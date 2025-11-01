@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Cerebras } from '@cerebras/cerebras_cloud_sdk';
+import { UsageTracker, TierType } from './utils/usageTracker';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -16,11 +17,14 @@ const App: React.FC = () => {
   const [isListening, setIsListening] = useState(false);
   const [speechInitialized, setSpeechInitialized] = useState(false);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [showUsage, setShowUsage] = useState(false);
+  const [userTier, setUserTier] = useState<TierType>('free');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessagesLengthRef = useRef(0);
+  const usageTrackerRef = useRef<UsageTracker>(new UsageTracker());
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   const scrollToBottom = () => {
@@ -30,6 +34,12 @@ const App: React.FC = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Load tier from usage tracker on mount
+  useEffect(() => {
+    const usage = usageTrackerRef.current.getUsage();
+    setUserTier(usage.tier);
+  }, []);
 
   const initializeSpeechSynthesis = () => {
     // Initialize speech synthesis with a dummy utterance (required for mobile)
@@ -386,6 +396,10 @@ const App: React.FC = () => {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
+
+      // Track usage for pricing/billing
+      usageTrackerRef.current.trackMessage(userMessage.content, assistantMessage.content);
+      console.log('Usage tracked:', usageTrackerRef.current.getUsage());
     } catch (error) {
       console.error('Error calling VCB-AI API:', error);
       const errorMessage: Message = {
@@ -427,34 +441,198 @@ const App: React.FC = () => {
               </p>
             </div>
           </div>
-          {/* Voice Mode Toggle Button */}
-          <button
-            type="button"
-            onClick={toggleVoiceMode}
-            className={`flex items-center space-x-1 md:space-x-2 px-2 py-1.5 md:px-4 md:py-3 border transition-colors ${
-              voiceModeEnabled
-                ? 'bg-vcb-white text-vcb-black border-vcb-white'
-                : 'bg-vcb-black text-vcb-white border-vcb-mid-grey hover:border-vcb-white'
-            }`}
-            title={voiceModeEnabled ? 'Stop Voice Mode' : 'Start Voice Mode (en-ZA)'}
-          >
-            {voiceModeEnabled && isListening ? (
-              <svg className="w-4 h-4 md:w-6 md:h-6 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+          <div className="flex items-center space-x-2">
+            {/* Usage Stats Button */}
+            <button
+              type="button"
+              onClick={() => setShowUsage(!showUsage)}
+              className="flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white hover:border-vcb-white transition-colors"
+              title="View Usage & Pricing"
+            >
+              <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/>
               </svg>
-            ) : (
-              <svg className="w-4 h-4 md:w-6 md:h-6" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-              </svg>
-            )}
-            <span className="hidden md:inline text-xs font-medium uppercase tracking-wide">
-              {voiceModeEnabled ? 'Voice On' : 'Voice Mode'}
-            </span>
-          </button>
+              <span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">Usage</span>
+            </button>
+
+            {/* Voice Mode Toggle Button */}
+            <button
+              type="button"
+              onClick={toggleVoiceMode}
+              className={`flex items-center space-x-1 md:space-x-2 px-2 py-1.5 md:px-4 md:py-3 border transition-colors ${
+                voiceModeEnabled
+                  ? 'bg-vcb-white text-vcb-black border-vcb-white'
+                  : 'bg-vcb-black text-vcb-white border-vcb-mid-grey hover:border-vcb-white'
+              }`}
+              title={voiceModeEnabled ? 'Stop Voice Mode' : 'Start Voice Mode (en-ZA)'}
+            >
+              {voiceModeEnabled && isListening ? (
+                <svg className="w-4 h-4 md:w-6 md:h-6 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                  <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                </svg>
+              ) : (
+                <svg className="w-4 h-4 md:w-6 md:h-6" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                  <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                </svg>
+              )}
+              <span className="hidden md:inline text-xs font-medium uppercase tracking-wide">
+                {voiceModeEnabled ? 'Voice On' : 'Voice Mode'}
+              </span>
+            </button>
+          </div>
         </div>
       </header>
+
+      {/* Usage & Pricing Modal */}
+      {showUsage && (
+        <div className="fixed inset-0 bg-vcb-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={() => setShowUsage(false)}>
+          <div className="bg-white border border-vcb-light-grey max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div className="bg-vcb-black border-b border-vcb-mid-grey px-6 py-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-vcb-white uppercase tracking-wider">Usage & Pricing</h2>
+              <button
+                onClick={() => setShowUsage(false)}
+                className="text-vcb-white hover:text-vcb-light-grey transition-colors"
+                title="Close"
+              >
+                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="px-6 py-6 space-y-6">
+              {/* Current Usage */}
+              <div className="border border-vcb-light-grey px-6 py-4">
+                <h3 className="text-base font-medium uppercase tracking-wide mb-4 text-vcb-black">Current Usage</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-vcb-mid-grey uppercase text-xs font-medium">Tier</p>
+                    <p className="text-vcb-black font-bold text-lg uppercase">{usageTrackerRef.current.getUsage().tier}</p>
+                  </div>
+                  <div>
+                    <p className="text-vcb-mid-grey uppercase text-xs font-medium">Conversations</p>
+                    <p className="text-vcb-black font-bold text-lg">{usageTrackerRef.current.getUsage().conversations}</p>
+                  </div>
+                  <div>
+                    <p className="text-vcb-mid-grey uppercase text-xs font-medium">Total Tokens</p>
+                    <p className="text-vcb-black font-bold text-lg">{usageTrackerRef.current.getUsage().tokens.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-vcb-mid-grey uppercase text-xs font-medium">Total Credits</p>
+                    <p className="text-vcb-black font-bold text-lg">{usageTrackerRef.current.getUsage().credits}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-vcb-mid-grey uppercase text-xs font-medium">Session Status</p>
+                    <p className="text-vcb-black font-medium">
+                      {usageTrackerRef.current.getUsage().sessionActive ? '✓ Active' : '○ Inactive'}
+                      <span className="text-xs text-vcb-mid-grey ml-2">
+                        ({Math.floor(usageTrackerRef.current.getUsage().sessionAge / 60000)} min ago)
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Remaining Chats */}
+              <div className="border border-vcb-light-grey px-6 py-4">
+                <h3 className="text-base font-medium uppercase tracking-wide mb-4 text-vcb-black">Remaining This Cycle</h3>
+                <div className="space-y-3 text-sm">
+                  {usageTrackerRef.current.getUsage().tier !== 'pro' && usageTrackerRef.current.getUsage().tier !== 'standard' && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-vcb-mid-grey uppercase text-xs font-medium">Lite Chats (1 credit)</span>
+                      <span className="text-vcb-black font-bold">{usageTrackerRef.current.getUsage().remainingLite}</span>
+                    </div>
+                  )}
+                  {(usageTrackerRef.current.getUsage().tier === 'standard' || usageTrackerRef.current.getUsage().tier === 'pro') && (
+                    <>
+                      <div className="flex justify-between items-center">
+                        <span className="text-vcb-mid-grey uppercase text-xs font-medium">Standard Chats (4 credits)</span>
+                        <span className="text-vcb-black font-bold">{usageTrackerRef.current.getUsage().remainingStandard}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-vcb-mid-grey uppercase text-xs font-medium">Premium Chats (10 credits)</span>
+                        <span className="text-vcb-black font-bold">{usageTrackerRef.current.getUsage().remainingPremium}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Tier Selector (temporary until auth) */}
+              <div className="border border-vcb-light-grey px-6 py-4">
+                <h3 className="text-base font-medium uppercase tracking-wide mb-4 text-vcb-black">Select Tier (Demo)</h3>
+                <div className="flex flex-wrap gap-2">
+                  {(['free', 'starter', 'standard', 'pro'] as TierType[]).map((tier) => (
+                    <button
+                      key={tier}
+                      onClick={() => {
+                        setUserTier(tier);
+                        usageTrackerRef.current.setTier(tier);
+                      }}
+                      className={`px-4 py-2 border text-xs font-medium uppercase tracking-wide transition-colors ${
+                        userTier === tier
+                          ? 'bg-vcb-black text-vcb-white border-vcb-black'
+                          : 'bg-white text-vcb-black border-vcb-mid-grey hover:border-vcb-black'
+                      }`}
+                    >
+                      {tier}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-vcb-mid-grey mt-3">* Tier selection will be managed through authentication in production</p>
+              </div>
+
+              {/* Pricing Info */}
+              <div className="border border-vcb-light-grey px-6 py-4">
+                <h3 className="text-base font-medium uppercase tracking-wide mb-4 text-vcb-black">Pricing Tiers</h3>
+                <div className="space-y-4 text-sm">
+                  <div className="pb-3 border-b border-vcb-light-grey">
+                    <p className="font-bold uppercase text-vcb-black">Starter - $5/month</p>
+                    <p className="text-vcb-mid-grey">60 Lite chats per cycle</p>
+                  </div>
+                  <div className="pb-3 border-b border-vcb-light-grey">
+                    <p className="font-bold uppercase text-vcb-black">Standard - $18/month</p>
+                    <p className="text-vcb-mid-grey">150 Standard + 50 Premium rollovers</p>
+                  </div>
+                  <div>
+                    <p className="font-bold uppercase text-vcb-black">Pro - $39/month</p>
+                    <p className="text-vcb-mid-grey">400 Standard + 120 Premium chats</p>
+                  </div>
+                </div>
+                <a
+                  href="pricing.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block mt-4 px-4 py-2 bg-vcb-black text-vcb-white text-xs font-medium uppercase tracking-wide hover:bg-vcb-dark-grey transition-colors"
+                >
+                  View Full Pricing
+                </a>
+              </div>
+
+              {/* Reset Button */}
+              <div className="border border-vcb-light-grey px-6 py-4">
+                <button
+                  onClick={() => {
+                    if (confirm('Reset all usage data? This cannot be undone.')) {
+                      usageTrackerRef.current.reset();
+                      setShowUsage(false);
+                      setShowUsage(true); // Force re-render
+                    }
+                  }}
+                  className="px-4 py-2 border border-vcb-mid-grey text-vcb-mid-grey text-xs font-medium uppercase tracking-wide hover:border-vcb-black hover:text-vcb-black transition-colors"
+                >
+                  Reset Usage Data
+                </button>
+                <p className="text-xs text-vcb-mid-grey mt-2">* Resets conversation count and credits (for testing/new billing cycle)</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Messages Container - 80%+ whitespace per §5.1, Mobile Optimized */}
       <div className="flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-12">
