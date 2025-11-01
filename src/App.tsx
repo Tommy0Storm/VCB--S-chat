@@ -15,6 +15,7 @@ const App: React.FC = () => {
   const [voiceModeEnabled, setVoiceModeEnabled] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [speechInitialized, setSpeechInitialized] = useState(false);
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -37,6 +38,15 @@ const App: React.FC = () => {
       window.speechSynthesis.speak(dummyUtterance);
       setSpeechInitialized(true);
       console.log('Speech synthesis initialized for mobile');
+
+      // Load voices after initialization
+      setTimeout(() => {
+        const voices = window.speechSynthesis.getVoices();
+        if (voices.length > 0) {
+          setAvailableVoices(voices);
+          console.log('Voices loaded after initialization:', voices.length);
+        }
+      }, 100);
     }
   };
 
@@ -76,15 +86,28 @@ const App: React.FC = () => {
 
     // Create speech synthesis utterance with en-ZA voice
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'en-ZA'; // South African English
     utterance.rate = 1.2; // 1.2x speed for faster playback
     utterance.pitch = 1.0;
 
-    // Try to find en-ZA voice
-    const voices = window.speechSynthesis.getVoices();
+    // Try to find best available voice
+    // Priority: en-ZA > en-GB > en-US > any English > default
+    const voices = availableVoices.length > 0 ? availableVoices : window.speechSynthesis.getVoices();
+    console.log('Selecting voice from', voices.length, 'available voices');
+
     const zaVoice = voices.find(voice => voice.lang === 'en-ZA');
-    if (zaVoice) {
-      utterance.voice = zaVoice;
+    const gbVoice = voices.find(voice => voice.lang === 'en-GB');
+    const usVoice = voices.find(voice => voice.lang === 'en-US');
+    const anyEnglish = voices.find(voice => voice.lang.startsWith('en'));
+
+    const selectedVoice = zaVoice || gbVoice || usVoice || anyEnglish;
+
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+      utterance.lang = selectedVoice.lang;
+      console.log('Selected voice:', selectedVoice.name, selectedVoice.lang);
+    } else {
+      utterance.lang = 'en-US'; // Fallback
+      console.log('No voice found, using default en-US');
     }
 
     utterance.onstart = () => {
@@ -143,13 +166,26 @@ const App: React.FC = () => {
   // Load voices when component mounts
   useEffect(() => {
     const loadVoices = () => {
-      window.speechSynthesis.getVoices();
+      const voices = window.speechSynthesis.getVoices();
+      console.log('Available voices:', voices.length);
+      console.log('Voice list:', voices.map(v => `${v.name} (${v.lang})`));
+      setAvailableVoices(voices);
     };
+
+    // Load immediately
     loadVoices();
+
+    // Also load when voices change (important for mobile)
     if (window.speechSynthesis.onvoiceschanged !== undefined) {
       window.speechSynthesis.onvoiceschanged = loadVoices;
     }
-  }, []);
+
+    // For mobile: try loading again after a delay
+    if (isMobile) {
+      setTimeout(loadVoices, 100);
+      setTimeout(loadVoices, 500);
+    }
+  }, [isMobile]);
 
   // Initialize speech recognition once on mount
   useEffect(() => {
