@@ -11,6 +11,7 @@ const App: React.FC = () => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [speakingIndex, setSpeakingIndex] = useState<number | null>(null);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -35,7 +36,7 @@ const App: React.FC = () => {
     // Create speech synthesis utterance with en-ZA voice
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'en-ZA'; // South African English
-    utterance.rate = 0.9; // Slightly slower for clarity
+    utterance.rate = 1.2; // 1.2x speed for faster playback
     utterance.pitch = 1.0;
 
     // Try to find en-ZA voice
@@ -58,6 +59,18 @@ const App: React.FC = () => {
     };
 
     window.speechSynthesis.speak(utterance);
+  };
+
+  const handleCopy = async (text: string, index: number) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedIndex(index);
+      setTimeout(() => {
+        setCopiedIndex(null);
+      }, 2000); // Show "Copied!" for 2 seconds
+    } catch (err) {
+      console.error('Failed to copy text:', err);
+    }
   };
 
   // Load voices when component mounts
@@ -216,21 +229,38 @@ const App: React.FC = () => {
                           {message.role === 'user' ? 'You' : 'VCB-AI'}
                         </p>
                         {message.role === 'assistant' && (
-                          <button
-                            onClick={() => handleSpeak(message.content, index)}
-                            className="flex items-center space-x-1 text-vcb-mid-grey hover:text-vcb-black transition-colors"
-                            title={speakingIndex === index ? 'Stop speaking' : 'Read aloud (en-ZA)'}
-                          >
-                            {speakingIndex === index ? (
-                              <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-                              </svg>
-                            ) : (
-                              <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
-                              </svg>
-                            )}
-                          </button>
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => handleCopy(message.content, index)}
+                              className="flex items-center space-x-1 text-vcb-mid-grey hover:text-vcb-black transition-colors"
+                              title={copiedIndex === index ? 'Copied!' : 'Copy to clipboard'}
+                            >
+                              {copiedIndex === index ? (
+                                <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                                </svg>
+                              ) : (
+                                <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
+                                </svg>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleSpeak(message.content, index)}
+                              className="flex items-center space-x-1 text-vcb-mid-grey hover:text-vcb-black transition-colors"
+                              title={speakingIndex === index ? 'Stop speaking' : 'Read aloud (en-ZA)'}
+                            >
+                              {speakingIndex === index ? (
+                                <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
+                                </svg>
+                              ) : (
+                                <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+                                </svg>
+                              )}
+                            </button>
+                          </div>
                         )}
                       </div>
                       <p className="text-sm md:text-base text-vcb-black whitespace-pre-wrap break-words leading-relaxed">
@@ -309,17 +339,11 @@ const App: React.FC = () => {
                 <>
                   <svg
                     className="w-4 h-4 md:w-5 md:h-5"
-                    fill="none"
-                    stroke="currentColor"
+                    fill="currentColor"
                     viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg"
-                    strokeWidth={2}
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                    />
+                    <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+                    <path d="M7 9h10v2H7zm0-3h10v2H7z"/>
                   </svg>
                   <span className="hidden md:inline">Send</span>
                 </>
