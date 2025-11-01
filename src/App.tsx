@@ -31,7 +31,7 @@ const App: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // Initialize Cerebras client
+      // Initialize VCB-AI client (Cerebras backend)
       const apiKey = import.meta.env.VITE_CEREBRAS_API_KEY;
       if (!apiKey) {
         throw new Error('VITE_CEREBRAS_API_KEY not found in environment variables');
@@ -66,10 +66,10 @@ const App: React.FC = () => {
 
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
-      console.error('Error calling Cerebras API:', error);
+      console.error('Error calling VCB-AI API:', error);
       const errorMessage: Message = {
         role: 'assistant',
-        content: `Error: ${error instanceof Error ? error.message : 'Failed to get response'}`,
+        content: `Error: ${error instanceof Error ? error.message : 'Failed to get response from VCB-AI'}`,
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
