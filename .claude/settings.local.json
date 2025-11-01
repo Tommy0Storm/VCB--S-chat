@@ -6,7 +6,12 @@
       "Bash(npx tsc --noEmit)",
       "Bash(npm run build:*)",
       "Bash(npm run dev:*)",
-      "Bash(git init:*)"
+      "Bash(git init:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nInitial commit: VCB-Chat application with VCB Cleaner Theme\n\n- React + TypeScript + Vite setup\n- Cerebras AI integration with Llama 3.1\n- VCB Cleaner Theme (§5.1-5.3): monochrome design, Quicksand typography\n- Black header bar with VCB logo\n- Enterprise-grade code quality (§1.3)\n- 80%+ whitespace, zero shadows, light-grey borders\n- Full accessibility and responsive design\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(gh repo create:*)",
+      "Bash(npm install:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nConfigure GitHub Pages deployment\n\n- Add base path for GitHub Pages in vite.config.ts\n- Install gh-pages package\n- Add predeploy and deploy scripts to package.json\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
     ],
     "deny": [],
     "ask": []
