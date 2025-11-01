@@ -12,8 +12,13 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [speakingIndex, setSpeakingIndex] = useState<number | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [voiceModeEnabled, setVoiceModeEnabled] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const recognitionRef = useRef<any>(null);
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastMessagesLengthRef = useRef(0);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -84,6 +89,116 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Initialize speech recognition
+  useEffect(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-ZA'; // South African English
+
+      recognition.onresult = (event: any) => {
+        const transcript = Array.from(event.results)
+          .map((result: any) => result[0])
+          .map((result: any) => result.transcript)
+          .join('');
+
+        setInput(transcript);
+
+        // Reset silence timer on speech
+        if (silenceTimerRef.current) {
+          clearTimeout(silenceTimerRef.current);
+        }
+
+        // Start new silence timer (3 seconds)
+        silenceTimerRef.current = setTimeout(() => {
+          if (transcript.trim() && !isLoading) {
+            // Auto-submit after 3 seconds of silence
+            const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+            const form = document.querySelector('form');
+            if (form) {
+              form.dispatchEvent(submitEvent);
+            }
+          }
+        }, 3000);
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error);
+        if (event.error === 'no-speech' || event.error === 'audio-capture') {
+          // Restart recognition if it stops unexpectedly
+          if (voiceModeEnabled && isListening) {
+            setTimeout(() => recognition.start(), 1000);
+          }
+        }
+      };
+
+      recognition.onend = () => {
+        // Auto-restart if voice mode is still enabled
+        if (voiceModeEnabled && isListening && !isLoading) {
+          try {
+            recognition.start();
+          } catch (err) {
+            console.error('Failed to restart recognition:', err);
+          }
+        }
+      };
+
+      recognitionRef.current = recognition;
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
+    };
+  }, [voiceModeEnabled, isListening, isLoading]);
+
+  // Auto-play AI responses in voice mode
+  useEffect(() => {
+    if (voiceModeEnabled && messages.length > lastMessagesLengthRef.current) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage.role === 'assistant') {
+        // Auto-play the AI response
+        handleSpeak(lastMessage.content, messages.length - 1);
+      }
+    }
+    lastMessagesLengthRef.current = messages.length;
+  }, [messages, voiceModeEnabled]);
+
+  const toggleVoiceMode = () => {
+    const newVoiceMode = !voiceModeEnabled;
+    setVoiceModeEnabled(newVoiceMode);
+
+    if (newVoiceMode) {
+      // Start listening
+      setIsListening(true);
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.start();
+        } catch (err) {
+          console.error('Failed to start recognition:', err);
+        }
+      }
+    } else {
+      // Stop listening
+      setIsListening(false);
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
+      // Stop any ongoing speech
+      window.speechSynthesis.cancel();
+      setSpeakingIndex(null);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -152,21 +267,49 @@ const App: React.FC = () => {
     <div className="flex flex-col h-screen bg-white font-quicksand font-light">
       {/* Header - VCB Cleaner Theme per §5.1-5.3, Mobile Optimized */}
       <header className="bg-vcb-black border-b border-vcb-mid-grey px-4 py-3 md:px-8 md:py-6">
-        <div className="flex items-center justify-center space-x-3 md:space-x-6">
-          {/* VCB Logo per §5.3 - must be on dark background */}
-          <img
-            src="https://i.postimg.cc/xdJqP9br/logo-transparent-Black-Back.png"
-            alt="VCB Logo"
-            className="h-20 md:h-32"
-          />
-          <div className="text-center">
-            <h1 className="text-base md:text-xl font-bold text-vcb-white tracking-wider">
-              VCB-CHAT (BETA)
-            </h1>
-            <p className="text-vcb-white text-[10px] md:text-xs mt-0.5 font-medium uppercase tracking-wide">
-              Powered by VCB-AI
-            </p>
+        <div className="flex items-center justify-between max-w-7xl mx-auto">
+          <div className="flex items-center space-x-3 md:space-x-6">
+            {/* VCB Logo per §5.3 - must be on dark background */}
+            <img
+              src="https://i.postimg.cc/xdJqP9br/logo-transparent-Black-Back.png"
+              alt="VCB Logo"
+              className="h-20 md:h-32"
+            />
+            <div className="text-center">
+              <h1 className="text-base md:text-xl font-bold text-vcb-white tracking-wider">
+                VCB-CHAT (BETA)
+              </h1>
+              <p className="text-vcb-white text-[10px] md:text-xs mt-0.5 font-medium uppercase tracking-wide">
+                Powered by VCB-AI
+              </p>
+            </div>
           </div>
+          {/* Voice Mode Toggle Button */}
+          <button
+            type="button"
+            onClick={toggleVoiceMode}
+            className={`flex items-center space-x-2 px-3 py-2 md:px-4 md:py-3 border transition-colors ${
+              voiceModeEnabled
+                ? 'bg-vcb-white text-vcb-black border-vcb-white'
+                : 'bg-vcb-black text-vcb-white border-vcb-mid-grey hover:border-vcb-white'
+            }`}
+            title={voiceModeEnabled ? 'Stop Voice Mode' : 'Start Voice Mode (en-ZA)'}
+          >
+            {voiceModeEnabled && isListening ? (
+              <svg className="w-5 h-5 md:w-6 md:h-6 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+              </svg>
+            ) : (
+              <svg className="w-5 h-5 md:w-6 md:h-6" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+              </svg>
+            )}
+            <span className="hidden md:inline text-xs font-medium uppercase tracking-wide">
+              {voiceModeEnabled ? 'Voice On' : 'Voice Mode'}
+            </span>
+          </button>
         </div>
       </header>
 
@@ -295,16 +438,28 @@ const App: React.FC = () => {
       {/* Input Container - high contrast per §5.1, Mobile Optimized */}
       <div className="border-t border-vcb-light-grey bg-white px-4 py-3 md:px-8 md:py-6">
         <form onSubmit={handleSubmit} className="max-w-5xl mx-auto">
+          {voiceModeEnabled && isListening && (
+            <div className="mb-3 flex items-center justify-center space-x-2 text-vcb-mid-grey">
+              <svg className="w-4 h-4 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+              </svg>
+              <span className="text-xs md:text-sm font-medium uppercase">Listening...</span>
+            </div>
+          )}
           <div className="flex space-x-2 md:space-x-4">
             <textarea
+              id="chat-input"
+              name="message"
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Type your message..."
+              placeholder={voiceModeEnabled ? "Speak your message..." : "Type your message..."}
               className="flex-1 bg-white text-vcb-black border border-vcb-light-grey px-3 py-2 md:px-6 md:py-4 text-sm md:text-base focus:outline-none focus:border-vcb-mid-grey resize-none font-light leading-relaxed"
               rows={1}
               disabled={isLoading}
+              readOnly={voiceModeEnabled}
             />
             <button
               type="submit"
