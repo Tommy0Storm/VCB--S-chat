@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+    <!-- Circular dark background -->
+    <circle cx="512" cy="512" r="486.4" fill="#1a1a1a"/>
+    
+    <!-- Chat bubbles group  -->
+    <g>
+        <!-- Bubble 1 (150px radius, 200px orbit) -->
+        <g>
+            <circle cx="371" cy="371" r="150" fill="#4a4a4a"/>
+            <path d="M 289 479 L 259 549 L 329 509 Z" fill="#4a4a4a"/>
+        </g>
+        
+        <!-- Bubble 2 (150px radius, 200px orbit) -->
+        <g>
+            <circle cx="653" cy="653" r="150" fill="#6a6a6a"/>
+            <path d="M 735 545 L 765 475 L 695 515 Z" fill="#6a6a6a"/>
+        </g>
+    </g>
+    
+    <!-- Central letter S (stationary) -->
+    <text x="512" y="540" font-family="Quicksand, Arial, sans-serif" font-size="420" font-weight="bold" 
+          fill="#FFFFFF" text-anchor="middle" dominant-baseline="middle">S</text>
+    
+    <!-- Circular border -->
+    <circle cx="512" cy="512" r="486.4" fill="none" stroke="#000000" stroke-width="8"/>
+</svg>
