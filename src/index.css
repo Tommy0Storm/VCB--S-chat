@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* VCB Cleaner Theme - Typography per §5.2 */
+body {
+  margin: 0;
+  font-family: 'Quicksand', sans-serif;
+  font-weight: 300; /* Quicksand 300 for body text */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Headings: Quicksand 500, all caps */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Quicksand', sans-serif;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+/* Main heading: Quicksand Bold, all caps */
+h1 {
+  font-weight: 700;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* VCB Cleaner Theme - Monochrome scrollbar per §5.1 */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a1a; /* Dark Grey */
+}
+
+::-webkit-scrollbar-thumb {
+  background: #666666; /* Mid Grey */
+  border-radius: 0; /* No rounded corners for cleaner look */
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #999999; /* Light Grey */
+}
+
+/* Animation delays for loading dots */
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-0.5rem);
+  }
+}
+
+.animate-bounce {
+  animation: bounce 1s infinite;
+}
+
+.delay-100 {
+  animation-delay: 0.1s;
+}
+
+.delay-200 {
+  animation-delay: 0.2s;
+}
