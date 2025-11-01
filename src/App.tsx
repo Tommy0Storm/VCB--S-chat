@@ -89,64 +89,91 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Initialize speech recognition
+  // Initialize speech recognition once on mount
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-ZA'; // South African English
+    if (!SpeechRecognition) {
+      console.error('Speech Recognition API not supported in this browser');
+      return;
+    }
 
-      recognition.onresult = (event: any) => {
-        const transcript = Array.from(event.results)
-          .map((result: any) => result[0])
-          .map((result: any) => result.transcript)
-          .join('');
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-ZA'; // South African English
 
-        setInput(transcript);
+    recognition.onstart = () => {
+      console.log('Speech recognition started');
+      setIsListening(true);
+    };
 
-        // Reset silence timer on speech
-        if (silenceTimerRef.current) {
-          clearTimeout(silenceTimerRef.current);
-        }
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results)
+        .map((result: any) => result[0])
+        .map((result: any) => result.transcript)
+        .join('');
 
-        // Start new silence timer (3 seconds)
-        silenceTimerRef.current = setTimeout(() => {
-          if (transcript.trim() && !isLoading) {
-            // Auto-submit after 3 seconds of silence
+      console.log('Transcript:', transcript);
+      setInput(transcript);
+
+      // Reset silence timer on speech
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
+
+      // Start new silence timer (3 seconds)
+      silenceTimerRef.current = setTimeout(() => {
+        if (transcript.trim()) {
+          console.log('Silence detected, submitting...');
+          // Auto-submit after 3 seconds of silence
+          const form = document.querySelector('form');
+          if (form) {
             const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
-            const form = document.querySelector('form');
-            if (form) {
-              form.dispatchEvent(submitEvent);
-            }
-          }
-        }, 3000);
-      };
-
-      recognition.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error);
-        if (event.error === 'no-speech' || event.error === 'audio-capture') {
-          // Restart recognition if it stops unexpectedly
-          if (voiceModeEnabled && isListening) {
-            setTimeout(() => recognition.start(), 1000);
+            form.dispatchEvent(submitEvent);
           }
         }
-      };
+      }, 3000);
+    };
 
-      recognition.onend = () => {
-        // Auto-restart if voice mode is still enabled
-        if (voiceModeEnabled && isListening && !isLoading) {
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+
+      if (event.error === 'not-allowed') {
+        alert('Microphone permission denied. Please allow microphone access and try again.');
+        setVoiceModeEnabled(false);
+      } else if (event.error === 'no-speech' || event.error === 'audio-capture') {
+        // Try to restart if voice mode is still enabled
+        if (voiceModeEnabled) {
+          setTimeout(() => {
+            try {
+              recognition.start();
+            } catch (err) {
+              console.error('Failed to restart after error:', err);
+            }
+          }, 1000);
+        }
+      }
+    };
+
+    recognition.onend = () => {
+      console.log('Speech recognition ended');
+      setIsListening(false);
+
+      // Auto-restart if voice mode is still enabled
+      if (voiceModeEnabled) {
+        setTimeout(() => {
           try {
             recognition.start();
+            console.log('Restarting recognition...');
           } catch (err) {
             console.error('Failed to restart recognition:', err);
           }
-        }
-      };
+        }, 100);
+      }
+    };
 
-      recognitionRef.current = recognition;
-    }
+    recognitionRef.current = recognition;
 
     return () => {
       if (recognitionRef.current) {
@@ -156,7 +183,7 @@ const App: React.FC = () => {
         clearTimeout(silenceTimerRef.current);
       }
     };
-  }, [voiceModeEnabled, isListening, isLoading]);
+  }, []);
 
   // Auto-play AI responses in voice mode
   useEffect(() => {
