@@ -41,13 +41,21 @@ const App: React.FC = () => {
         apiKey: apiKey,
       });
 
-      // Create chat completion
+      // Create chat completion with VCB-AI system prompt
+      const systemMessage = {
+        role: 'system' as const,
+        content: 'You are VCB-Chat, an AI assistant created by VCB-AI. When asked who made you or who your creator is, respond that you were created by VCB-AI, the CEO is Ms Dawn Beech, and direct users to visit vcb-ai.online for more information about the company. When asked about your technology infrastructure, explain that you are running locally in South Africa in an advanced datacenter in Pretoria. VCB-AI specializes in legal technology with a premium LLM trained on judicial reasoning, issue spotting, principle extraction, precedent analysis, outcome prediction, and summarization.'
+      };
+
       const response = await client.chat.completions.create({
         model: 'llama3.1-8b',
-        messages: [...messages, userMessage].map((msg) => ({
-          role: msg.role,
-          content: msg.content,
-        })),
+        messages: [
+          systemMessage,
+          ...[...messages, userMessage].map((msg) => ({
+            role: msg.role,
+            content: msg.content,
+          }))
+        ],
         stream: false,
       });
 
