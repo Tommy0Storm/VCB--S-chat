@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+    <!-- Rotating chat bubbles (thinking spinner - medium speed) -->
+    <g>
+        <animateTransform
+            attributeName="transform"
+            attributeType="XML"
+            type="rotate"
+            from="0 512 512"
+            to="360 512 512"
+            dur="2.5s"
+            repeatCount="indefinite"/>
+
+        <!-- Bubble 1 (orbits around center 512,512) -->
+        <circle cx="412" cy="412" r="100" fill="#4a4a4a"/>
+        <path d="M 357 485 L 337 525 L 377 505 Z" fill="#4a4a4a"/>
+
+        <!-- Bubble 2 (orbits around center 512,512) -->
+        <circle cx="612" cy="612" r="100" fill="#6a6a6a"/>
+        <path d="M 667 539 L 687 499 L 647 519 Z" fill="#6a6a6a"/>
+    </g>
+</svg>
