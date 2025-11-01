@@ -526,7 +526,7 @@ const App: React.FC = () => {
               className="h-16 md:h-32"
             />
             <img
-              src="/Sovereign-Chat-icon-Spin.svg"
+              src="Sovereign-Chat-icon-Spin.svg"
               alt="Sovereign AI"
               className="h-12 md:h-24"
             />
@@ -994,7 +994,7 @@ const App: React.FC = () => {
                         </div>
                       ) : (
                         <img
-                          src="/sovereign-chat-icon-static.svg"
+                          src="sovereign-chat-icon-static.svg"
                           alt="VCB-AI"
                           className="w-8 h-8 md:w-10 md:h-10"
                         />
@@ -1054,12 +1054,12 @@ const App: React.FC = () => {
               <div className="max-w-3xl border border-vcb-light-grey bg-white px-4 py-3 md:px-8 md:py-6">
                 <div className="flex items-center space-x-2 md:space-x-4">
                   <img
-                    src="/sovereign-chat-icon-static.svg"
+                    src="sovereign-chat-icon-static.svg"
                     alt="VCB-AI"
                     className="w-8 h-8 md:w-10 md:h-10"
                   />
                   <img
-                    src="/sovereign-spinner.svg"
+                    src="sovereign-spinner.svg"
                     alt="Loading..."
                     className="w-8 h-8 md:w-10 md:h-10"
                   />
@@ -1105,7 +1105,7 @@ const App: React.FC = () => {
               {isLoading ? (
                 <>
                   <img
-                    src="/sovereign-spinner.svg"
+                    src="sovereign-spinner.svg"
                     alt="Sending..."
                     className="h-4 w-4 md:h-5 md:w-5"
                   />
