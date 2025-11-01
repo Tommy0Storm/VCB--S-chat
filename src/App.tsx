@@ -98,7 +98,7 @@ const App: React.FC = () => {
           />
           <div className="text-center">
             <h1 className="text-xl font-bold text-vcb-white tracking-wider">
-              VCB-CHAT
+              VCB-CHAT (BETA)
             </h1>
             <p className="text-vcb-white text-xs mt-0.5 font-medium uppercase tracking-wide">
               Powered by VCB-AI
