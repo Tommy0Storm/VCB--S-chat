@@ -5,6 +5,9 @@ export interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  type?: 'text' | 'image';
+  imageUrl?: string;
+  imagePrompt?: string;
 }
 
 export interface Conversation {

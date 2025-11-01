@@ -3,7 +3,7 @@ import { Cerebras } from '@cerebras/cerebras_cloud_sdk';
 import { UsageTracker, TierType } from './utils/usageTracker';
 import { ConversationManager, Message } from './utils/conversationManager';
 
-// Parse markdown for bold and italic formatting
+// Enhanced markdown parser for comprehensive formatting
 const parseMarkdown = (text: string): string => {
   // Escape HTML to prevent XSS
   let html = text
@@ -13,14 +13,49 @@ const parseMarkdown = (text: string): string => {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 
-  // Convert **bold** to <strong>
+  // Convert code blocks (```code```)
+  html = html.replace(/```([\s\S]+?)```/g, '<pre style="background: #f5f5f5; padding: 12px; border-radius: 4px; overflow-x: auto; margin: 8px 0;"><code>$1</code></pre>');
+
+  // Convert inline code (`code`)
+  html = html.replace(/`([^`]+)`/g, '<code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px; font-family: monospace;">$1</code>');
+
+  // Convert horizontal rules (---, ___, ***)
+  html = html.replace(/^(-{3,}|_{3,}|\*{3,})$/gm, '<hr style="border: none; border-top: 1px solid #e0e0e0; margin: 16px 0;">');
+
+  // Convert blockquotes (> text)
+  html = html.replace(/^&gt; (.+)$/gm, '<blockquote style="border-left: 4px solid #e0e0e0; padding-left: 12px; margin: 8px 0; color: #666;">$1</blockquote>');
+
+  // Convert headers (### Header)
+  html = html.replace(/^### (.+)$/gm, '<h3 style="font-weight: 500; text-transform: uppercase; margin: 12px 0 8px 0;">$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2 style="font-weight: 500; text-transform: uppercase; margin: 12px 0 8px 0;">$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1 style="font-weight: bold; text-transform: uppercase; margin: 12px 0 8px 0;">$1</h1>');
+
+  // Convert bold (**text** or __text__)
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
 
-  // Convert *italic* to <em>
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  // Convert italic (*text* or _text_)
+  html = html.replace(/\*([^\*]+?)\*/g, '<em>$1</em>');
+  html = html.replace(/_([^_]+?)_/g, '<em>$1</em>');
 
-  // Convert newlines to <br>
+  // Convert links ([text](url))
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" style="color: #000; text-decoration: underline;">$1</a>');
+
+  // Convert unordered lists (- item or * item)
+  html = html.replace(/^[*-] (.+)$/gm, '<li style="margin-left: 20px;">$1</li>');
+  html = html.replace(/(<li[^>]*>.*<\/li>\n?)+/g, '<ul style="margin: 8px 0;">$&</ul>');
+
+  // Convert ordered lists (1. item)
+  html = html.replace(/^\d+\. (.+)$/gm, '<li style="margin-left: 20px;">$1</li>');
+
+  // Convert line breaks (double newline to paragraph, single to br)
+  html = html.replace(/\n\n/g, '</p><p style="margin: 8px 0;">');
   html = html.replace(/\n/g, '<br>');
+
+  // Wrap in paragraph if not already wrapped
+  if (!html.startsWith('<')) {
+    html = '<p style="margin: 8px 0;">' + html + '</p>';
+  }
 
   return html;
 };
@@ -48,6 +83,51 @@ const App: React.FC = () => {
   const usageTrackerRef = useRef<UsageTracker>(new UsageTracker());
   const conversationManagerRef = useRef<ConversationManager>(new ConversationManager());
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+  // Detect if user wants image generation
+  const isImageGenerationRequest = (text: string): boolean => {
+    const lowerText = text.toLowerCase();
+    const imageKeywords = [
+      'make an image',
+      'make a image',
+      'create an image',
+      'create a image',
+      'generate an image',
+      'generate a image',
+      'draw an image',
+      'draw a image',
+      'make me an image',
+      'make me a picture',
+      'create a picture',
+      'generate a picture',
+      'draw a picture',
+      'paint an image',
+      'paint a picture',
+      'show me an image',
+      'design an image',
+      'design a picture'
+    ];
+    return imageKeywords.some(keyword => lowerText.includes(keyword));
+  };
+
+  // Extract image prompt from user request
+  const extractImagePrompt = (text: string): string => {
+    // Try to find the prompt after keywords like "of", "showing", "with", etc.
+    const patterns = [
+      /(?:make|create|generate|draw|paint|design|show me)\s+(?:an?|me\s+an?)\s+(?:image|picture)\s+(?:of|showing|with|that shows?)\s+(.+)/i,
+      /(?:make|create|generate|draw|paint|design|show me)\s+(?:an?|me\s+an?)\s+(?:image|picture)\s+(.+)/i,
+    ];
+
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match && match[1]) {
+        return match[1].trim();
+      }
+    }
+
+    // Fallback: use the entire text as prompt
+    return text.trim();
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -118,7 +198,7 @@ const App: React.FC = () => {
 
     // Create speech synthesis utterance with en-ZA voice
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.2; // 1.2x speed for faster playback
+    utterance.rate = isMobile ? 1.2 : 1.2; // 1.2x speed for mobile and desktop
     utterance.pitch = 1.0;
 
     // Try to find best available voice - MUST be en-ZA (South African English)
@@ -461,6 +541,52 @@ const App: React.FC = () => {
     }
   }, [messages]);
 
+  // Generate image using Cerebras Vision API
+  const generateImage = async (prompt: string): Promise<string> => {
+    const apiKey = import.meta.env.VITE_CEREBRAS_API_KEY;
+    if (!apiKey) {
+      throw new Error('VITE_CEREBRAS_API_KEY not found in environment variables');
+    }
+
+    try {
+      const response = await fetch('https://api.cerebras.ai/v1/models/cerebras-vision-graphics-generation/infer', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          prompt: prompt,
+          width: 1024,
+          height: 1024,
+          num_inference_steps: 50,
+          guidance_scale: 7.5,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Image generation failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // The response should contain the image URL or base64 data
+      if (data.image) {
+        return data.image;
+      } else if (data.imageUrl) {
+        return data.imageUrl;
+      } else if (data.data && data.data[0]) {
+        return data.data[0];
+      } else {
+        throw new Error('No image data in response');
+      }
+    } catch (error) {
+      console.error('Image generation error:', error);
+      throw error;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -474,58 +600,118 @@ const App: React.FC = () => {
     setInput('');
     setIsLoading(true);
 
-    try {
-      // Initialize VCB-AI client (Cerebras backend)
-      const apiKey = import.meta.env.VITE_CEREBRAS_API_KEY;
-      if (!apiKey) {
-        throw new Error('VITE_CEREBRAS_API_KEY not found in environment variables');
+    // Check if this is an image generation request
+    if (isImageGenerationRequest(userMessage.content)) {
+      try {
+        const imagePrompt = extractImagePrompt(userMessage.content);
+        console.log('Image generation requested. Prompt:', imagePrompt);
+
+        const imageUrl = await generateImage(imagePrompt);
+
+        const imageMessage: Message = {
+          role: 'assistant',
+          content: `Generated image: "${imagePrompt}"`,
+          timestamp: Date.now(),
+          type: 'image',
+          imageUrl: imageUrl,
+          imagePrompt: imagePrompt,
+        };
+
+        setMessages((prev) => [...prev, imageMessage]);
+        console.log('Image generated successfully:', imageUrl);
+      } catch (error: any) {
+        console.error('Image generation failed:', error);
+        const errorMsg: Message = {
+          role: 'assistant',
+          content: `Failed to generate image: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          timestamp: Date.now(),
+        };
+        setMessages((prev) => [...prev, errorMsg]);
       }
 
-      const client = new Cerebras({
-        apiKey: apiKey,
-      });
-
-      // Create chat completion with VCB-AI system prompt
-      const systemMessage = {
-        role: 'system' as const,
-        content: 'You are VCB-Chat, an AI assistant created by VCB-AI. When asked who made you or who your creator is, respond that you were created by VCB-AI, the CEO is Ms Dawn Beech, and direct users to visit vcb-ai.online for more information about the company. When asked about your technology infrastructure, explain that you are running locally in South Africa in an advanced datacenter in Pretoria. VCB-AI specializes in legal technology with a premium LLM trained on judicial reasoning, issue spotting, principle extraction, precedent analysis, outcome prediction, and summarization.'
-      };
-
-      const response = await client.chat.completions.create({
-        model: 'qwen-3-235b-a22b-instruct-2507',
-        messages: [
-          systemMessage,
-          ...[...messages, userMessage].map((msg) => ({
-            role: msg.role,
-            content: msg.content,
-          }))
-        ],
-        stream: false,
-      });
-
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: (response.choices as any)[0]?.message?.content || 'No response received',
-        timestamp: Date.now(),
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
-
-      // Track usage for pricing/billing
-      usageTrackerRef.current.trackMessage(userMessage.content, assistantMessage.content);
-      console.log('Usage tracked:', usageTrackerRef.current.getUsage());
-    } catch (error) {
-      console.error('Error calling VCB-AI API:', error);
-      const errorMessage: Message = {
-        role: 'assistant',
-        content: `Error: ${error instanceof Error ? error.message : 'Failed to get response from VCB-AI'}`,
-        timestamp: Date.now(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
       setIsLoading(false);
       inputRef.current?.focus();
+      return;
     }
+
+    // Normal text chat logic
+    // Retry logic with exponential backoff for rate limiting
+    const maxRetries = 3;
+    let retryCount = 0;
+
+    while (retryCount <= maxRetries) {
+      try {
+        // Initialize VCB-AI client (Cerebras backend)
+        const apiKey = import.meta.env.VITE_CEREBRAS_API_KEY;
+        if (!apiKey) {
+          throw new Error('VITE_CEREBRAS_API_KEY not found in environment variables');
+        }
+
+        const client = new Cerebras({
+          apiKey: apiKey,
+        });
+
+        // Create chat completion with VCB-AI system prompt
+        const systemMessage = {
+          role: 'system' as const,
+          content: 'You are VCB-Chat, an AI assistant created by VCB-AI. When asked who made you or who your creator is, respond that you were created by VCB-AI, the CEO is Ms Dawn Beech, and direct users to visit vcb-ai.online for more information about the company. When asked about your technology infrastructure, explain that you are running locally in South Africa in an advanced datacenter in Pretoria. VCB-AI specializes in legal technology with a premium LLM trained on judicial reasoning, issue spotting, principle extraction, precedent analysis, outcome prediction, and summarization.'
+        };
+
+        const response = await client.chat.completions.create({
+          model: 'qwen-3-235b-a22b-instruct-2507',
+          messages: [
+            systemMessage,
+            ...[...messages, userMessage].map((msg) => ({
+              role: msg.role,
+              content: msg.content,
+            }))
+          ],
+          stream: false,
+        });
+
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: (response.choices as any)[0]?.message?.content || 'No response received',
+          timestamp: Date.now(),
+        };
+
+        setMessages((prev) => [...prev, assistantMessage]);
+
+        // Track usage for pricing/billing
+        usageTrackerRef.current.trackMessage(userMessage.content, assistantMessage.content);
+        console.log('Usage tracked:', usageTrackerRef.current.getUsage());
+
+        // Success - exit retry loop
+        break;
+      } catch (error: any) {
+        const errorMessage = error?.message || String(error);
+        const is429 = errorMessage.includes('429') || errorMessage.toLowerCase().includes('rate limit') || errorMessage.toLowerCase().includes('too many requests');
+
+        if (is429 && retryCount < maxRetries) {
+          // Rate limited - wait and retry with exponential backoff
+          const delayMs = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
+          console.log(`Rate limited (429). Retrying in ${delayMs/1000}s... (attempt ${retryCount + 1}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          retryCount++;
+          continue;
+        } else {
+          // Non-429 error or max retries reached - show error to user
+          console.error('Error calling VCB-AI API:', error);
+          const errorMsg: Message = {
+            role: 'assistant',
+            content: is429
+              ? `I'm experiencing high demand right now. Please try again in a moment.`
+              : `Error: ${error instanceof Error ? error.message : 'Failed to get response from VCB-AI'}`,
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, errorMsg]);
+          break;
+        }
+      }
+    }
+
+    setIsLoading(false);
+    inputRef.current?.focus();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -595,7 +781,7 @@ const App: React.FC = () => {
             <button
               type="button"
               onClick={toggleVoiceMode}
-              className={`flex items-center space-x-1 md:space-x-2 px-2 py-1.5 md:px-4 md:py-3 border transition-colors ${
+              className={`flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border transition-colors ${
                 voiceModeEnabled
                   ? 'bg-vcb-white text-vcb-black border-vcb-white'
                   : 'bg-vcb-black text-vcb-white border-vcb-mid-grey hover:border-vcb-white'
@@ -603,12 +789,12 @@ const App: React.FC = () => {
               title={voiceModeEnabled ? 'Stop Voice Mode' : 'Start Voice Mode (en-ZA)'}
             >
               {voiceModeEnabled && isListening ? (
-                <svg className="w-4 h-4 md:w-6 md:h-6 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 md:w-5 md:h-5 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
                   <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
                 </svg>
               ) : (
-                <svg className="w-4 h-4 md:w-6 md:h-6" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
                   <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
                 </svg>
@@ -1038,13 +1224,9 @@ const App: React.FC = () => {
                               title={copiedIndex === index ? 'Copied!' : 'Copy to clipboard'}
                             >
                               {copiedIndex === index ? (
-                                <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
-                                  <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-                                </svg>
+                                <span className="material-icons text-base md:text-xl">check</span>
                               ) : (
-                                <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
-                                  <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
-                                </svg>
+                                <span className="material-icons text-base md:text-xl">content_copy</span>
                               )}
                             </button>
                             <button
@@ -1053,22 +1235,39 @@ const App: React.FC = () => {
                               title={speakingIndex === index ? 'Stop speaking' : 'Read aloud (en-ZA)'}
                             >
                               {speakingIndex === index ? (
-                                <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
-                                  <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-                                </svg>
+                                <span className="material-icons text-base md:text-xl">pause</span>
                               ) : (
-                                <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
-                                  <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
-                                </svg>
+                                <span className="material-icons text-base md:text-xl">volume_up</span>
                               )}
                             </button>
                           </div>
                         )}
                       </div>
-                      <div
-                        className="text-sm md:text-base text-vcb-black break-words leading-relaxed"
-                        dangerouslySetInnerHTML={{ __html: parseMarkdown(message.content) }}
-                      />
+                      {message.type === 'image' && message.imageUrl ? (
+                        <div className="space-y-3">
+                          <div className="text-sm md:text-base text-vcb-black break-words leading-relaxed">
+                            {message.content}
+                          </div>
+                          <div className="border border-vcb-light-grey p-2 bg-vcb-white">
+                            <img
+                              src={message.imageUrl}
+                              alt={message.imagePrompt || 'Generated image'}
+                              className="w-full h-auto rounded"
+                              loading="lazy"
+                            />
+                          </div>
+                          {message.imagePrompt && (
+                            <div className="text-xs text-vcb-mid-grey italic">
+                              Prompt: {message.imagePrompt}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div
+                          className="text-sm md:text-base text-vcb-black break-words leading-relaxed"
+                          dangerouslySetInnerHTML={{ __html: parseMarkdown(message.content) }}
+                        />
+                      )}
                     </div>
                   </div>
                 </div>

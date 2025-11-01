@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+    <!-- Circular dark background -->
+    <circle cx="512" cy="512" r="486.4" fill="#1a1a1a"/>
+    
+    <!-- Chat bubbles group (with orbit animation - pushed far outward) -->
+    <g>
+    <!-- Group rotation animation around center -->
+    <animateTransform
+        attributeName="transform"
+        attributeType="XML"
+        type="rotate"
+        values="0 512 512; 180 512 512; 180 512 512; 180 512 512; 360 512 512"
+        keyTimes="0; 0.45; 0.5; 0.55; 1"
+        dur="10s"
+        repeatCount="indefinite"
+        calcMode="spline"
+        keySplines="0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1"/>
+        <!-- Bubble 1 (150px radius, 200px orbit, 720° spin) -->
+        <g>
+        <animateTransform
+            attributeName="transform"
+            attributeType="XML"
+            type="rotate"
+            values="0 371 371; 0 371 371; 720 371 371; 0 371 371; 0 371 371"
+            keyTimes="0; 0.45; 0.5; 0.55; 1"
+            dur="10s"
+            repeatCount="indefinite"
+            calcMode="spline"
+            keySplines="0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1"
+            additive="sum"/>
+            <circle cx="371" cy="371" r="150" fill="#4a4a4a"/>
+            <path d="M 289 479 L 259 549 L 329 509 Z" fill="#4a4a4a"/>
+        </g>
+        
+        <!-- Bubble 2 (150px radius, 200px orbit, -720° counter-spin) -->
+        <g>
+        <animateTransform
+            attributeName="transform"
+            attributeType="XML"
+            type="rotate"
+            values="0 653 653; 0 653 653; -720 653 653; 0 653 653; 0 653 653"
+            keyTimes="0; 0.45; 0.5; 0.55; 1"
+            dur="10s"
+            repeatCount="indefinite"
+            calcMode="spline"
+            keySplines="0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1"
+            additive="sum"/>
+            <circle cx="653" cy="653" r="150" fill="#6a6a6a"/>
+            <path d="M 735 545 L 765 475 L 695 515 Z" fill="#6a6a6a"/>
+        </g>
+    </g>
+    
+    <!-- Central letter S (stationary) -->
+    <text x="512" y="540" font-family="Quicksand, Arial, sans-serif" font-size="420" font-weight="bold" 
+          fill="#FFFFFF" text-anchor="middle" dominant-baseline="middle">S</text>
+    
+    <!-- Circular border -->
+    <circle cx="512" cy="512" r="486.4" fill="none" stroke="#000000" stroke-width="8"/>
+</svg>
