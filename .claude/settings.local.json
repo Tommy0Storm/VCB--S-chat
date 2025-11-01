@@ -14,7 +14,8 @@
       "Bash(git commit -m \"$(cat <<''EOF''\nConfigure GitHub Pages deployment\n\n- Add base path for GitHub Pages in vite.config.ts\n- Install gh-pages package\n- Add predeploy and deploy scripts to package.json\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(git push:*)",
       "Bash(npm run deploy:*)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nAdd VCB-AI attribution and infrastructure details\n\n- System prompt now identifies creator as VCB-AI with CEO Ms Dawn Beech\n- References vcb-ai.online for company information\n- Mentions local SA datacenter infrastructure in Pretoria\n- Includes VCB-AI''s legal tech specialization (§3.1)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+      "Bash(git commit -m \"$(cat <<''EOF''\nAdd VCB-AI attribution and infrastructure details\n\n- System prompt now identifies creator as VCB-AI with CEO Ms Dawn Beech\n- References vcb-ai.online for company information\n- Mentions local SA datacenter infrastructure in Pretoria\n- Includes VCB-AI''s legal tech specialization (§3.1)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git commit -m \"$(cat <<''EOF''\nReplace Cerebras branding with VCB-AI in chat interface\n\n- Changed message labels from \"Cerebras AI\" to \"VCB-AI\"\n- Updated welcome message to reference VCB-AI\n- Maintains VCB-AI brand consistency (§2.1, §6.2)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
     ],
     "deny": [],
     "ask": []

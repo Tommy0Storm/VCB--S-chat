@@ -127,7 +127,7 @@ const App: React.FC = () => {
                 />
               </svg>
               <p className="text-lg font-medium uppercase tracking-wide">
-                Start a conversation with Cerebras AI
+                Start a conversation with VCB-AI
               </p>
               <p className="text-sm mt-3 font-light">
                 Type your message below to get started
@@ -162,7 +162,7 @@ const App: React.FC = () => {
                     </div>
                     <div className="flex-1">
                       <p className="text-xs font-medium text-vcb-mid-grey mb-2 uppercase tracking-wide">
-                        {message.role === 'user' ? 'You' : 'Cerebras AI'}
+                        {message.role === 'user' ? 'You' : 'VCB-AI'}
                       </p>
                       <p className="text-vcb-black whitespace-pre-wrap break-words leading-relaxed">
                         {message.content}
