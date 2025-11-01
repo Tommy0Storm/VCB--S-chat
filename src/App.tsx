@@ -547,11 +547,6 @@ const App: React.FC = () => {
               alt="VCB Logo"
               className="h-16 md:h-32"
             />
-            <img
-              src="Sovereign-Chat-icon-Spin.svg"
-              alt="Sovereign AI"
-              className="h-12 md:h-24"
-            />
             <div className="text-center">
               <h1 className="text-sm md:text-xl font-bold text-vcb-white tracking-wider">
                 VCB-CHAT (BETA)
