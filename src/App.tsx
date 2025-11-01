@@ -89,25 +89,38 @@ const App: React.FC = () => {
     utterance.rate = 1.2; // 1.2x speed for faster playback
     utterance.pitch = 1.0;
 
-    // Try to find best available voice
-    // Priority: en-ZA > en-GB > en-US > any English > default
+    // Try to find best available voice - MUST be en-ZA (South African English)
     const voices = availableVoices.length > 0 ? availableVoices : window.speechSynthesis.getVoices();
     console.log('Selecting voice from', voices.length, 'available voices');
 
-    const zaVoice = voices.find(voice => voice.lang === 'en-ZA');
-    const gbVoice = voices.find(voice => voice.lang === 'en-GB');
-    const usVoice = voices.find(voice => voice.lang === 'en-US');
-    const anyEnglish = voices.find(voice => voice.lang.startsWith('en'));
+    // Search for en-ZA voice (check multiple formats: en-ZA, en_ZA, en-za)
+    const zaVoice = voices.find(voice =>
+      voice.lang === 'en-ZA' ||
+      voice.lang === 'en_ZA' ||
+      voice.lang.toLowerCase() === 'en-za' ||
+      voice.name.toLowerCase().includes('south africa')
+    );
 
-    const selectedVoice = zaVoice || gbVoice || usVoice || anyEnglish;
-
-    if (selectedVoice) {
-      utterance.voice = selectedVoice;
-      utterance.lang = selectedVoice.lang;
-      console.log('Selected voice:', selectedVoice.name, selectedVoice.lang);
+    if (zaVoice) {
+      utterance.voice = zaVoice;
+      utterance.lang = 'en-ZA';
+      console.log('✓ Using en-ZA voice:', zaVoice.name);
     } else {
-      utterance.lang = 'en-US'; // Fallback
-      console.log('No voice found, using default en-US');
+      // No en-ZA available - use en-GB as closest alternative, but log warning
+      const gbVoice = voices.find(voice => voice.lang === 'en-GB');
+      const usVoice = voices.find(voice => voice.lang === 'en-US');
+      const anyEnglish = voices.find(voice => voice.lang.startsWith('en'));
+
+      const fallbackVoice = gbVoice || usVoice || anyEnglish;
+
+      if (fallbackVoice) {
+        utterance.voice = fallbackVoice;
+        utterance.lang = fallbackVoice.lang;
+        console.warn('⚠ en-ZA voice not available! Using fallback:', fallbackVoice.name, fallbackVoice.lang);
+      } else {
+        utterance.lang = 'en-ZA'; // Force en-ZA lang even without specific voice
+        console.warn('⚠ No English voices found! Using system default with en-ZA language tag');
+      }
     }
 
     utterance.onstart = () => {
@@ -396,20 +409,20 @@ const App: React.FC = () => {
   return (
     <div className="flex flex-col h-screen bg-white font-quicksand font-light">
       {/* Header - VCB Cleaner Theme per §5.1-5.3, Mobile Optimized */}
-      <header className="bg-vcb-black border-b border-vcb-mid-grey px-4 py-3 md:px-8 md:py-6">
+      <header className="bg-vcb-black border-b border-vcb-mid-grey px-4 py-2 md:px-8 md:py-6">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
-          <div className="flex items-center space-x-3 md:space-x-6">
+          <div className="flex items-center space-x-2 md:space-x-6">
             {/* VCB Logo per §5.3 - must be on dark background */}
             <img
               src="https://i.postimg.cc/xdJqP9br/logo-transparent-Black-Back.png"
               alt="VCB Logo"
-              className="h-20 md:h-32"
+              className="h-16 md:h-32"
             />
             <div className="text-center">
-              <h1 className="text-base md:text-xl font-bold text-vcb-white tracking-wider">
+              <h1 className="text-sm md:text-xl font-bold text-vcb-white tracking-wider">
                 VCB-CHAT (BETA)
               </h1>
-              <p className="text-vcb-white text-[10px] md:text-xs mt-0.5 font-medium uppercase tracking-wide">
+              <p className="text-vcb-white text-[9px] md:text-xs mt-0.5 font-medium uppercase tracking-wide">
                 Powered by VCB-AI
               </p>
             </div>
@@ -418,7 +431,7 @@ const App: React.FC = () => {
           <button
             type="button"
             onClick={toggleVoiceMode}
-            className={`flex items-center space-x-2 px-3 py-2 md:px-4 md:py-3 border transition-colors ${
+            className={`flex items-center space-x-1 md:space-x-2 px-2 py-1.5 md:px-4 md:py-3 border transition-colors ${
               voiceModeEnabled
                 ? 'bg-vcb-white text-vcb-black border-vcb-white'
                 : 'bg-vcb-black text-vcb-white border-vcb-mid-grey hover:border-vcb-white'
@@ -426,12 +439,12 @@ const App: React.FC = () => {
             title={voiceModeEnabled ? 'Stop Voice Mode' : 'Start Voice Mode (en-ZA)'}
           >
             {voiceModeEnabled && isListening ? (
-              <svg className="w-5 h-5 md:w-6 md:h-6 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 md:w-6 md:h-6 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
                 <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
               </svg>
             ) : (
-              <svg className="w-5 h-5 md:w-6 md:h-6" fill="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 md:w-6 md:h-6" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
                 <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
               </svg>
