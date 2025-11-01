@@ -14,11 +14,13 @@ const App: React.FC = () => {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [voiceModeEnabled, setVoiceModeEnabled] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [speechInitialized, setSpeechInitialized] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessagesLengthRef = useRef(0);
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -28,7 +30,22 @@ const App: React.FC = () => {
     scrollToBottom();
   }, [messages]);
 
+  const initializeSpeechSynthesis = () => {
+    // Initialize speech synthesis with a dummy utterance (required for mobile)
+    if (!speechInitialized) {
+      const dummyUtterance = new SpeechSynthesisUtterance('');
+      window.speechSynthesis.speak(dummyUtterance);
+      setSpeechInitialized(true);
+      console.log('Speech synthesis initialized for mobile');
+    }
+  };
+
   const handleSpeak = (text: string, index: number) => {
+    // Initialize speech synthesis on first use (mobile requirement)
+    if (isMobile && !speechInitialized) {
+      initializeSpeechSynthesis();
+    }
+
     // Stop any ongoing speech
     if (window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();
@@ -47,7 +64,8 @@ const App: React.FC = () => {
     }
 
     // Pause speech recognition during TTS playback to prevent feedback loop
-    if (voiceModeEnabled && recognitionRef.current && isListening) {
+    // Skip this on mobile to allow TTS to work
+    if (voiceModeEnabled && recognitionRef.current && isListening && !isMobile) {
       try {
         recognitionRef.current.stop();
         console.log('Paused recognition for TTS playback');
@@ -70,13 +88,16 @@ const App: React.FC = () => {
     }
 
     utterance.onstart = () => {
+      console.log('TTS started');
       setSpeakingIndex(index);
     };
 
     utterance.onend = () => {
+      console.log('TTS ended');
       setSpeakingIndex(null);
       // Restart speech recognition after TTS finishes (if voice mode still enabled)
-      if (voiceModeEnabled && recognitionRef.current) {
+      // Skip on mobile to prevent conflicts
+      if (voiceModeEnabled && recognitionRef.current && !isMobile) {
         setTimeout(() => {
           try {
             recognitionRef.current.start();
@@ -88,10 +109,11 @@ const App: React.FC = () => {
       }
     };
 
-    utterance.onerror = () => {
+    utterance.onerror = (event) => {
+      console.error('TTS error:', event);
       setSpeakingIndex(null);
-      // Restart recognition on error too
-      if (voiceModeEnabled && recognitionRef.current) {
+      // Restart recognition on error too (skip on mobile)
+      if (voiceModeEnabled && recognitionRef.current && !isMobile) {
         setTimeout(() => {
           try {
             recognitionRef.current.start();
@@ -102,6 +124,7 @@ const App: React.FC = () => {
       }
     };
 
+    console.log('Starting TTS playback');
     window.speechSynthesis.speak(utterance);
   };
 
@@ -241,6 +264,11 @@ const App: React.FC = () => {
     setVoiceModeEnabled(newVoiceMode);
 
     if (newVoiceMode) {
+      // Initialize speech synthesis on mobile (required for autoplay)
+      if (isMobile) {
+        initializeSpeechSynthesis();
+      }
+
       // Start listening
       setIsListening(true);
       if (recognitionRef.current) {
