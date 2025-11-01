@@ -470,7 +470,7 @@ const App: React.FC = () => {
       };
 
       const response = await client.chat.completions.create({
-        model: 'qwen2.5-72b-instruct',
+        model: 'qwen2.5-72b',
         messages: [
           systemMessage,
           ...[...messages, userMessage].map((msg) => ({
