@@ -1,11 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Cerebras } from '@cerebras/cerebras_cloud_sdk';
 import { UsageTracker, TierType } from './utils/usageTracker';
-
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-}
+import { ConversationManager, Message } from './utils/conversationManager';
 
 const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -19,12 +15,16 @@ const App: React.FC = () => {
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [showUsage, setShowUsage] = useState(false);
   const [userTier, setUserTier] = useState<TierType>('free');
+  const [showChatHistory, setShowChatHistory] = useState(false);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessagesLengthRef = useRef(0);
   const usageTrackerRef = useRef<UsageTracker>(new UsageTracker());
+  const conversationManagerRef = useRef<ConversationManager>(new ConversationManager());
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   const scrollToBottom = () => {
@@ -352,11 +352,102 @@ const App: React.FC = () => {
     }
   };
 
+  // Conversation Management Functions
+  const saveCurrentConversation = () => {
+    if (messages.length === 0) return;
+
+    const messagesWithTimestamps: Message[] = messages.map((msg, index) => ({
+      ...msg,
+      timestamp: msg.timestamp || Date.now() + index,
+    }));
+
+    if (currentConversationId) {
+      // Update existing conversation
+      conversationManagerRef.current.updateConversation(currentConversationId, messagesWithTimestamps);
+      console.log('Updated conversation:', currentConversationId);
+    } else {
+      // Create new conversation
+      const newConv = conversationManagerRef.current.createConversation(messagesWithTimestamps);
+      setCurrentConversationId(newConv.id);
+      console.log('Created new conversation:', newConv.id);
+    }
+  };
+
+  const loadConversation = (id: string) => {
+    const conv = conversationManagerRef.current.getConversation(id);
+    if (conv) {
+      setMessages(conv.messages);
+      setCurrentConversationId(id);
+      setShowChatHistory(false);
+      console.log('Loaded conversation:', id, conv.title);
+    }
+  };
+
+  const createNewChat = () => {
+    // Save current conversation before starting new one
+    if (messages.length > 0) {
+      saveCurrentConversation();
+    }
+
+    // Clear current chat
+    setMessages([]);
+    setCurrentConversationId(null);
+    setInput('');
+    setShowChatHistory(false);
+    console.log('Started new chat');
+  };
+
+  const deleteConversationById = (id: string) => {
+    const deleted = conversationManagerRef.current.deleteConversation(id);
+    if (deleted) {
+      // If we deleted the current conversation, clear the chat
+      if (id === currentConversationId) {
+        setMessages([]);
+        setCurrentConversationId(null);
+      }
+      console.log('Deleted conversation:', id);
+    }
+  };
+
+  const exportConversation = (id: string, format: 'json' | 'text') => {
+    const exported = format === 'json'
+      ? conversationManagerRef.current.exportToJSON(id)
+      : conversationManagerRef.current.exportToText(id);
+
+    if (exported) {
+      const blob = new Blob([exported], { type: format === 'json' ? 'application/json' : 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `conversation_${id}.${format === 'json' ? 'json' : 'txt'}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      console.log('Exported conversation:', id, format);
+    }
+  };
+
+  // Auto-save conversation when messages change
+  useEffect(() => {
+    if (messages.length > 0) {
+      const timeoutId = setTimeout(() => {
+        saveCurrentConversation();
+      }, 2000); // Auto-save after 2 seconds of inactivity
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [messages]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
-    const userMessage: Message = { role: 'user', content: input.trim() };
+    const userMessage: Message = {
+      role: 'user',
+      content: input.trim(),
+      timestamp: Date.now(),
+    };
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
@@ -393,6 +484,7 @@ const App: React.FC = () => {
       const assistantMessage: Message = {
         role: 'assistant',
         content: (response.choices as any)[0]?.message?.content || 'No response received',
+        timestamp: Date.now(),
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
@@ -405,6 +497,7 @@ const App: React.FC = () => {
       const errorMessage: Message = {
         role: 'assistant',
         content: `Error: ${error instanceof Error ? error.message : 'Failed to get response from VCB-AI'}`,
+        timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -442,6 +535,19 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center space-x-2">
+            {/* Chat History Button */}
+            <button
+              type="button"
+              onClick={() => setShowChatHistory(!showChatHistory)}
+              className="flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white hover:border-vcb-white transition-colors"
+              title="Chat History"
+            >
+              <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/>
+              </svg>
+              <span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">History</span>
+            </button>
+
             {/* Usage Stats Button */}
             <button
               type="button"
@@ -484,6 +590,206 @@ const App: React.FC = () => {
           </div>
         </div>
       </header>
+
+      {/* Chat History Modal */}
+      {showChatHistory && (
+        <div className="fixed inset-0 bg-vcb-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={() => setShowChatHistory(false)}>
+          <div className="bg-white border border-vcb-light-grey max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div className="bg-vcb-black border-b border-vcb-mid-grey px-6 py-4">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-bold text-vcb-white uppercase tracking-wider">Chat History</h2>
+                <button
+                  onClick={() => setShowChatHistory(false)}
+                  className="text-vcb-white hover:text-vcb-light-grey transition-colors"
+                  title="Close"
+                >
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                  </svg>
+                </button>
+              </div>
+
+              {/* Search Bar */}
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search conversations..."
+                  className="flex-1 bg-white text-vcb-black border border-vcb-mid-grey px-3 py-2 text-sm focus:outline-none focus:border-vcb-white"
+                />
+                <button
+                  onClick={createNewChat}
+                  className="px-4 py-2 bg-vcb-white text-vcb-black text-xs font-medium uppercase tracking-wide hover:bg-vcb-light-grey transition-colors border border-vcb-white"
+                  title="New Chat"
+                >
+                  + New Chat
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Content - Conversation List */}
+            <div className="px-6 py-4">
+              {(() => {
+                const conversations = searchQuery
+                  ? conversationManagerRef.current.searchConversations(searchQuery)
+                  : conversationManagerRef.current.getAllConversations();
+
+                if (conversations.length === 0) {
+                  return (
+                    <div className="text-center py-12 text-vcb-mid-grey">
+                      <svg className="w-16 h-16 mx-auto mb-4 opacity-50" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+                      </svg>
+                      <p className="text-sm uppercase">
+                        {searchQuery ? 'No conversations found' : 'No chat history yet'}
+                      </p>
+                      <p className="text-xs mt-2">
+                        {searchQuery ? 'Try a different search term' : 'Start a conversation to see it here'}
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-2">
+                    {conversations.map((conv) => {
+                      const isActive = conv.id === currentConversationId;
+                      const messageCount = conv.messages.length;
+                      const lastUpdate = new Date(conv.updatedAt).toLocaleDateString();
+
+                      return (
+                        <div
+                          key={conv.id}
+                          className={`border p-4 transition-colors cursor-pointer ${
+                            isActive
+                              ? 'bg-vcb-light-grey border-vcb-black'
+                              : 'bg-white border-vcb-light-grey hover:border-vcb-mid-grey'
+                          }`}
+                          onClick={() => loadConversation(conv.id)}
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2 mb-1">
+                                {conv.isPinned && (
+                                  <svg className="w-4 h-4 text-vcb-mid-grey" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
+                                  </svg>
+                                )}
+                                <h3 className="text-sm font-medium text-vcb-black line-clamp-1">{conv.title}</h3>
+                              </div>
+                              <div className="flex items-center space-x-3 text-xs text-vcb-mid-grey">
+                                <span>{messageCount} messages</span>
+                                <span>•</span>
+                                <span>{lastUpdate}</span>
+                              </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex items-center space-x-1 ml-2" onClick={(e) => e.stopPropagation()}>
+                              {/* Pin/Unpin */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  conversationManagerRef.current.togglePin(conv.id);
+                                  setShowChatHistory(false);
+                                  setTimeout(() => setShowChatHistory(true), 0);
+                                }}
+                                className="p-1.5 text-vcb-mid-grey hover:text-vcb-black transition-colors"
+                                title={conv.isPinned ? 'Unpin' : 'Pin'}
+                              >
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
+                                </svg>
+                              </button>
+
+                              {/* Rename */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const newTitle = prompt('Enter new title:', conv.title);
+                                  if (newTitle && newTitle.trim()) {
+                                    conversationManagerRef.current.renameConversation(conv.id, newTitle.trim());
+                                    setShowChatHistory(false);
+                                    setTimeout(() => setShowChatHistory(true), 0);
+                                  }
+                                }}
+                                className="p-1.5 text-vcb-mid-grey hover:text-vcb-black transition-colors"
+                                title="Rename"
+                              >
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                                </svg>
+                              </button>
+
+                              {/* Export */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const format = confirm('Export as JSON? (Cancel for plain text)') ? 'json' : 'text';
+                                  exportConversation(conv.id, format);
+                                }}
+                                className="p-1.5 text-vcb-mid-grey hover:text-vcb-black transition-colors"
+                                title="Export"
+                              >
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/>
+                                </svg>
+                              </button>
+
+                              {/* Delete */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm(`Delete "${conv.title}"? This cannot be undone.`)) {
+                                    deleteConversationById(conv.id);
+                                    setShowChatHistory(false);
+                                    setTimeout(() => setShowChatHistory(true), 0);
+                                  }
+                                }}
+                                className="p-1.5 text-vcb-mid-grey hover:text-red-600 transition-colors"
+                                title="Delete"
+                              >
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+              {/* Stats Footer */}
+              {(() => {
+                const stats = conversationManagerRef.current.getStats();
+                return (
+                  <div className="mt-6 pt-4 border-t border-vcb-light-grey">
+                    <div className="grid grid-cols-3 gap-4 text-center text-xs">
+                      <div>
+                        <p className="text-vcb-mid-grey uppercase">Total</p>
+                        <p className="text-vcb-black font-bold text-lg">{stats.total}</p>
+                      </div>
+                      <div>
+                        <p className="text-vcb-mid-grey uppercase">Pinned</p>
+                        <p className="text-vcb-black font-bold text-lg">{stats.pinned}</p>
+                      </div>
+                      <div>
+                        <p className="text-vcb-mid-grey uppercase">Messages</p>
+                        <p className="text-vcb-black font-bold text-lg">{stats.totalMessages}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Usage & Pricing Modal */}
       {showUsage && (
