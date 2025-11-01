@@ -3,6 +3,28 @@ import { Cerebras } from '@cerebras/cerebras_cloud_sdk';
 import { UsageTracker, TierType } from './utils/usageTracker';
 import { ConversationManager, Message } from './utils/conversationManager';
 
+// Parse markdown for bold and italic formatting
+const parseMarkdown = (text: string): string => {
+  // Escape HTML to prevent XSS
+  let html = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
+  // Convert **bold** to <strong>
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+  // Convert *italic* to <em>
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+  // Convert newlines to <br>
+  html = html.replace(/\n/g, '<br>');
+
+  return html;
+};
+
 const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -1040,9 +1062,10 @@ const App: React.FC = () => {
                           </div>
                         )}
                       </div>
-                      <p className="text-sm md:text-base text-vcb-black whitespace-pre-wrap break-words leading-relaxed">
-                        {message.content}
-                      </p>
+                      <div
+                        className="text-sm md:text-base text-vcb-black break-words leading-relaxed"
+                        dangerouslySetInnerHTML={{ __html: parseMarkdown(message.content) }}
+                      />
                     </div>
                   </div>
                 </div>
@@ -1059,8 +1082,8 @@ const App: React.FC = () => {
                     className="w-8 h-8 md:w-10 md:h-10"
                   />
                   <img
-                    src="sovereign-spinner.svg"
-                    alt="Loading..."
+                    src="sovereign-thinking-spinner.svg"
+                    alt="Thinking..."
                     className="w-8 h-8 md:w-10 md:h-10"
                   />
                 </div>
@@ -1083,7 +1106,12 @@ const App: React.FC = () => {
               <span className="text-xs md:text-sm font-medium uppercase">Listening...</span>
             </div>
           )}
-          <div className="flex space-x-2 md:space-x-4">
+          <div className="flex items-center space-x-2 md:space-x-4">
+            <img
+              src="Sovereign-Chat-icon-Spin.svg"
+              alt="Sovereign"
+              className="h-12 w-12 md:h-16 md:w-16 flex-shrink-0"
+            />
             <textarea
               id="chat-input"
               name="message"
@@ -1105,7 +1133,7 @@ const App: React.FC = () => {
               {isLoading ? (
                 <>
                   <img
-                    src="sovereign-spinner.svg"
+                    src="sovereign-thinking-spinner.svg"
                     alt="Sending..."
                     className="h-4 w-4 md:h-5 md:w-5"
                   />
