@@ -542,11 +542,19 @@ const App: React.FC = () => {
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center space-x-2 md:space-x-6">
             {/* VCB Logo per §5.3 - must be on dark background */}
-            <img
-              src="https://i.postimg.cc/xdJqP9br/logo-transparent-Black-Back.png"
-              alt="VCB Logo"
-              className="h-16 md:h-32"
-            />
+            <a
+              href="https://vcb-ai.online"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Visit VCB-AI"
+              className="transition-opacity hover:opacity-80"
+            >
+              <img
+                src="https://i.postimg.cc/xdJqP9br/logo-transparent-Black-Back.png"
+                alt="VCB Logo"
+                className="h-16 md:h-32"
+              />
+            </a>
             <div className="text-center">
               <h1 className="text-sm md:text-xl font-bold text-vcb-white tracking-wider">
                 VCB-CHAT (BETA)
