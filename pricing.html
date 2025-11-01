@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Sovereign AI Pricing</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            font-family: 'Quicksand', Arial, sans-serif;
+            color: #111111;
+            background-color: #ffffff;
+        }
+        body {
+            margin: 0;
+            font-family: inherit;
+            font-weight: 300;
+            background-color: #ffffff;
+            color: #111111;
+            line-height: 1.6;
+            letter-spacing: 0.01em;
+        }
+        a {
+            color: #111111;
+        }
+        header {
+            background-color: #000000;
+            color: #ffffff;
+            padding: 3rem 1.5rem;
+        }
+        .header-inner {
+            max-width: 960px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+            text-align: center;
+        }
+        .logo-wrap {
+            background-color: #0f0f0f;
+            padding: 1rem 1.5rem;
+        }
+        .logo-wrap img {
+            max-width: 160px;
+            height: auto;
+            display: block;
+        }
+        h1 {
+            margin: 0;
+            font-size: 2.25rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+        }
+        header p {
+            margin: 0;
+            font-size: 1.05rem;
+        }
+        h2,
+        h3 {
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+        .cta-group {
+            margin-top: 1rem;
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .cta-button {
+            padding: 0.75rem 1.75rem;
+            border-radius: 9999px;
+            border: 1px solid #ffffff;
+            background-color: transparent;
+            color: #ffffff;
+            font-weight: 500;
+            text-decoration: none;
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+        .cta-button:hover,
+        .cta-button:focus {
+            background-color: #ffffff;
+            color: #000000;
+            outline: none;
+        }
+        .cta-button:focus-visible {
+            outline: 2px solid #ffffff;
+            outline-offset: 3px;
+        }
+        main {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 2.5rem 1.5rem 4rem;
+        }
+        section {
+            border: 1px solid #e5e7eb;
+            padding: 2rem 1.75rem;
+            background-color: #ffffff;
+        }
+        section + section {
+            margin-top: 2.5rem;
+        }
+        .plans {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            border: none;
+            padding: 0;
+            background: none;
+        }
+        .plan {
+            border: 1px solid #d1d5db;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            background-color: #ffffff;
+        }
+        .plan h2 {
+            margin: 0;
+            font-size: 1.35rem;
+        }
+        .plan .price {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: #000000;
+        }
+        .badge {
+            align-self: flex-start;
+            padding: 0.4rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            background-color: #f3f4f6;
+            color: #111111;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+        }
+        .plan ul,
+        .sovereignty ul {
+            margin: 0;
+            padding-left: 1.2rem;
+            display: grid;
+            gap: 0.6rem;
+        }
+        .note {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: #4b5563;
+        }
+        .credits table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1.5rem;
+        }
+        .credits th,
+        .credits td {
+            padding: 0.9rem 1rem;
+            border-bottom: 1px solid #e5e7eb;
+            text-align: left;
+        }
+        .credits thead th {
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-size: 0.85rem;
+        }
+        .faq details {
+            margin-top: 1rem;
+            border: 1px solid #d1d5db;
+            padding: 1rem 1.25rem;
+            background-color: #f9fafb;
+        }
+        .faq summary {
+            font-weight: 500;
+            cursor: pointer;
+            outline: none;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+        .faq details[open] {
+            background-color: #ffffff;
+        }
+        .faq details p {
+            margin: 0.75rem 0 0;
+            color: #374151;
+        }
+        @media (max-width: 640px) {
+            header {
+                padding: 2.5rem 1rem;
+            }
+            h1 {
+                font-size: 1.8rem;
+            }
+            main {
+                padding: 2rem 1rem 3rem;
+            }
+            .plan {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-inner">
+            <div class="logo-wrap">
+                <img src="https://i.postimg.cc/xdJqP9br/logo-transparent-Black-Back.png" alt="VCB Sovereign AI logo">
+            </div>
+            <div>
+                <h1>Sovereign South African AI, fluent in 11 official languages.</h1>
+                <p>Choose the plan that fits your pace and keep conversations anchored in local context.</p>
+            </div>
+            <div class="cta-group">
+                <a class="cta-button" href="#plans" aria-label="View pricing plans">Get started</a>
+                <a class="cta-button" href="#contact" aria-label="Contact sales">Talk to sales</a>
+            </div>
+        </div>
+    </header>
+    <main>
+        <section class="about" aria-labelledby="about-heading">
+            <h2 id="about-heading">What makes VCB Sovereign AI different?</h2>
+            <p>
+                VCB keeps your conversations inside South African borders while delivering nuanced, culturally aware
+                support across every official language. Deploy rapid customer responses, localized research, and
+                multilingual knowledge workflows without exporting sensitive data overseas.
+            </p>
+        </section>
+        <section class="sovereignty" aria-labelledby="sovereignty-heading">
+            <h2 id="sovereignty-heading">Data sovereignty by design</h2>
+            <p>
+                Every interaction stays within South Africa—processed, encrypted, and retained on infrastructure that
+                complies with the Protection of Personal Information Act (POPIA) and related regulations. We never move
+                chats offshore, ensuring your organisation remains outside foreign jurisdiction or surveillance.
+            </p>
+            <ul>
+                <li><strong>Local storage:</strong> All chat transcripts live on South African servers managed for high availability.</li>
+                <li><strong>POPIA compliance:</strong> Policies, audits, and retention schedules align with national privacy law.</li>
+                <li><strong>No foreign jurisdiction:</strong> Traffic is geo-fenced and monitored to prevent cross-border transfer.</li>
+                <li><strong>Secure infrastructure:</strong> Layered controls guard against unauthorised access or breaches.</li>
+            </ul>
+            <p>
+                Choosing VCB Sovereign AI means your teams can collaborate confidently, knowing their conversations stay
+                private, compliant, and protected by South African law.
+            </p>
+        </section>
+        <section class="plans" id="plans" aria-label="Pricing plans">
+            <article class="plan">
+                <span class="badge">Core multilingual chat</span>
+                <h2>Starter</h2>
+                <div class="price">R99 / $5 per month</div>
+                <ul>
+                    <li>60 Lite chats each billing cycle</li>
+                    <li>Best for individuals exploring sovereign AI</li>
+                    <li>Cancel anytime</li>
+                </ul>
+            </article>
+            <article class="plan">
+                <span class="badge">Optimized responses</span>
+                <h2>Standard</h2>
+                <div class="price">R349 / $18 per month</div>
+                <ul>
+                    <li>150 Standard chats plus 50 Premium rollovers</li>
+                    <li>Rollovers convert to Standard after 60 days</li>
+                    <li>Ideal for growing teams needing richer context</li>
+                </ul>
+            </article>
+            <article class="plan">
+                <span class="badge">Fastest latency + knowledge packs</span>
+                <h2>Pro</h2>
+                <div class="price">R749 / $39 per month</div>
+                <ul>
+                    <li>400 Standard chats and 120 Premium chats monthly</li>
+                    <li>Knowledge pack integrations and priority routing</li>
+                    <li>Designed for high-volume, high-stakes workflows</li>
+                </ul>
+            </article>
+        </section>
+
+        <section class="credits" id="credits" aria-labelledby="credits-heading">
+            <h3 id="credits-heading">Pay-as-you-go packs that never expire</h3>
+            <p class="note">1 Premium chat = 10 credits, 1 Standard chat = 4 credits, 1 Lite chat = 1 credit.</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Pack</th>
+                        <th>Credits</th>
+                        <th>Coverage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>$10 pack</td>
+                        <td>100 credits</td>
+                        <td>10 Premium or 25 Standard or 100 Lite chats</td>
+                    </tr>
+                    <tr>
+                        <td>$40 pack</td>
+                        <td>400 credits</td>
+                        <td>40 Premium or 100 Standard or 400 Lite chats</td>
+                    </tr>
+                    <tr>
+                        <td>$100 pack</td>
+                        <td>1,000 credits</td>
+                        <td>100 Premium or 250 Standard or 1,000 Lite chats</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p class="note">Enterprise bundles add SSO, analytics, and custom guardrails with committed volume pricing.</p>
+        </section>
+        <section class="faq" aria-labelledby="faq-heading">
+            <h2 id="faq-heading">Frequently asked questions</h2>
+            <details>
+                <summary>How do you define a conversation?</summary>
+                <p>A conversation includes all exchanges within a 30-minute window of activity. After 30 minutes of inactivity the session resets and a new conversation begins.</p>
+            </details>
+            <details>
+                <summary>Is my data kept within South Africa?</summary>
+                <p>Yes. All data is processed and stored locally to help you comply with POPIA and other regional privacy regulations.</p>
+            </details>
+            <details>
+                <summary>Can I switch tiers later?</summary>
+                <p>You can upgrade, downgrade, or cancel at any time. Changes take effect at the next billing cycle and unused pay-as-you-go credits stay in your account.</p>
+            </details>
+        </section>
+        <section id="contact" class="about" aria-labelledby="contact-heading">
+            <h2 id="contact-heading">Need a custom plan?</h2>
+            <p>
+                Email <a href="mailto:hello@vcb.africa">hello@vcb.africa</a> or call +27 11 555 1234 to tailor enterprise volumes,
+                compliance reviews, or on-premise deployments. Our team replies within one business day.
+            </p>
+        </section>
+    </main>
+</body>
+</html>
