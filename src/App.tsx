@@ -34,7 +34,25 @@ const App: React.FC = () => {
       window.speechSynthesis.cancel();
       if (speakingIndex === index) {
         setSpeakingIndex(null);
+        // Restart recognition if voice mode is enabled
+        if (voiceModeEnabled && recognitionRef.current) {
+          try {
+            recognitionRef.current.start();
+          } catch (err) {
+            console.error('Failed to restart recognition after stopping TTS:', err);
+          }
+        }
         return;
+      }
+    }
+
+    // Pause speech recognition during TTS playback to prevent feedback loop
+    if (voiceModeEnabled && recognitionRef.current && isListening) {
+      try {
+        recognitionRef.current.stop();
+        console.log('Paused recognition for TTS playback');
+      } catch (err) {
+        console.error('Failed to pause recognition:', err);
       }
     }
 
@@ -57,10 +75,31 @@ const App: React.FC = () => {
 
     utterance.onend = () => {
       setSpeakingIndex(null);
+      // Restart speech recognition after TTS finishes (if voice mode still enabled)
+      if (voiceModeEnabled && recognitionRef.current) {
+        setTimeout(() => {
+          try {
+            recognitionRef.current.start();
+            console.log('Resumed recognition after TTS playback');
+          } catch (err) {
+            console.error('Failed to restart recognition after TTS:', err);
+          }
+        }, 500); // 500ms delay to ensure TTS has fully stopped
+      }
     };
 
     utterance.onerror = () => {
       setSpeakingIndex(null);
+      // Restart recognition on error too
+      if (voiceModeEnabled && recognitionRef.current) {
+        setTimeout(() => {
+          try {
+            recognitionRef.current.start();
+          } catch (err) {
+            console.error('Failed to restart recognition after TTS error:', err);
+          }
+        }, 500);
+      }
     };
 
     window.speechSynthesis.speak(utterance);
