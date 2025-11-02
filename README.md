@@ -31,7 +31,7 @@ For licensing inquiries: info@vcb-ai.online
 
 ## Features
 
-- Real-time chat interface with Cerebras AI
+- Real-time chat interface with VCB AI
 - Modern, responsive UI built with React and Tailwind CSS
 - TypeScript for type safety
 - Beautiful dark theme with smooth animations
@@ -44,13 +44,13 @@ For licensing inquiries: info@vcb-ai.online
 
 - Node.js (v18 or higher recommended)
 - npm or yarn
-- A Cerebras API key (get one at [https://cloud.cerebras.ai/](https://cloud.cerebras.ai/))
+- A VCB API key (get one at [https://cloud.VCB.ai/](https://cloud.VCB.ai/))
 
 ## Installation
 
 1. Clone or navigate to this repository:
 ```bash
-cd cerebras-chat
+cd VCB-chat
 ```
 
 2. Install dependencies:
@@ -60,9 +60,9 @@ npm install
 
 3. Set up your environment variables:
    - Copy `.env.example` to `.env`
-   - Add your Cerebras API key to the `.env` file:
+   - Add your VCB API key to the `.env` file:
 ```
-VITE_CEREBRAS_API_KEY=your_actual_api_key_here
+VITE_VCB_API_KEY=your_actual_api_key_here
 ```
 
 ## Running the Application
@@ -89,7 +89,7 @@ npm run preview
 ## Project Structure
 
 ```
-cerebras-chat/
+VCB-chat/
 ├── src/
 │   ├── App.tsx          # Main chat component
 │   ├── main.tsx         # Application entry point
@@ -110,7 +110,7 @@ cerebras-chat/
 - **TypeScript** - Type safety
 - **Vite** - Build tool and dev server
 - **Tailwind CSS** - Utility-first CSS framework
-- **Cerebras Cloud SDK** - AI API integration
+- **VCB Cloud SDK** - AI API integration
 - **Llama 3.1** - AI model (8B parameter version)
 
 ## Usage Tips
@@ -130,7 +130,7 @@ cerebras-chat/
 ## Troubleshooting
 
 ### API Key Error
-If you see "VITE_CEREBRAS_API_KEY not found", make sure:
+If you see "VITE_VCB_API_KEY not found", make sure:
 1. You created the `.env` file in the project root
 2. The API key is properly set in the `.env` file
 3. You restart the dev server after changing `.env`
@@ -154,5 +154,5 @@ Unauthorized reproduction or distribution is strictly prohibited.
 
 For issues with:
 - This application: Check the code or create an issue
-- Cerebras API: Visit [Cerebras documentation](https://cloud.cerebras.ai/docs)
+- VCB API: Visit [VCB documentation](https://cloud.VCB.ai/docs)
 - React/Vite: Check their respective documentation
