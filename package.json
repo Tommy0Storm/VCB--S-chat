@@ -1,8 +1,11 @@
 {
-  "name": "cerebras-chat",
+  "name": "vcb-chat",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "VCB-AI (Pty) Ltd",
+  "description": "VCB-Chat - Sovereign AI for African Jurisprudence. Proprietary legal tech platform with 1M token context.",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

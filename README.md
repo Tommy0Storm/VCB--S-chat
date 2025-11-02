@@ -1,6 +1,33 @@
-# Cerebras AI Chat Interface
+# VCB-CHAT - Sovereign AI for African Jurisprudence
 
-A modern, production-ready React chat interface powered by Cerebras AI and the Llama 3.1 model.
+**⚠️ PROPRIETARY SOFTWARE - ALL RIGHTS RESERVED ⚠️**
+
+A premium legal tech AI platform with 1 million token context, trained for South African law and multilingual support (11 official languages).
+
+**Copyright © 2025 VCB-AI (Pty) Ltd**
+CEO: Ms Dawn Beech | Website: [vcb-ai.online](https://vcb-ai.online)
+Pretoria Datacenter, South Africa
+
+---
+
+## 🔒 STRICT PROPRIETARY LICENSE
+
+**THIS REPOSITORY IS PUBLICLY VISIBLE FOR DEMONSTRATION PURPOSES ONLY.**
+
+❌ **YOU MAY NOT:**
+- Copy, modify, or distribute this code
+- Use this code commercially without written permission
+- Create derivative works or extract algorithms
+- Train AI models using this codebase
+- Remove proprietary notices
+
+✅ **READ THE FULL LICENSE:** [LICENSE](./LICENSE)
+
+**Unauthorized use constitutes copyright infringement under South African law.**
+
+For licensing inquiries: info@vcb-ai.online
+
+---
 
 ## Features
 
@@ -118,7 +145,10 @@ npm install
 
 ## License
 
-MIT
+**PROPRIETARY - SEE [LICENSE](./LICENSE) FILE**
+
+This software is protected by South African copyright law and international treaties.
+Unauthorized reproduction or distribution is strictly prohibited.
 
 ## Support
 
