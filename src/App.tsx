@@ -549,41 +549,44 @@ const App: React.FC = () => {
     }
 
     try {
-      const response = await fetch('https://api.cerebras.ai/v1/models/cerebras-vision-graphics-generation/infer', {
+      // Try the image generation API endpoint
+      const response = await fetch('https://api.cerebras.ai/v1/images/generations', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
+          model: 'flux-dev',
           prompt: prompt,
           width: 1024,
           height: 1024,
-          num_inference_steps: 50,
-          guidance_scale: 7.5,
+          steps: 50,
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Image generation failed: ${response.status}`);
+        throw new Error(errorData.message || `Image generation not available (${response.status})`);
       }
 
       const data = await response.json();
 
-      // The response should contain the image URL or base64 data
-      if (data.image) {
+      // Handle different response formats
+      if (data.data && data.data[0] && data.data[0].url) {
+        return data.data[0].url;
+      } else if (data.data && data.data[0] && data.data[0].b64_json) {
+        return `data:image/png;base64,${data.data[0].b64_json}`;
+      } else if (data.image) {
         return data.image;
       } else if (data.imageUrl) {
         return data.imageUrl;
-      } else if (data.data && data.data[0]) {
-        return data.data[0];
       } else {
         throw new Error('No image data in response');
       }
     } catch (error) {
       console.error('Image generation error:', error);
-      throw error;
+      throw new Error('Image generation is currently unavailable. Please try text-based questions instead.');
     }
   };
 
