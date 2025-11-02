@@ -1,4 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import { Cerebras } from '@cerebras/cerebras_cloud_sdk';
 import { UsageTracker, TierType } from './utils/usageTracker';
 import { ConversationManager, Message } from './utils/conversationManager';
@@ -253,76 +256,6 @@ const normalizeIcons = (text: string): string => {
     const normalized = universalIconMap[iconName.toLowerCase()];
     return normalized ? `[${normalized}]` : match;
   });
-};
-
-// Enhanced markdown parser for comprehensive formatting
-const parseMarkdown = (text: string): string => {
-  // First, enforce formatting rules
-  text = enforceFormatting(text);
-  // Then normalize icons to consistent names
-  text = normalizeIcons(text);
-  // Escape HTML to prevent XSS
-  let html = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-
-  // Convert code blocks (```code```)
-  html = html.replace(/```([\s\S]+?)```/g, '<pre style="background: #f5f5f5; padding: 12px; border-radius: 4px; overflow-x: auto; margin: 8px 0;"><code>$1</code></pre>');
-
-  // Convert inline code (`code`)
-  html = html.replace(/`([^`]+)`/g, '<code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px; font-family: monospace;">$1</code>');
-
-  // Convert horizontal rules (---, ___, ***)
-  html = html.replace(/^(-{3,}|_{3,}|\*{3,})$/gm, '<hr style="border: none; border-top: 1px solid #e0e0e0; margin: 16px 0;">');
-
-  // Convert blockquotes (> text)
-  html = html.replace(/^&gt; (.+)$/gm, '<blockquote style="border-left: 4px solid #e0e0e0; padding-left: 12px; margin: 8px 0; color: #666;">$1</blockquote>');
-
-  // Convert headers (### Header) - ALL headers must be bold
-  html = html.replace(/^### (.+)$/gm, '<h3 style="font-weight: bold; text-transform: uppercase; margin: 12px 0 8px 0;">$1</h3>');
-  html = html.replace(/^## (.+)$/gm, '<h2 style="font-weight: bold; text-transform: uppercase; margin: 12px 0 8px 0;">$1</h2>');
-  html = html.replace(/^# (.+)$/gm, '<h1 style="font-weight: bold; text-transform: uppercase; margin: 12px 0 8px 0;">$1</h1>');
-
-  // Convert bold (**text** or __text__)
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
-
-  // Convert italic (*text* or _text_)
-  html = html.replace(/\*([^\*]+?)\*/g, '<em>$1</em>');
-  html = html.replace(/_([^_]+?)_/g, '<em>$1</em>');
-
-  // Convert Google Material Icons [icon_name] to actual icons
-  html = html.replace(/\[([a-z_0-9]+)\]/g, (match, iconName) => {
-    // Check if it looks like a Material Icon name (lowercase with underscores and numbers)
-    if (/^[a-z_0-9]+$/.test(iconName)) {
-      return `<span class="material-icons" style="font-size: 1.8em; vertical-align: middle; color: inherit;">${iconName}</span>`;
-    }
-    return match; // Not an icon, keep as-is
-  });
-
-  // Convert links ([text](url)) - must come after icon conversion
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" style="color: #000; text-decoration: underline;">$1</a>');
-
-  // Convert unordered lists (- item or * item)
-  html = html.replace(/^[*-] (.+)$/gm, '<li style="margin-left: 20px;">$1</li>');
-  html = html.replace(/(<li[^>]*>.*<\/li>\n?)+/g, '<ul style="margin: 8px 0;">$&</ul>');
-
-  // Convert ordered lists (1. item)
-  html = html.replace(/^\d+\. (.+)$/gm, '<li style="margin-left: 20px;">$1</li>');
-
-  // Convert line breaks (double newline to paragraph, single to br)
-  html = html.replace(/\n\n/g, '</p><p style="margin: 8px 0;">');
-  html = html.replace(/\n/g, '<br>');
-
-  // Wrap in paragraph if not already wrapped
-  if (!html.startsWith('<')) {
-    html = '<p style="margin: 8px 0;">' + html + '</p>';
-  }
-
-  return html;
 };
 
 const App: React.FC = () => {
@@ -1566,10 +1499,69 @@ const App: React.FC = () => {
                           )}
                         </div>
                       ) : (
-                        <div
-                          className="text-sm md:text-base text-vcb-black break-words leading-relaxed"
-                          dangerouslySetInnerHTML={{ __html: parseMarkdown(message.content) }}
-                        />
+                        <div className="text-sm md:text-base text-vcb-black break-words leading-relaxed prose prose-sm md:prose-base max-w-none">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            rehypePlugins={[rehypeRaw]}
+                            components={{
+                              // Custom renderer for Material Icons [icon_name]
+                              p: ({node, children, ...props}) => {
+                                const processChildren = (children: any): any => {
+                                  if (typeof children === 'string') {
+                                    // Replace [icon_name] with Material Icon spans
+                                    const parts = children.split(/(\[[a-z_0-9]+\])/g);
+                                    return parts.map((part, idx) => {
+                                      const iconMatch = part.match(/^\[([a-z_0-9]+)\]$/);
+                                      if (iconMatch) {
+                                        return (
+                                          <span
+                                            key={idx}
+                                            className="material-icons"
+                                            style={{ fontSize: '1.8em', verticalAlign: 'middle', color: 'inherit' }}
+                                          >
+                                            {iconMatch[1]}
+                                          </span>
+                                        );
+                                      }
+                                      return part;
+                                    });
+                                  }
+                                  if (Array.isArray(children)) {
+                                    return children.map((child) =>
+                                      typeof child === 'string' ? processChildren(child) : child
+                                    );
+                                  }
+                                  return children;
+                                };
+                                return <p {...props}>{processChildren(children)}</p>;
+                              },
+                            // Style tables
+                            table: ({node, ...props}) => (
+                              <div className="overflow-x-auto my-4">
+                                <table className="min-w-full border-collapse border border-vcb-light-grey" {...props} />
+                              </div>
+                            ),
+                            thead: ({node, ...props}) => (
+                              <thead className="bg-vcb-light-grey" {...props} />
+                            ),
+                            th: ({node, ...props}) => (
+                              <th className="border border-vcb-mid-grey px-4 py-2 text-left font-semibold" {...props} />
+                            ),
+                            td: ({node, ...props}) => (
+                              <td className="border border-vcb-light-grey px-4 py-2" {...props} />
+                            ),
+                            // Style code blocks
+                            code: ({node, inline, ...props}: any) =>
+                              inline ? (
+                                <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono" {...props} />
+                              ) : (
+                                <code className="block bg-gray-100 p-4 rounded overflow-x-auto font-mono text-sm" {...props} />
+                              ),
+                          }}
+                        >
+                          {enforceFormatting(normalizeIcons(message.content))}
+                        </ReactMarkdown>
+                        </div>
                       )}
                     </div>
                   </div>
