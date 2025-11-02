@@ -1,0 +1,156 @@
+Domain,Concept,Primary Icon,Alternatives,Use Case
+COOKING & FOOD,heat,local_fire_department,fireplace | whatshot,COOKING & FOOD: heat
+COOKING & FOOD,cool,ac_unit,snowflake | cloud,COOKING & FOOD: cool
+COOKING & FOOD,mix,blender,auto_mixer | kitchen,COOKING & FOOD: mix
+COOKING & FOOD,chop,kitchen_knife,content_cut | scissors,COOKING & FOOD: chop
+COOKING & FOOD,measure,straighten,ruler | aspect_ratio,COOKING & FOOD: measure
+COOKING & FOOD,ingredient,inventory_2,shopping_cart | local_dining,COOKING & FOOD: ingredient
+COOKING & FOOD,bake,baking_production,cookie | pie,COOKING & FOOD: bake
+COOKING & FOOD,serve,restaurant,local_dining | room_service,COOKING & FOOD: serve
+COOKING & FOOD,time,schedule,timer | access_time,COOKING & FOOD: time
+COOKING & FOOD,container,bowl,set_meal | lunch_dining,COOKING & FOOD: container
+COOKING & FOOD,combine,merge_type,call_merge | unarchive,COOKING & FOOD: combine
+TECHNOLOGY & CODING,error,error,error_outline | cancel,TECHNOLOGY & CODING: error
+TECHNOLOGY & CODING,success,check_circle,done | verified,TECHNOLOGY & CODING: success
+TECHNOLOGY & CODING,warning,warning,priority_high | info,TECHNOLOGY & CODING: warning
+TECHNOLOGY & CODING,loading,loop,autorenew | hourglass_empty,TECHNOLOGY & CODING: loading
+TECHNOLOGY & CODING,debug,bug_report,build | code,TECHNOLOGY & CODING: debug
+TECHNOLOGY & CODING,save,save,backup | cloud_download,TECHNOLOGY & CODING: save
+TECHNOLOGY & CODING,deploy,publish,send | rocket_launch,TECHNOLOGY & CODING: deploy
+TECHNOLOGY & CODING,build,build,handyman | construction,TECHNOLOGY & CODING: build
+TECHNOLOGY & CODING,test,check_circle,done_all | task_alt,TECHNOLOGY & CODING: test
+TECHNOLOGY & CODING,database,storage,database | cloud_queue,TECHNOLOGY & CODING: database
+TECHNOLOGY & CODING,api,cloud,api | router,TECHNOLOGY & CODING: api
+TECHNOLOGY & CODING,security,lock,security | verified_user,TECHNOLOGY & CODING: security
+TECHNOLOGY & CODING,delete,delete,delete_forever | remove,TECHNOLOGY & CODING: delete
+HEALTH & MEDICAL,heart,favorite,healing | heart_plus,HEALTH & MEDICAL: heart
+HEALTH & MEDICAL,medicine,pills,medication | vaccine,HEALTH & MEDICAL: medicine
+HEALTH & MEDICAL,symptom,sick,sentiment_very_dissatisfied | warning,HEALTH & MEDICAL: symptom
+HEALTH & MEDICAL,exercise,fitness_center,directions_run | sports,HEALTH & MEDICAL: exercise
+HEALTH & MEDICAL,doctor,person_health,medical_information | emergency,HEALTH & MEDICAL: doctor
+HEALTH & MEDICAL,hospital,local_hospital,medical_services | domain,HEALTH & MEDICAL: hospital
+HEALTH & MEDICAL,nutrition,restaurant,local_dining | apple,HEALTH & MEDICAL: nutrition
+HEALTH & MEDICAL,sleep,bedtime,hotel | bedroom_baby,HEALTH & MEDICAL: sleep
+HEALTH & MEDICAL,weight,scale,monitor_weight | straighten,HEALTH & MEDICAL: weight
+HEALTH & MEDICAL,activity,directions_walk,directions_run | directions_bike,HEALTH & MEDICAL: activity
+BUSINESS & FINANCE,money,attach_money,currency_exchange | payment,BUSINESS & FINANCE: money
+BUSINESS & FINANCE,profit,trending_up,arrow_upward | show_chart,BUSINESS & FINANCE: profit
+BUSINESS & FINANCE,loss,trending_down,arrow_downward | show_chart,BUSINESS & FINANCE: loss
+BUSINESS & FINANCE,investment,trending_up,auto_invest | savings,BUSINESS & FINANCE: investment
+BUSINESS & FINANCE,payment,payment,credit_card | wallet,BUSINESS & FINANCE: payment
+BUSINESS & FINANCE,contract,description,article | contract,BUSINESS & FINANCE: contract
+BUSINESS & FINANCE,meeting,event,calendar_today | groups,BUSINESS & FINANCE: meeting
+BUSINESS & FINANCE,presentation,slideshow,edit_note | description,BUSINESS & FINANCE: presentation
+BUSINESS & FINANCE,report,description,assessment | auto_stories,BUSINESS & FINANCE: report
+BUSINESS & FINANCE,team,groups,people | supervisor_account,BUSINESS & FINANCE: team
+BUSINESS & FINANCE,growth,trending_up,arrow_upward | bar_chart,BUSINESS & FINANCE: growth
+BUSINESS & FINANCE,target,bullseye,gps_fixed | track_changes,BUSINESS & FINANCE: target
+BUSINESS & FINANCE,deadline,access_time,schedule | calendar_today,BUSINESS & FINANCE: deadline
+LEARNING & EDUCATION,lesson,school,book | description,LEARNING & EDUCATION: lesson
+LEARNING & EDUCATION,assignment,assignment,task | done,LEARNING & EDUCATION: assignment
+LEARNING & EDUCATION,test,assignment_turned_in,check_circle | task_alt,LEARNING & EDUCATION: test
+LEARNING & EDUCATION,question,help,help_outline | question_mark,LEARNING & EDUCATION: question
+LEARNING & EDUCATION,answer,check_circle,done_all | task,LEARNING & EDUCATION: answer
+LEARNING & EDUCATION,discussion,forum,comment | chat,LEARNING & EDUCATION: discussion
+LEARNING & EDUCATION,video,videocam,play_circle | movie,LEARNING & EDUCATION: video
+LEARNING & EDUCATION,document,description,file_copy | insert_drive_file,LEARNING & EDUCATION: document
+LEARNING & EDUCATION,progress,trending_up,show_chart | speed,LEARNING & EDUCATION: progress
+LEARNING & EDUCATION,certificate,verified,military_tech | card_giftcard,LEARNING & EDUCATION: certificate
+LEARNING & EDUCATION,homework,assignment_turned_in,school | book,LEARNING & EDUCATION: homework
+TRAVEL & TRANSPORTATION,flight,flight,flight_takeoff | flight_land,TRAVEL & TRANSPORTATION: flight
+TRAVEL & TRANSPORTATION,hotel,hotel,bed | room_service,TRAVEL & TRANSPORTATION: hotel
+TRAVEL & TRANSPORTATION,car,directions_car,two_wheeler | train,TRAVEL & TRANSPORTATION: car
+TRAVEL & TRANSPORTATION,location,location_on,map | pin_drop,TRAVEL & TRANSPORTATION: location
+TRAVEL & TRANSPORTATION,destination,gps_fixed,location_on | place,TRAVEL & TRANSPORTATION: destination
+TRAVEL & TRANSPORTATION,navigation,navigation,directions | map,TRAVEL & TRANSPORTATION: navigation
+TRAVEL & TRANSPORTATION,booking,calendar_today,event_available | check_circle,TRAVEL & TRANSPORTATION: booking
+TRAVEL & TRANSPORTATION,ticket,confirmation_number,card_giftcard | sell,TRAVEL & TRANSPORTATION: ticket
+TRAVEL & TRANSPORTATION,luggage,luggage,backpack | shopping_bag,TRAVEL & TRANSPORTATION: luggage
+TRAVEL & TRANSPORTATION,passport,card_travel,document_scanner | verified_user,TRAVEL & TRANSPORTATION: passport
+SOCIAL & COMMUNICATION,message,mail,message | mail_outline,SOCIAL & COMMUNICATION: message
+SOCIAL & COMMUNICATION,phone,phone,smartphone | call,SOCIAL & COMMUNICATION: phone
+SOCIAL & COMMUNICATION,video_call,videocam,video_call | call,SOCIAL & COMMUNICATION: video_call
+SOCIAL & COMMUNICATION,share,share,share_location | file_download,SOCIAL & COMMUNICATION: share
+SOCIAL & COMMUNICATION,like,favorite,thumb_up | star,SOCIAL & COMMUNICATION: like
+SOCIAL & COMMUNICATION,comment,comment,forum | chat,SOCIAL & COMMUNICATION: comment
+SOCIAL & COMMUNICATION,follow,person_add,following | person_plus_one,SOCIAL & COMMUNICATION: follow
+SOCIAL & COMMUNICATION,friend,people,groups | person_add,SOCIAL & COMMUNICATION: friend
+SOCIAL & COMMUNICATION,notification,notifications,notifications_active | mail,SOCIAL & COMMUNICATION: notification
+SOCIAL & COMMUNICATION,block,block,no_accounts | cancel,SOCIAL & COMMUNICATION: block
+SOCIAL & COMMUNICATION,report,flag,report | report_problem,SOCIAL & COMMUNICATION: report
+MEDIA & CREATIVE,photo,image,photo | image_aspect_ratio,MEDIA & CREATIVE: photo
+MEDIA & CREATIVE,video,videocam,video_library | movie,MEDIA & CREATIVE: video
+MEDIA & CREATIVE,audio,music_note,headphones | volume_up,MEDIA & CREATIVE: audio
+MEDIA & CREATIVE,edit,edit,edit_note | create,MEDIA & CREATIVE: edit
+MEDIA & CREATIVE,color,palette,color_lens | brush,MEDIA & CREATIVE: color
+MEDIA & CREATIVE,filter,tune,adjust | graphic_eq,MEDIA & CREATIVE: filter
+MEDIA & CREATIVE,crop,crop,crop_square | aspect_ratio,MEDIA & CREATIVE: crop
+MEDIA & CREATIVE,upload,upload,cloud_upload | publish,MEDIA & CREATIVE: upload
+MEDIA & CREATIVE,download,download,cloud_download | get_app,MEDIA & CREATIVE: download
+MEDIA & CREATIVE,share,share,share_location | send,MEDIA & CREATIVE: share
+WEATHER & NATURE,sunny,wb_sunny,light_mode | sunny,WEATHER & NATURE: sunny
+WEATHER & NATURE,rain,cloud_queue,grain | opacity,WEATHER & NATURE: rain
+WEATHER & NATURE,snow,ac_unit,cloud_queue | wb_sunny,WEATHER & NATURE: snow
+WEATHER & NATURE,wind,air,cloud_queue | waves,WEATHER & NATURE: wind
+WEATHER & NATURE,storm,cloud_queue,flash_on | warning,WEATHER & NATURE: storm
+WEATHER & NATURE,cloud,cloud,cloud_queue | cloud_circle,WEATHER & NATURE: cloud
+WEATHER & NATURE,temperature,thermostat,device_thermostat | info,WEATHER & NATURE: temperature
+WEATHER & NATURE,humidity,opacity,water | cloud_queue,WEATHER & NATURE: humidity
+WEATHER & NATURE,pressure,compress,expand | cloud_queue,WEATHER & NATURE: pressure
+SPORTS & FITNESS,exercise,fitness_center,directions_run | sports,SPORTS & FITNESS: exercise
+SPORTS & FITNESS,gym,fitness_center,sports | sports_bar,SPORTS & FITNESS: gym
+SPORTS & FITNESS,running,directions_run,sports | directions_walk,SPORTS & FITNESS: running
+SPORTS & FITNESS,cycling,directions_bike,two_wheeler | sports,SPORTS & FITNESS: cycling
+SPORTS & FITNESS,swimming,pool,water | waves,SPORTS & FITNESS: swimming
+SPORTS & FITNESS,basketball,sports_basketball,sports | sports_bar,SPORTS & FITNESS: basketball
+SPORTS & FITNESS,soccer,sports_soccer,sports | sports_bar,SPORTS & FITNESS: soccer
+SPORTS & FITNESS,training,fitness_center,sports | school,SPORTS & FITNESS: training
+SPORTS & FITNESS,achievement,military_tech,star | card_giftcard,SPORTS & FITNESS: achievement
+SPORTS & FITNESS,score,score,leaderboard | bar_chart,SPORTS & FITNESS: score
+HOME & LIVING,furniture,chair,bed | couch,HOME & LIVING: furniture
+HOME & LIVING,kitchen,kitchen,microwave | restaurant,HOME & LIVING: kitchen
+HOME & LIVING,bedroom,bed,hotel | bedroom_parent,HOME & LIVING: bedroom
+HOME & LIVING,bathroom,bathtub,shower | wc,HOME & LIVING: bathroom
+HOME & LIVING,cleaning,cleaning_services,vacuum | soap,HOME & LIVING: cleaning
+HOME & LIVING,security,lock,security | verified_user,HOME & LIVING: security
+HOME & LIVING,temperature,thermostat,device_thermostat | ac_unit,HOME & LIVING: temperature
+HOME & LIVING,lighting,light_mode,lightbulb | wb_sunny,HOME & LIVING: lighting
+HOME & LIVING,repair,build,handyman | construction,HOME & LIVING: repair
+HOME & LIVING,decoration,palette,brush | brush_icon,HOME & LIVING: decoration
+SHOPPING & ECOMMERCE,cart,shopping_cart,shopping_bag | local_offer,SHOPPING & ECOMMERCE: cart
+SHOPPING & ECOMMERCE,product,shopping_bag,inventory_2 | shopping_cart,SHOPPING & ECOMMERCE: product
+SHOPPING & ECOMMERCE,checkout,payment,credit_card | attach_money,SHOPPING & ECOMMERCE: checkout
+SHOPPING & ECOMMERCE,delivery,local_shipping,directions_car | map,SHOPPING & ECOMMERCE: delivery
+SHOPPING & ECOMMERCE,return,assignment_return,undo | restore,SHOPPING & ECOMMERCE: return
+SHOPPING & ECOMMERCE,discount,local_offer,discount | savings,SHOPPING & ECOMMERCE: discount
+SHOPPING & ECOMMERCE,review,star,rate_review | feedback,SHOPPING & ECOMMERCE: review
+SHOPPING & ECOMMERCE,wishlist,favorite,favorite_border | star,SHOPPING & ECOMMERCE: wishlist
+SHOPPING & ECOMMERCE,category,category,tabs | view_list,SHOPPING & ECOMMERCE: category
+SHOPPING & ECOMMERCE,search,search,magnifying_glass | find_in_page,SHOPPING & ECOMMERCE: search
+ENVIRONMENT & SUSTAINABILITY,recycle,recycle,eco | spa,ENVIRONMENT & SUSTAINABILITY: recycle
+ENVIRONMENT & SUSTAINABILITY,energy,bolt,flash_on | light_mode,ENVIRONMENT & SUSTAINABILITY: energy
+ENVIRONMENT & SUSTAINABILITY,water,water,water_drop | waves,ENVIRONMENT & SUSTAINABILITY: water
+ENVIRONMENT & SUSTAINABILITY,pollution,cloud_queue,warning | cloud,ENVIRONMENT & SUSTAINABILITY: pollution
+ENVIRONMENT & SUSTAINABILITY,tree,nature,eco | spa,ENVIRONMENT & SUSTAINABILITY: tree
+ENVIRONMENT & SUSTAINABILITY,carbon,trending_up,cloud_queue | warning,ENVIRONMENT & SUSTAINABILITY: carbon
+ENVIRONMENT & SUSTAINABILITY,green,eco,spa | nature,ENVIRONMENT & SUSTAINABILITY: green
+ENVIRONMENT & SUSTAINABILITY,renewable,wb_sunny,bolt | waves,ENVIRONMENT & SUSTAINABILITY: renewable
+GENERAL ACTIONS,add,add,add_circle | add_box,GENERAL ACTIONS: add
+GENERAL ACTIONS,delete,delete,delete_forever | remove,GENERAL ACTIONS: delete
+GENERAL ACTIONS,edit,edit,edit_note | create,GENERAL ACTIONS: edit
+GENERAL ACTIONS,save,save,backup | cloud_download,GENERAL ACTIONS: save
+GENERAL ACTIONS,search,search,magnifying_glass | find_in_page,GENERAL ACTIONS: search
+GENERAL ACTIONS,settings,settings,tune | build,GENERAL ACTIONS: settings
+GENERAL ACTIONS,help,help,help_outline | info,GENERAL ACTIONS: help
+GENERAL ACTIONS,info,info,information | description,GENERAL ACTIONS: info
+GENERAL ACTIONS,warning,warning,priority_high | error,GENERAL ACTIONS: warning
+GENERAL ACTIONS,success,check_circle,done | verified,GENERAL ACTIONS: success
+GENERAL ACTIONS,cancel,cancel,close | block,GENERAL ACTIONS: cancel
+GENERAL ACTIONS,refresh,refresh,autorenew | loop,GENERAL ACTIONS: refresh
+GENERAL ACTIONS,download,download,cloud_download | get_app,GENERAL ACTIONS: download
+GENERAL ACTIONS,upload,upload,cloud_upload | publish,GENERAL ACTIONS: upload
+GENERAL ACTIONS,share,share,share_location | send,GENERAL ACTIONS: share
+GENERAL ACTIONS,open,open_in_new,open_in_browser | launch,GENERAL ACTIONS: open
+GENERAL ACTIONS,close,close,cancel | block,GENERAL ACTIONS: close
+GENERAL ACTIONS,expand,expand_more,expand_less | unfold_more,GENERAL ACTIONS: expand
+GENERAL ACTIONS,collapse,expand_less,unfold_less | keyboard_arrow_up,GENERAL ACTIONS: collapse

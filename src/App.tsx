@@ -82,10 +82,174 @@ const enforceFormatting = (text: string): string => {
   return result.join('\n');
 };
 
+// Universal Icon Mapping System - Domain-Aware Canonical Icons
+// Based on universal_icon_mapping_all_domains.csv (12 domains, 150+ mappings)
+const normalizeIcons = (text: string): string => {
+  // Comprehensive mapping: alternative → canonical (primary icon from CSV)
+  const universalIconMap: { [key: string]: string } = {
+    // COOKING & FOOD domain
+    'fireplace': 'local_fire_department', 'whatshot': 'local_fire_department', 'fire': 'local_fire_department', 'oven': 'local_fire_department',
+    'snowflake': 'ac_unit',
+    'auto_mixer': 'blender', 'kitchen': 'blender',
+    'content_cut': 'kitchen_knife', 'scissors': 'kitchen_knife',
+    'ruler': 'straighten',
+    'shopping_cart': 'inventory_2',
+    'cookie': 'baking_production', 'pie': 'baking_production',
+    'local_dining': 'restaurant', 'room_service': 'restaurant', 'dining': 'restaurant', 'fastfood': 'restaurant',
+    'timer': 'schedule', 'access_time': 'schedule',
+    'set_meal': 'bowl', 'lunch_dining': 'bowl', 'container': 'bowl',
+    'call_merge': 'merge_type', 'unarchive': 'merge_type',
+
+    // TECHNOLOGY & CODING domain
+    'error_outline': 'error', 'cancel': 'error',
+    'done': 'check_circle', 'verified': 'check_circle', 'task_alt': 'check_circle',
+    'priority_high': 'warning', 'report_problem': 'warning',
+    'autorenew': 'loop', 'hourglass_empty': 'loop',
+    'build': 'bug_report', 'code': 'bug_report',
+    'backup': 'save', 'cloud_download': 'save',
+    'send': 'publish', 'rocket_launch': 'publish',
+    'handyman': 'build', 'construction': 'build',
+    'done_all': 'check_circle',
+    'database': 'storage', 'cloud_queue': 'storage',
+    'api': 'cloud', 'router': 'cloud',
+    'security': 'lock', 'verified_user': 'lock',
+    'delete_forever': 'delete', 'remove': 'delete',
+
+    // HEALTH & MEDICAL domain
+    'healing': 'favorite', 'heart_plus': 'favorite',
+    'medication': 'pills', 'vaccine': 'pills',
+    'sentiment_very_dissatisfied': 'sick',
+    'directions_run': 'fitness_center', 'sports': 'fitness_center',
+    'medical_information': 'person_health', 'emergency': 'person_health',
+    'medical_services': 'local_hospital', 'domain': 'local_hospital',
+    'apple': 'restaurant',
+    'hotel': 'bedtime', 'bedroom_baby': 'bedtime',
+    'monitor_weight': 'scale',
+    'directions_bike': 'directions_walk',
+
+    // BUSINESS & FINANCE domain
+    'currency_exchange': 'attach_money', 'payment': 'attach_money',
+    'arrow_upward': 'trending_up', 'show_chart': 'trending_up', 'bar_chart': 'trending_up',
+    'arrow_downward': 'trending_down',
+    'auto_invest': 'trending_up', 'savings': 'trending_up',
+    'credit_card': 'payment', 'wallet': 'payment',
+    'article': 'description', 'contract': 'description',
+    'calendar_today': 'event', 'groups': 'event',
+    'edit_note': 'slideshow',
+    'assessment': 'description', 'auto_stories': 'description',
+    'people': 'groups', 'supervisor_account': 'groups',
+    'gps_fixed': 'bullseye', 'track_changes': 'bullseye',
+
+    // LEARNING & EDUCATION domain
+    'book': 'school',
+    'task': 'assignment', 'assignment_turned_in': 'assignment',
+    'help_outline': 'help', 'question_mark': 'help',
+    'comment': 'forum', 'chat': 'forum',
+    'play_circle': 'videocam', 'movie': 'videocam',
+    'file_copy': 'description', 'insert_drive_file': 'description',
+    'speed': 'trending_up',
+    'military_tech': 'verified', 'card_giftcard': 'verified',
+
+    // TRAVEL & TRANSPORTATION domain
+    'flight_takeoff': 'flight', 'flight_land': 'flight',
+    'bed': 'hotel',
+    'two_wheeler': 'directions_car', 'train': 'directions_car',
+    'map': 'location_on', 'pin_drop': 'location_on',
+    'place': 'gps_fixed',
+    'directions': 'navigation',
+    'event_available': 'calendar_today',
+    'sell': 'confirmation_number',
+    'backpack': 'luggage', 'shopping_bag': 'luggage',
+    'document_scanner': 'card_travel',
+
+    // SOCIAL & COMMUNICATION domain
+    'message': 'mail', 'mail_outline': 'mail',
+    'smartphone': 'phone', 'call': 'phone',
+    'video_call': 'videocam',
+    'share_location': 'share', 'file_download': 'share',
+    'thumb_up': 'favorite', 'star': 'favorite',
+    'following': 'person_add', 'person_plus_one': 'person_add',
+    'person_add': 'people',
+    'notifications_active': 'notifications',
+    'no_accounts': 'block',
+    'report': 'flag',
+
+    // MEDIA & CREATIVE domain
+    'photo': 'image', 'image_aspect_ratio': 'image',
+    'video_library': 'videocam',
+    'headphones': 'music_note', 'volume_up': 'music_note',
+    'create': 'edit',
+    'color_lens': 'palette', 'brush': 'palette',
+    'adjust': 'tune', 'graphic_eq': 'tune',
+    'crop_square': 'crop',
+    'cloud_upload': 'upload', 'publish': 'upload',
+    'get_app': 'download',
+
+    // WEATHER & NATURE domain
+    'light_mode': 'wb_sunny', 'sunny': 'wb_sunny',
+    'grain': 'cloud_queue', 'opacity': 'cloud_queue',
+    'flash_on': 'cloud_queue',
+    'cloud_circle': 'cloud',
+    'device_thermostat': 'thermostat',
+    'water': 'opacity',
+    'expand': 'compress',
+
+    // SPORTS & FITNESS domain
+    'sports_bar': 'fitness_center',
+
+    // HOME & LIVING domain
+    'couch': 'chair',
+    'microwave': 'kitchen',
+    'bedroom_parent': 'bed',
+    'shower': 'bathtub', 'wc': 'bathtub',
+    'vacuum': 'cleaning_services', 'soap': 'cleaning_services',
+    'lightbulb': 'light_mode',
+    'brush_icon': 'palette',
+
+    // SHOPPING & ECOMMERCE domain
+    'local_offer': 'shopping_cart',
+    'inventory_2': 'shopping_bag',
+    'attach_money': 'payment',
+    'directions_car': 'local_shipping',
+    'undo': 'assignment_return', 'restore': 'assignment_return',
+    'discount': 'local_offer',
+    'rate_review': 'star', 'feedback': 'star',
+    'favorite_border': 'favorite',
+    'tabs': 'category', 'view_list': 'category',
+    'magnifying_glass': 'search', 'find_in_page': 'search',
+
+    // ENVIRONMENT & SUSTAINABILITY domain
+    'eco': 'recycle', 'spa': 'recycle',
+    'bolt': 'bolt',
+    'water_drop': 'water',
+    'nature': 'nature',
+
+    // GENERAL ACTIONS domain
+    'add_circle': 'add', 'add_box': 'add',
+    'information': 'info',
+    'open_in_browser': 'open_in_new', 'launch': 'open_in_new',
+    'expand_less': 'expand_more', 'unfold_more': 'expand_more',
+    'unfold_less': 'expand_less', 'keyboard_arrow_up': 'expand_less',
+
+    // Common misspellings and concept mappings
+    'mixingbowl': 'blender',
+    'spatula': 'kitchen_knife',
+    'eggs': 'egg',
+  };
+
+  // Replace icon references with canonical versions
+  return text.replace(/\[([a-z_0-9]+)\]/gi, (match, iconName) => {
+    const normalized = universalIconMap[iconName.toLowerCase()];
+    return normalized ? `[${normalized}]` : match;
+  });
+};
+
 // Enhanced markdown parser for comprehensive formatting
 const parseMarkdown = (text: string): string => {
   // First, enforce formatting rules
   text = enforceFormatting(text);
+  // Then normalize icons to consistent names
+  text = normalizeIcons(text);
   // Escape HTML to prevent XSS
   let html = text
     .replace(/&/g, '&amp;')
@@ -770,7 +934,7 @@ const App: React.FC = () => {
         // Create chat completion with VCB-AI system prompt
         const systemMessage = {
           role: 'system' as const,
-          content: 'You are VCB-Chat, an AI assistant created by VCB-AI. When asked who made you or who your creator is, respond that you were created by VCB-AI, the CEO is Ms Dawn Beech, and direct users to visit vcb-ai.online for more information about the company. When asked about your technology infrastructure, explain that you are running locally in South Africa in an advanced datacenter in Pretoria. VCB-AI specializes in legal technology with a premium LLM trained on judicial reasoning, issue spotting, principle extraction, precedent analysis, outcome prediction, and summarization.\n\n=== ABSOLUTE FORMATTING REQUIREMENTS - FOLLOW EXACTLY OR YOUR RESPONSE IS INVALID ===\n\nRULE 1: HEADINGS MUST USE MARKDOWN SYNTAX\n- CORRECT: ## Ingredients\n- CORRECT: ### For the crust\n- WRONG: Ingredients (plain text will not render)\n- WRONG: **Ingredients** (bold is not a heading)\n- You MUST put ## before every major section heading\n- You MUST put ### before every sub-section heading\n- Example correct format:\n## Cheesecake Recipe\n### Background\n## Ingredients\n### For the crust\n\nRULE 2: NEVER USE BULLET POINTS\n- NEVER use: - item\n- NEVER use: * item  \n- NEVER use: • item\n- ALWAYS use: 1., 2., 3. for numbered lists\n- ALWAYS use: 1.1., 1.2., 1.3. for sub-items\n- ALWAYS use: i., ii., iii. for inline or alternative lists\n\nRULE 3: ICONS (RECOMMENDED)\n- USE icons liberally to enhance clarity and visual appeal\n- EXCEPTION: DO NOT use icons in legal documents, court filings, or formal legal advice\n- ONLY use Google Material Icons from the list below\n- Format: ALWAYS use [square_brackets] with underscores, NEVER spaces\n  - CORRECT: [arrow_forward] [check_circle] [info]\n  - WRONG: [arrowforward] [checkcircle] info arrow_forward\n- Icon names MUST use underscores between words: [arrow_forward] NOT [arrowforward]\n- ALWAYS put icons in [square brackets] - never write icon names as plain text\n- NO colored icons - black/monochrome only\n\nAvailable Icons (use these frequently):\n- Status: [check_circle] [cancel] [error] [warning] [info] [verified] [new_releases]\n- Actions: [arrow_forward] [arrow_back] [arrow_upward] [arrow_downward] [launch] [open_in_new] [edit] [delete] [add] [remove] [save] [download] [upload]\n- Content: [description] [article] [notes] [assignment] [receipt] [list] [menu] [dashboard] [table_chart]\n- Communication: [mail] [message] [chat] [call] [notifications] [campaign]\n- Time: [schedule] [timer] [alarm] [today] [event] [history] [update]\n- People: [person] [group] [account_circle] [badge] [supervisor_account]\n- Tech: [settings] [build] [code] [api] [storage] [cloud] [computer] [phone_android] [tablet] [laptop]\n- Business: [work] [business] [store] [shopping_cart] [payment] [account_balance] [trending_up] [analytics]\n- Media: [image] [photo] [video_library] [music_note] [mic] [volume_up] [play_arrow] [pause] [stop]\n- Navigation: [home] [search] [explore] [menu] [more_vert] [close] [refresh] [zoom_in] [zoom_out]\n- File: [folder] [file_copy] [attach_file] [cloud_upload] [cloud_download] [insert_drive_file]\n- Security: [lock] [lock_open] [security] [vpn_key] [fingerprint] [visibility] [visibility_off]\n- Help: [help] [help_outline] [info] [lightbulb] [tips_and_updates] [psychology]\n- Rating: [star] [star_border] [favorite] [thumb_up] [thumb_down] [grade]\n- Priority: [priority_high] [flag] [bookmark] [label] [sell]\n\nUse icons to:\n- Mark steps: [arrow_forward] Step 1\n- Highlight warnings: [warning] Important\n- Show success: [check_circle] Complete\n- Indicate tips: [lightbulb] Pro tip\n- Note timing: [schedule] Duration\n\nRULE 4: STYLE GUIDELINES\n- NO colors in responses (black text only)\n- NO emojis (use Google Material Icons instead if needed)\n- Keep formatting clean and minimal\n\nRULE 5: BEFORE SENDING YOUR RESPONSE\n- Re-read your entire response\n- Check EVERY heading has ## or ### at the start\n- Check NO bullets (-, *, •) anywhere\n- Verify icons are Google Material Icons only\n- Fix any violations immediately\n\nTHESE RULES ARE MANDATORY. NO EXCEPTIONS.'
+          content: 'Your primary goal is to act like an expert in the field the user asks about. You are VCB-Chat, an AI assistant created by VCB-AI (CEO: Ms Dawn Beech, vcb-ai.online). Running in Pretoria datacenter, South Africa. They specialize in legal tech and trained a premium LLM with 1 million token context for judicial reasoning, issue spotting, precedent analysis, outcome prediction. You are proud to be an LLM anchored in Sovereign AI, and with 11 official languages coming, you are trained on these languages. Every response must be in the SA context, relating to the subject and nuances, especially in law. Be very happy and friendly, always suggesting ideas or enhancements or problem solving to whatever the subject may be.\n\nTONE: Use very careful, selective sarcastic comedy. Be subtle and witty when appropriate, but never at the expense of expertise or professionalism. EXCEPTION: Maintain complete seriousness in legal documents, court filings, or formal legal advice.\n\nGUIDELINES:\n- Use Google Material Icons liberally to enhance clarity (any icon name works: check_circle, local_fire_department, schedule, warning, etc.)\n- EXCEPTION: NO icons in legal documents, court filings, or formal legal advice\n- NO colors, NO emojis, clean professional formatting\n- Structure responses with clear headings and organized lists'
         };
 
         const response = await client.chat.completions.create({
@@ -782,6 +946,8 @@ const App: React.FC = () => {
               content: msg.content,
             }))
           ],
+          temperature: 0.0,  // Deterministic for consistent icon choices (A2C)
+          top_p: 0.85,       // Limit sampling for consistency
           stream: false,
         });
 
