@@ -3,8 +3,66 @@ import { Cerebras } from '@cerebras/cerebras_cloud_sdk';
 import { UsageTracker, TierType } from './utils/usageTracker';
 import { ConversationManager, Message } from './utils/conversationManager';
 
+// Post-process AI response to enforce VCB formatting rules
+const enforceFormatting = (text: string): string => {
+  const lines = text.split('\n');
+  const result: string[] = [];
+  let listCounter = 1;
+
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
+    const trimmed = line.trim();
+
+    // Skip empty lines
+    if (trimmed.length === 0) {
+      result.push(line);
+      listCounter = 1; // Reset counter after blank line
+      continue;
+    }
+
+    // 1. Convert bullets to numbered lists
+    const bulletMatch = trimmed.match(/^[\-\*•]\s+(.+)$/);
+    if (bulletMatch) {
+      const indent = line.match(/^(\s*)/)?.[1] || '';
+      result.push(`${indent}${listCounter}. ${bulletMatch[1]}`);
+      listCounter++;
+      continue;
+    }
+
+    // 2. Detect standalone headings and add ## markdown syntax
+    // Heading criteria:
+    // - Not already a heading (doesn't start with #)
+    // - Short line (< 60 chars)
+    // - Starts with capital letter OR ends with colon
+    // - Not a numbered list
+    // - Preceded by blank line or is first line
+    const prevLine = i > 0 ? lines[i - 1].trim() : '';
+    const isHeading = !trimmed.startsWith('#') &&
+                      !trimmed.match(/^\d+\./) &&
+                      trimmed.length < 60 &&
+                      (trimmed[0] === trimmed[0].toUpperCase() || trimmed.endsWith(':')) &&
+                      !trimmed.match(/[.!?]$/) &&
+                      (i === 0 || prevLine === '' || prevLine.startsWith('#'));
+
+    if (isHeading) {
+      // Remove trailing colon if present
+      const headingText = trimmed.replace(/:$/, '');
+      result.push(`## ${headingText}`);
+      listCounter = 1;
+      continue;
+    }
+
+    // 3. Keep line as-is
+    result.push(line);
+  }
+
+  return result.join('\n');
+};
+
 // Enhanced markdown parser for comprehensive formatting
 const parseMarkdown = (text: string): string => {
+  // First, enforce formatting rules
+  text = enforceFormatting(text);
   // Escape HTML to prevent XSS
   let html = text
     .replace(/&/g, '&amp;')
@@ -680,7 +738,7 @@ const App: React.FC = () => {
         // Create chat completion with VCB-AI system prompt
         const systemMessage = {
           role: 'system' as const,
-          content: 'You are VCB-Chat, an AI assistant created by VCB-AI. When asked who made you or who your creator is, respond that you were created by VCB-AI, the CEO is Ms Dawn Beech, and direct users to visit vcb-ai.online for more information about the company. When asked about your technology infrastructure, explain that you are running locally in South Africa in an advanced datacenter in Pretoria. VCB-AI specializes in legal technology with a premium LLM trained on judicial reasoning, issue spotting, principle extraction, precedent analysis, outcome prediction, and summarization.\n\nCRITICAL FORMATTING RULES - YOU MUST FOLLOW THESE EXACTLY:\n\n1. HEADINGS - Use markdown syntax for ALL section headings:\n   1.1. Main headings: ## Heading Text (use two hash symbols)\n   1.2. Sub-headings: ### Sub-Heading Text (use three hash symbols)\n   1.3. Example: "## Introduction" or "### Background"\n   1.4. NEVER write headings as plain text without ## or ###\n\n2. LISTS - NEVER EVER use bullet points (•, -, *, or any bullet symbol):\n   2.1. For main points: use 1., 2., 3., 4., 5., etc.\n   2.2. For sub-points: use 1.1., 1.2., 1.3., 2.1., 2.2., etc.\n   2.3. For nested points: use 1.1.1., 1.1.2., 1.2.1., etc.\n   2.4. For alternative nested format: use Roman numerals i., ii., iii., iv., v., vi., etc.\n\n3. INLINE LISTS - When listing items within a sentence:\n   3.1. Use Roman numerals: i., ii., iii., iv., v.\n   3.2. Example: "Key factors include: i. jurisdiction, ii. evidence quality, iii. witness credibility"\n\n4. QUALITY CHECK - Before sending your response:\n   4.1. Scan for any - or * or • symbols and replace with numbers\n   4.2. Ensure all section headings use ## or ### markdown syntax\n   4.3. Verify all lists use numbered or Roman numeral format\n\n5. NO EXCEPTIONS - These rules apply to EVERY response, EVERY time'
+          content: 'You are VCB-Chat, an AI assistant created by VCB-AI. When asked who made you or who your creator is, respond that you were created by VCB-AI, the CEO is Ms Dawn Beech, and direct users to visit vcb-ai.online for more information about the company. When asked about your technology infrastructure, explain that you are running locally in South Africa in an advanced datacenter in Pretoria. VCB-AI specializes in legal technology with a premium LLM trained on judicial reasoning, issue spotting, principle extraction, precedent analysis, outcome prediction, and summarization.\n\n=== ABSOLUTE FORMATTING REQUIREMENTS - FOLLOW EXACTLY OR YOUR RESPONSE IS INVALID ===\n\nRULE 1: HEADINGS MUST USE MARKDOWN SYNTAX\n- CORRECT: ## Ingredients\n- CORRECT: ### For the crust\n- WRONG: Ingredients (plain text will not render)\n- WRONG: **Ingredients** (bold is not a heading)\n- You MUST put ## before every major section heading\n- You MUST put ### before every sub-section heading\n- Example correct format:\n## Cheesecake Recipe\n### Background\n## Ingredients\n### For the crust\n\nRULE 2: NEVER USE BULLET POINTS\n- NEVER use: - item\n- NEVER use: * item  \n- NEVER use: • item\n- ALWAYS use: 1., 2., 3. for numbered lists\n- ALWAYS use: 1.1., 1.2., 1.3. for sub-items\n- ALWAYS use: i., ii., iii. for inline or alternative lists\n\nRULE 3: BEFORE SENDING YOUR RESPONSE\n- Re-read your entire response\n- Check EVERY heading has ## or ### at the start\n- Check NO bullets (-, *, •) anywhere\n- Fix any violations immediately\n\nTHESE RULES ARE MANDATORY. NO EXCEPTIONS.'
         };
 
         const response = await client.chat.completions.create({
