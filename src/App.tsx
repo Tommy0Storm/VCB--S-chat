@@ -1499,68 +1499,132 @@ const App: React.FC = () => {
                           )}
                         </div>
                       ) : (
-                        <div className="text-sm md:text-base text-vcb-black break-words leading-relaxed prose prose-sm md:prose-base max-w-none">
+                        <div className="text-sm md:text-base text-vcb-black break-words leading-relaxed">
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             rehypePlugins={[rehypeRaw]}
                             components={{
-                              // Custom renderer for Material Icons [icon_name]
+                              // Helper to process icons in any text content
                               p: ({node, children, ...props}) => {
-                                const processChildren = (children: any): any => {
+                                const processIcons = (children: any): any => {
                                   if (typeof children === 'string') {
-                                    // Replace [icon_name] with Material Icon spans
                                     const parts = children.split(/(\[[a-z_0-9]+\])/g);
                                     return parts.map((part, idx) => {
                                       const iconMatch = part.match(/^\[([a-z_0-9]+)\]$/);
                                       if (iconMatch) {
-                                        return (
-                                          <span
-                                            key={idx}
-                                            className="material-icons"
-                                            style={{ fontSize: '1.8em', verticalAlign: 'middle', color: 'inherit' }}
-                                          >
-                                            {iconMatch[1]}
-                                          </span>
-                                        );
+                                        return <span key={idx} className="material-icons" style={{ fontSize: '1.8em', verticalAlign: 'middle', color: 'inherit' }}>{iconMatch[1]}</span>;
                                       }
                                       return part;
                                     });
                                   }
                                   if (Array.isArray(children)) {
-                                    return children.map((child) =>
-                                      typeof child === 'string' ? processChildren(child) : child
-                                    );
+                                    return children.map((child) => typeof child === 'string' ? processIcons(child) : child);
                                   }
                                   return children;
                                 };
-                                return <p {...props}>{processChildren(children)}</p>;
+                                return <p {...props}>{processIcons(children)}</p>;
                               },
-                            // Style tables
-                            table: ({node, ...props}) => (
-                              <div className="overflow-x-auto my-4">
-                                <table className="min-w-full border-collapse border border-vcb-light-grey" {...props} />
-                              </div>
-                            ),
-                            thead: ({node, ...props}) => (
-                              <thead className="bg-vcb-light-grey" {...props} />
-                            ),
-                            th: ({node, ...props}) => (
-                              <th className="border border-vcb-mid-grey px-4 py-2 text-left font-semibold" {...props} />
-                            ),
-                            td: ({node, ...props}) => (
-                              <td className="border border-vcb-light-grey px-4 py-2" {...props} />
-                            ),
-                            // Style code blocks
-                            code: ({node, inline, ...props}: any) =>
-                              inline ? (
-                                <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono" {...props} />
-                              ) : (
-                                <code className="block bg-gray-100 p-4 rounded overflow-x-auto font-mono text-sm" {...props} />
+                              // UPPERCASE headings with icon support
+                              h1: ({node, children, ...props}) => {
+                                const processIcons = (children: any): any => {
+                                  if (typeof children === 'string') {
+                                    const parts = children.split(/(\[[a-z_0-9]+\])/g);
+                                    return parts.map((part, idx) => {
+                                      const iconMatch = part.match(/^\[([a-z_0-9]+)\]$/);
+                                      if (iconMatch) return <span key={idx} className="material-icons" style={{ fontSize: '1.8em', verticalAlign: 'middle', color: 'inherit' }}>{iconMatch[1]}</span>;
+                                      return part;
+                                    });
+                                  }
+                                  if (Array.isArray(children)) return children.map((child) => typeof child === 'string' ? processIcons(child) : child);
+                                  return children;
+                                };
+                                return <h1 {...props} className="text-2xl font-bold uppercase my-4">{processIcons(children)}</h1>;
+                              },
+                              h2: ({node, children, ...props}) => {
+                                const processIcons = (children: any): any => {
+                                  if (typeof children === 'string') {
+                                    const parts = children.split(/(\[[a-z_0-9]+\])/g);
+                                    return parts.map((part, idx) => {
+                                      const iconMatch = part.match(/^\[([a-z_0-9]+)\]$/);
+                                      if (iconMatch) return <span key={idx} className="material-icons" style={{ fontSize: '1.8em', verticalAlign: 'middle', color: 'inherit' }}>{iconMatch[1]}</span>;
+                                      return part;
+                                    });
+                                  }
+                                  if (Array.isArray(children)) return children.map((child) => typeof child === 'string' ? processIcons(child) : child);
+                                  return children;
+                                };
+                                return <h2 {...props} className="text-xl font-bold uppercase my-3">{processIcons(children)}</h2>;
+                              },
+                              h3: ({node, children, ...props}) => {
+                                const processIcons = (children: any): any => {
+                                  if (typeof children === 'string') {
+                                    const parts = children.split(/(\[[a-z_0-9]+\])/g);
+                                    return parts.map((part, idx) => {
+                                      const iconMatch = part.match(/^\[([a-z_0-9]+)\]$/);
+                                      if (iconMatch) return <span key={idx} className="material-icons" style={{ fontSize: '1.8em', verticalAlign: 'middle', color: 'inherit' }}>{iconMatch[1]}</span>;
+                                      return part;
+                                    });
+                                  }
+                                  if (Array.isArray(children)) return children.map((child) => typeof child === 'string' ? processIcons(child) : child);
+                                  return children;
+                                };
+                                return <h3 {...props} className="text-lg font-bold uppercase my-2">{processIcons(children)}</h3>;
+                              },
+                              h4: ({node, children, ...props}) => {
+                                const processIcons = (children: any): any => {
+                                  if (typeof children === 'string') {
+                                    const parts = children.split(/(\[[a-z_0-9]+\])/g);
+                                    return parts.map((part, idx) => {
+                                      const iconMatch = part.match(/^\[([a-z_0-9]+)\]$/);
+                                      if (iconMatch) return <span key={idx} className="material-icons" style={{ fontSize: '1.8em', verticalAlign: 'middle', color: 'inherit' }}>{iconMatch[1]}</span>;
+                                      return part;
+                                    });
+                                  }
+                                  if (Array.isArray(children)) return children.map((child) => typeof child === 'string' ? processIcons(child) : child);
+                                  return children;
+                                };
+                                return <h4 {...props} className="text-base font-bold uppercase my-2">{processIcons(children)}</h4>;
+                              },
+                              // Premium table styling
+                              table: ({node, ...props}) => (
+                                <div className="overflow-x-auto my-6 border border-vcb-mid-grey rounded-lg shadow-sm">
+                                  <table className="min-w-full border-collapse" {...props} />
+                                </div>
                               ),
-                          }}
-                        >
-                          {enforceFormatting(normalizeIcons(message.content))}
-                        </ReactMarkdown>
+                              thead: ({node, ...props}) => <thead className="bg-vcb-black text-white" {...props} />,
+                              tbody: ({node, ...props}) => <tbody className="bg-white divide-y divide-vcb-light-grey" {...props} />,
+                              th: ({node, ...props}) => <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider" {...props} />,
+                              td: ({node, ...props}) => <td className="px-6 py-4 text-sm whitespace-normal" {...props} />,
+                              tr: ({node, ...props}) => <tr className="hover:bg-gray-50 transition-colors duration-150" {...props} />,
+                              // Code blocks
+                              code: ({node, inline, ...props}: any) =>
+                                inline ? (
+                                  <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono text-vcb-black" {...props} />
+                                ) : (
+                                  <code className="block bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto font-mono text-sm my-3" {...props} />
+                                ),
+                              // Lists
+                              ul: ({node, ...props}) => <ul className="list-disc list-inside my-3 space-y-1.5 ml-4" {...props} />,
+                              ol: ({node, ...props}) => <ol className="list-decimal list-inside my-3 space-y-1.5 ml-4" {...props} />,
+                              li: ({node, ...props}) => <li className="leading-relaxed" {...props} />,
+                              // Blockquotes
+                              blockquote: ({node, ...props}) => (
+                                <blockquote className="border-l-4 border-vcb-mid-grey bg-gray-50 pl-4 py-2 my-4 italic text-gray-700" {...props} />
+                              ),
+                              // Links
+                              a: ({node, ...props}) => (
+                                <a className="text-vcb-black underline hover:text-vcb-mid-grey transition-colors" target="_blank" rel="noopener noreferrer" {...props} />
+                              ),
+                              // Horizontal rule
+                              hr: ({node, ...props}) => <hr className="my-6 border-t-2 border-vcb-light-grey" {...props} />,
+                              // Strong/Bold
+                              strong: ({node, ...props}) => <strong className="font-bold" {...props} />,
+                              // Emphasis/Italic
+                              em: ({node, ...props}) => <em className="italic" {...props} />,
+                            }}
+                          >
+                            {enforceFormatting(normalizeIcons(message.content))}
+                          </ReactMarkdown>
                         </div>
                       )}
                     </div>

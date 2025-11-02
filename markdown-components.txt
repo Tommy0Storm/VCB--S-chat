@@ -1,0 +1,95 @@
+// Icon processor helper - reusable across all components
+const processIconsInText = (children: any): any => {
+  if (typeof children === 'string') {
+    const parts = children.split(/(\[[a-z_0-9]+\])/g);
+    return parts.map((part, idx) => {
+      const iconMatch = part.match(/^\[([a-z_0-9]+)\]$/);
+      if (iconMatch) {
+        return (
+          <span key={idx} className="material-icons" style={{ fontSize: '1.8em', verticalAlign: 'middle', color: 'inherit' }}>
+            {iconMatch[1]}
+          </span>
+        );
+      }
+      return part;
+    });
+  }
+  if (Array.isArray(children)) {
+    return children.map((child, idx) => typeof child === 'string' ? processIconsInText(child) : child);
+  }
+  return children;
+};
+
+// ReactMarkdown components object
+components={{
+  // Paragraphs with icons
+  p: ({node, children, ...props}) => <p {...props}>{processIconsInText(children)}</p>,
+
+  // Headings - UPPERCASE with icons
+  h1: ({node, children, ...props}) => (
+    <h1 {...props} className="text-2xl font-bold uppercase my-4">{processIconsInText(children)}</h1>
+  ),
+  h2: ({node, children, ...props}) => (
+    <h2 {...props} className="text-xl font-bold uppercase my-3">{processIconsInText(children)}</h2>
+  ),
+  h3: ({node, children, ...props}) => (
+    <h3 {...props} className="text-lg font-bold uppercase my-2">{processIconsInText(children)}</h3>
+  ),
+  h4: ({node, children, ...props}) => (
+    <h4 {...props} className="text-base font-bold uppercase my-2">{processIconsInText(children)}</h4>
+  ),
+
+  // Tables - Premium styling
+  table: ({node, ...props}) => (
+    <div className="overflow-x-auto my-6 border border-vcb-mid-grey rounded-lg shadow-sm">
+      <table className="min-w-full border-collapse" {...props} />
+    </div>
+  ),
+  thead: ({node, ...props}) => (
+    <thead className="bg-vcb-black text-white" {...props} />
+  ),
+  tbody: ({node, ...props}) => (
+    <tbody className="bg-white divide-y divide-vcb-light-grey" {...props} />
+  ),
+  th: ({node, ...props}) => (
+    <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider" {...props} />
+  ),
+  td: ({node, ...props}) => (
+    <td className="px-6 py-4 text-sm whitespace-normal" {...props} />
+  ),
+  tr: ({node, ...props}) => (
+    <tr className="hover:bg-gray-50 transition-colors duration-150" {...props} />
+  ),
+
+  // Code blocks
+  code: ({node, inline, ...props}: any) =>
+    inline ? (
+      <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono text-vcb-black" {...props} />
+    ) : (
+      <code className="block bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto font-mono text-sm my-3" {...props} />
+    ),
+
+  // Lists
+  ul: ({node, ...props}) => <ul className="list-disc list-inside my-3 space-y-1.5 ml-4" {...props} />,
+  ol: ({node, ...props}) => <ol className="list-decimal list-inside my-3 space-y-1.5 ml-4" {...props} />,
+  li: ({node, ...props}) => <li className="leading-relaxed" {...props} />,
+
+  // Blockquotes
+  blockquote: ({node, ...props}) => (
+    <blockquote className="border-l-4 border-vcb-mid-grey bg-gray-50 pl-4 py-2 my-4 italic text-gray-700" {...props} />
+  ),
+
+  // Links
+  a: ({node, ...props}) => (
+    <a className="text-vcb-black underline hover:text-vcb-mid-grey transition-colors" target="_blank" rel="noopener noreferrer" {...props} />
+  ),
+
+  // Horizontal rule
+  hr: ({node, ...props}) => <hr className="my-6 border-t-2 border-vcb-light-grey" {...props} />,
+
+  // Strong/Bold
+  strong: ({node, ...props}) => <strong className="font-bold" {...props} />,
+
+  // Emphasis/Italic
+  em: ({node, ...props}) => <em className="italic" {...props} />,
+}}
