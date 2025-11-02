@@ -1,25 +1,18 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm create:*)",
-      "Bash(npm install)",
       "Bash(npx tsc --noEmit)",
-      "Bash(npm run build:*)",
-      "Bash(npm run dev:*)",
-      "Bash(git init:*)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nInitial commit: VCB-Chat application with VCB Cleaner Theme\n\n- React + TypeScript + Vite setup\n- Cerebras AI integration with Llama 3.1\n- VCB Cleaner Theme (§5.1-5.3): monochrome design, Quicksand typography\n- Black header bar with VCB logo\n- Enterprise-grade code quality (§1.3)\n- 80%+ whitespace, zero shadows, light-grey borders\n- Full accessibility and responsive design\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
-      "Bash(gh repo create:*)",
-      "Bash(npm install:*)",
       "Bash(git add:*)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nConfigure GitHub Pages deployment\n\n- Add base path for GitHub Pages in vite.config.ts\n- Install gh-pages package\n- Add predeploy and deploy scripts to package.json\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git commit -m \"$(cat <<''EOF''\nAdd Cerebras Vision image generation and enhanced markdown rendering\n\nFeatures Added:\n- Cerebras Vision Graphics Generation Model integration\n  - Detects image generation requests (\"make an image\", etc.)\n  - Routes to Cerebras Vision API endpoint\n  - Displays generated images inline in chat with prompts\n  - Supports image messages in conversation history\n\n- Enhanced Markdown Parser\n  - Code blocks (```) and inline code (`)\n  - Headers (#, ##, ###)\n  - Bold (**text**) and italic (*text*)\n  - Links [text](url)\n  - Lists (ordered and unordered)\n  - Blockquotes (> text)\n  - Horizontal rules (---)\n  - Proper rendering without showing markdown characters\n\n- Google Material Icons Integration\n  - Added Material Icons library\n  - Replaced message output icons (copy, speak) with Material Icons\n  - Consistent icon sizes across UI\n\n- UI Improvements\n  - Standardized top bar button sizes\n  - Mobile playback speed set to 1.2x\n  - Added new Sovereign spinner and icon assets\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(git push:*)",
-      "Bash(npm run deploy:*)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nAdd VCB-AI attribution and infrastructure details\n\n- System prompt now identifies creator as VCB-AI with CEO Ms Dawn Beech\n- References vcb-ai.online for company information\n- Mentions local SA datacenter infrastructure in Pretoria\n- Includes VCB-AI''s legal tech specialization (§3.1)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
-      "Bash(git commit -m \"$(cat <<''EOF''\nReplace Cerebras branding with VCB-AI in chat interface\n\n- Changed message labels from \"Cerebras AI\" to \"VCB-AI\"\n- Updated welcome message to reference VCB-AI\n- Maintains VCB-AI brand consistency (§2.1, §6.2)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
-      "Bash(git commit -m \"$(cat <<''EOF''\nRemove Cerebras branding from error messages and comments\n\n- Updated error messages to reference VCB-AI instead of Cerebras API\n- Updated code comments for brand consistency\n- Maintains VCB-AI brand identity throughout (§2.1, §6.2)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git commit -m \"$(cat <<''EOF''\nAdd GitHub Actions workflow for automatic Pages deployment\n\n- Automated build and deploy on push to master\n- Configures Node.js 20 environment\n- Builds Vite app with environment variables\n- Deploys to GitHub Pages automatically\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git fetch:*)",
       "Bash(git commit:*)",
-      "Bash(mkdir:*)",
-      "Bash(mv:*)"
+      "Bash(gh auth status)",
+      "Bash(gh api:*)",
+      "Bash(gh workflow run:*)",
+      "Bash(gh run list:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": [],
     "ask": []
