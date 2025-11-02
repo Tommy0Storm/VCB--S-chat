@@ -25,9 +25,9 @@ const parseMarkdown = (text: string): string => {
   // Convert blockquotes (> text)
   html = html.replace(/^&gt; (.+)$/gm, '<blockquote style="border-left: 4px solid #e0e0e0; padding-left: 12px; margin: 8px 0; color: #666;">$1</blockquote>');
 
-  // Convert headers (### Header)
-  html = html.replace(/^### (.+)$/gm, '<h3 style="font-weight: 500; text-transform: uppercase; margin: 12px 0 8px 0;">$1</h3>');
-  html = html.replace(/^## (.+)$/gm, '<h2 style="font-weight: 500; text-transform: uppercase; margin: 12px 0 8px 0;">$1</h2>');
+  // Convert headers (### Header) - ALL headers must be bold
+  html = html.replace(/^### (.+)$/gm, '<h3 style="font-weight: bold; text-transform: uppercase; margin: 12px 0 8px 0;">$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2 style="font-weight: bold; text-transform: uppercase; margin: 12px 0 8px 0;">$1</h2>');
   html = html.replace(/^# (.+)$/gm, '<h1 style="font-weight: bold; text-transform: uppercase; margin: 12px 0 8px 0;">$1</h1>');
 
   // Convert bold (**text** or __text__)
@@ -75,6 +75,8 @@ const App: React.FC = () => {
   const [showChatHistory, setShowChatHistory] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [sessionTime, setSessionTime] = useState(0); // Session time in seconds
+  const sessionStartRef = useRef<number>(Date.now());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -135,6 +137,24 @@ const App: React.FC = () => {
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  // Format session time as HH:MM:SS
+  const formatSessionTime = (seconds: number): string => {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Session timer - update every second
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - sessionStartRef.current) / 1000);
+      setSessionTime(elapsed);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
@@ -728,7 +748,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-white font-quicksand font-light">
+    <div className="flex flex-col h-screen bg-white font-quicksand font-normal">
       {/* Header - VCB Cleaner Theme per §5.1-5.3, Mobile Optimized */}
       <header className="bg-vcb-black border-b border-vcb-mid-grey px-4 py-2 md:px-8 md:py-6">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
@@ -769,6 +789,16 @@ const App: React.FC = () => {
               </svg>
               <span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">History</span>
             </button>
+
+            {/* Session Timer */}
+            <div className="flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white">
+              <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61l1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42C16.07 4.74 14.12 4 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+              </svg>
+              <span className="text-[10px] md:text-xs font-mono font-medium tracking-wide">
+                {formatSessionTime(sessionTime)}
+              </span>
+            </div>
 
             {/* Usage Stats Button */}
             <button
@@ -1184,7 +1214,7 @@ const App: React.FC = () => {
               <p className="text-base md:text-lg font-medium uppercase tracking-wide">
                 Start a conversation with VCB-AI
               </p>
-              <p className="text-xs md:text-sm mt-2 md:mt-3 font-light">
+              <p className="text-xs md:text-sm mt-2 md:mt-3 font-normal">
                 Type your message below to get started
               </p>
             </div>
@@ -1328,7 +1358,7 @@ const App: React.FC = () => {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={voiceModeEnabled ? "Speak your message..." : "Type your message..."}
-              className="flex-1 bg-white text-vcb-black border border-vcb-light-grey px-3 py-2 md:px-6 md:py-4 text-sm md:text-base focus:outline-none focus:border-vcb-mid-grey resize-none font-light leading-relaxed"
+              className="flex-1 bg-white text-vcb-black border border-vcb-light-grey px-3 py-2 md:px-6 md:py-4 text-sm md:text-base focus:outline-none focus:border-vcb-mid-grey resize-none font-normal leading-relaxed"
               rows={1}
               disabled={isLoading}
               readOnly={voiceModeEnabled}
