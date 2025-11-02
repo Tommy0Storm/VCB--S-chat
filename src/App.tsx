@@ -5,16 +5,27 @@ import { ConversationManager, Message } from './utils/conversationManager';
 
 // Post-process AI response to enforce VCB formatting rules
 const enforceFormatting = (text: string): string => {
-  // First, fix common icon mistakes
   let fixed = text;
 
-  // Fix icons without square brackets (common mistake)
+  // STEP 1: Strip ALL emojis (zero tolerance)
+  // Matches all emoji ranges: emoticons, symbols, pictographs, etc.
+  fixed = fixed.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}\u{1F100}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{FE00}-\u{FE0F}\u{200D}]/gu, '');
+
+  // STEP 2: Remove invalid icon names (non-existent Material Icons)
+  const invalidIcons = ['crushed', 'smile', 'oomph']; // Add more as discovered
+  invalidIcons.forEach(invalid => {
+    const regex = new RegExp(`\\[${invalid}\\]`, 'gi');
+    fixed = fixed.replace(regex, '');
+  });
+
+  // STEP 3: Fix icons without square brackets (common mistake)
   const iconNames = [
     'check_circle', 'warning', 'info', 'error', 'cancel', 'verified',
     'arrow_forward', 'arrow_back', 'arrow_upward', 'arrow_downward',
     'lightbulb', 'schedule', 'timer', 'today', 'settings', 'build',
     'home', 'search', 'menu', 'close', 'edit', 'delete', 'save',
-    'image', 'photo', 'video_library', 'music_note'
+    'image', 'photo', 'video_library', 'music_note', 'cake', 'receipt',
+    'restaurant', 'local_fire_department'
   ];
 
   // Wrap standalone icon names in brackets
