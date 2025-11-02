@@ -84,30 +84,33 @@ const App: React.FC = () => {
   const conversationManagerRef = useRef<ConversationManager>(new ConversationManager());
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-  // Detect if user wants image generation
-  const isImageGenerationRequest = (text: string): boolean => {
-    const lowerText = text.toLowerCase();
-    const imageKeywords = [
-      'make an image',
-      'make a image',
-      'create an image',
-      'create a image',
-      'generate an image',
-      'generate a image',
-      'draw an image',
-      'draw a image',
-      'make me an image',
-      'make me a picture',
-      'create a picture',
-      'generate a picture',
-      'draw a picture',
-      'paint an image',
-      'paint a picture',
-      'show me an image',
-      'design an image',
-      'design a picture'
-    ];
-    return imageKeywords.some(keyword => lowerText.includes(keyword));
+  // Detect if user wants image generation (temporarily disabled)
+  const isImageGenerationRequest = (_text: string): boolean => {
+    // Image generation temporarily disabled until Cerebras API supports it
+    return false;
+
+    // const lowerText = text.toLowerCase();
+    // const imageKeywords = [
+    //   'make an image',
+    //   'make a image',
+    //   'create an image',
+    //   'create a image',
+    //   'generate an image',
+    //   'generate a image',
+    //   'draw an image',
+    //   'draw a image',
+    //   'make me an image',
+    //   'make me a picture',
+    //   'create a picture',
+    //   'generate a picture',
+    //   'draw a picture',
+    //   'paint an image',
+    //   'paint a picture',
+    //   'show me an image',
+    //   'design an image',
+    //   'design a picture'
+    // ];
+    // return imageKeywords.some(keyword => lowerText.includes(keyword));
   };
 
   // Extract image prompt from user request
