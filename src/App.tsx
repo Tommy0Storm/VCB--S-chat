@@ -262,6 +262,40 @@ const normalizeIcons = (text: string): string => {
   });
 };
 
+// Fix markdown tables that are missing header rows (GFM requirement)
+const fixMarkdownTables = (text: string): string => {
+  const lines = text.split('\n');
+  const result: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Detect separator line that starts a table (e.g., |:---|---| or |---|---|)
+    const isSeparatorLine = /^\|[\s]*:?-+:?[\s]*\|/.test(line);
+
+    if (isSeparatorLine) {
+      // Check if previous line is NOT a table row (missing header)
+      const prevLine = i > 0 ? lines[i - 1] : '';
+      const isPrevLineTableRow = /^\|.*\|[\s]*$/.test(prevLine);
+
+      if (!isPrevLineTableRow) {
+        // Count columns in separator
+        const columnCount = (line.match(/\|/g) || []).length - 1;
+
+        // Generate empty header row
+        const headerCells = Array(columnCount).fill('   ').join(' | ');
+        const headerRow = `| ${headerCells} |`;
+
+        result.push(headerRow);
+      }
+    }
+
+    result.push(line);
+  }
+
+  return result.join('\n');
+};
+
 const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -1657,7 +1691,7 @@ FORMATERING REËLS / FORMATTING RULES:
                               em: ({node, ...props}) => <em className="italic" {...props} />,
                             }}
                           >
-                            {enforceFormatting(normalizeIcons(message.content))}
+                            {fixMarkdownTables(enforceFormatting(normalizeIcons(message.content)))}
                           </ReactMarkdown>
                         </div>
                       )}
