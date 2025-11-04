@@ -1501,7 +1501,7 @@ FORMATERING REËLS / FORMATTING RULES:
                             </button>
                             <button
                               onClick={() => handleSpeak(message.content, index)}
-                              className="flex items-center space-x-1 text-vcb-mid-grey hover:text-vcb-black transition-colors"
+                              className="hidden flex items-center space-x-1 text-vcb-mid-grey hover:text-vcb-black transition-colors"
                               title={speakingIndex === index ? 'Stop speaking' : 'Read aloud (en-ZA)'}
                             >
                               {speakingIndex === index ? (
