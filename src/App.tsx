@@ -1132,46 +1132,35 @@ const App: React.FC = () => {
           maxRetries: 0,  // Disable automatic retries to prevent 429 cascades
         });
 
-        // Smart Router: Detect if query requires complex/legal reasoning
+        // Smart Router: Detect if query requires Qwen thinking model
         const requiresComplexReasoning = (query: string): boolean => {
+          const queryLower = query.toLowerCase();
+          const wordCount = query.split(' ').length;
+          
+          // Only use Qwen for:
+          // 1. Long detailed questions (20+ words)
+          const isLongQuery = wordCount > 20;
+          
+          // 2. Questions with complex reasoning indicators
+          const hasComplexQuestionPattern = /\b(why|how|what if|should i|hoekom|hoe|wat as|moet ek|kungani|kanjani)\b/i.test(query);
+          
+          // 3. Legal terms in multiple SA languages
           const legalKeywords = [
-            'law', 'legal', 'court', 'judge', 'case', 'legislation', 'act', 'statute', 
-            'constitution', 'rights', 'contract', 'eviction', 'tenant', 'landlord',
-            'labour', 'employment', 'divorce', 'custody', 'criminal', 'civil',
-            'appeal', 'precedent', 'ruling', 'attorney', 'lawyer', 'advocate',
-            'wet', 'hof', 'regs', 'grondwet', 'prokureur', 'advokaat',
+            'wet', 'hof', 'regs', 'grondwet', 'prokureur', 'advokaat', // Afrikaans
             'umthetho', 'inkantolo', // Zulu: law, court
             'molao', 'lekgotla', // Sotho: law, court
           ];
-          
-          const complexKeywords = [
-            'explain', 'analyze', 'compare', 'evaluate', 'assess', 'advise',
-            'strategy', 'plan', 'research', 'detailed', 'comprehensive',
-            'verduidelik', 'ontleed', 'vergelyk', // Afrikaans
-          ];
-
-          const queryLower = query.toLowerCase();
-          
-          // Check for legal keywords
           const hasLegalTerms = legalKeywords.some(keyword => queryLower.includes(keyword));
           
-          // Check for complex analysis requests
-          const hasComplexTerms = complexKeywords.some(keyword => queryLower.includes(keyword));
-          
-          // Check query length (longer queries often need deeper reasoning)
-          const isLongQuery = query.split(' ').length > 20;
-          
-          // Check for question words indicating complex queries
-          const hasComplexQuestionPattern = /\b(why|how|what if|explain|difference|compare|should i)\b/i.test(query);
-          
-          return hasLegalTerms || (hasComplexTerms && (isLongQuery || hasComplexQuestionPattern));
+          // Use Qwen ONLY if: long query OR (complex question + legal terms)
+          return isLongQuery || (hasComplexQuestionPattern && hasLegalTerms);
         };
 
-        // Determine which model to use
+        // Determine which model to use (default to Llama for speed)
         const useThinkingModel = requiresComplexReasoning(userMessage.content);
         const selectedModel = useThinkingModel 
-          ? 'qwen-3-235b-a22b-instruct-2507'  // Complex/legal queries
-          : 'llama-3.3-70b';                    // General queries
+          ? 'qwen-3-235b-a22b-instruct-2507'  // Long/complex legal queries only
+          : 'llama-3.3-70b';                    // Default for everything else
 
         // Adjust system prompt based on model
         const systemPromptContent = useThinkingModel
