@@ -516,7 +516,7 @@ const App: React.FC = () => {
       }
     };
 
-    utterance.onerror = (event) => {
+    utterance.onerror = () => {
       // console.error('TTS error:', event);
       setSpeakingIndex(null);
       // Restart recognition on error too (skip on mobile)
