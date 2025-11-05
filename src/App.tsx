@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, startTransition } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -371,7 +371,7 @@ const App: React.FC = () => {
   };
 
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }); // Changed from 'smooth' to 'auto' for instant scrolling
   }, []);
 
   // Format session time as HH:MM:SS
@@ -408,14 +408,14 @@ const App: React.FC = () => {
       const dummyUtterance = new SpeechSynthesisUtterance('');
       window.speechSynthesis.speak(dummyUtterance);
       setSpeechInitialized(true);
-      console.log('Speech synthesis initialized for mobile');
+      // console.log('Speech synthesis initialized for mobile');
 
       // Load voices after initialization
       setTimeout(() => {
         const voices = window.speechSynthesis.getVoices();
         if (voices.length > 0) {
           setAvailableVoices(voices);
-          console.log('Voices loaded after initialization:', voices.length);
+          // console.log('Voices loaded after initialization:', voices.length);
         }
       }, 100);
     }
@@ -437,7 +437,7 @@ const App: React.FC = () => {
           try {
             recognitionRef.current.start();
           } catch (err) {
-            console.error('Failed to restart recognition after stopping TTS:', err);
+            // console.error('Failed to restart recognition after stopping TTS:', err);
           }
         }
         return;
@@ -449,9 +449,9 @@ const App: React.FC = () => {
     if (voiceModeEnabled && recognitionRef.current && isListening && !isMobile) {
       try {
         recognitionRef.current.stop();
-        console.log('Paused recognition for TTS playback');
+        // console.log('Paused recognition for TTS playback');
       } catch (err) {
-        console.error('Failed to pause recognition:', err);
+        // console.error('Failed to pause recognition:', err);
       }
     }
 
@@ -462,7 +462,7 @@ const App: React.FC = () => {
 
     // Try to find best available voice - MUST be en-ZA (South African English)
     const voices = availableVoices.length > 0 ? availableVoices : window.speechSynthesis.getVoices();
-    console.log('Selecting voice from', voices.length, 'available voices');
+    // console.log('Selecting voice from', voices.length, 'available voices');
 
     // Search for en-ZA voice (check multiple formats: en-ZA, en_ZA, en-za)
     const zaVoice = voices.find(voice =>
@@ -475,7 +475,7 @@ const App: React.FC = () => {
     if (zaVoice) {
       utterance.voice = zaVoice;
       utterance.lang = 'en-ZA';
-      console.log('✓ Using en-ZA voice:', zaVoice.name);
+      // console.log('✓ Using en-ZA voice:', zaVoice.name);
     } else {
       // No en-ZA available - use en-GB as closest alternative, but log warning
       const gbVoice = voices.find(voice => voice.lang === 'en-GB');
@@ -487,20 +487,20 @@ const App: React.FC = () => {
       if (fallbackVoice) {
         utterance.voice = fallbackVoice;
         utterance.lang = fallbackVoice.lang;
-        console.warn('⚠ en-ZA voice not available! Using fallback:', fallbackVoice.name, fallbackVoice.lang);
+        // console.warn('⚠ en-ZA voice not available! Using fallback:', fallbackVoice.name, fallbackVoice.lang);
       } else {
         utterance.lang = 'en-ZA'; // Force en-ZA lang even without specific voice
-        console.warn('⚠ No English voices found! Using system default with en-ZA language tag');
+        // console.warn('⚠ No English voices found! Using system default with en-ZA language tag');
       }
     }
 
     utterance.onstart = () => {
-      console.log('TTS started');
+      // console.log('TTS started');
       setSpeakingIndex(index);
     };
 
     utterance.onend = () => {
-      console.log('TTS ended');
+      // console.log('TTS ended');
       setSpeakingIndex(null);
       // Restart speech recognition after TTS finishes (if voice mode still enabled)
       // Skip on mobile to prevent conflicts
@@ -508,16 +508,16 @@ const App: React.FC = () => {
         setTimeout(() => {
           try {
             recognitionRef.current.start();
-            console.log('Resumed recognition after TTS playback');
+            // console.log('Resumed recognition after TTS playback');
           } catch (err) {
-            console.error('Failed to restart recognition after TTS:', err);
+            // console.error('Failed to restart recognition after TTS:', err);
           }
         }, 500); // 500ms delay to ensure TTS has fully stopped
       }
     };
 
     utterance.onerror = (event) => {
-      console.error('TTS error:', event);
+      // console.error('TTS error:', event);
       setSpeakingIndex(null);
       // Restart recognition on error too (skip on mobile)
       if (voiceModeEnabled && recognitionRef.current && !isMobile) {
@@ -525,13 +525,13 @@ const App: React.FC = () => {
           try {
             recognitionRef.current.start();
           } catch (err) {
-            console.error('Failed to restart recognition after TTS error:', err);
+            // console.error('Failed to restart recognition after TTS error:', err);
           }
         }, 500);
       }
     };
 
-    console.log('Starting TTS playback');
+    // console.log('Starting TTS playback');
     window.speechSynthesis.speak(utterance);
   };
 
@@ -543,7 +543,7 @@ const App: React.FC = () => {
         setCopiedIndex(null);
       }, 2000); // Show "Copied!" for 2 seconds
     } catch (err) {
-      console.error('Failed to copy text:', err);
+      // console.error('Failed to copy text:', err);
     }
   };
 
@@ -551,8 +551,8 @@ const App: React.FC = () => {
   useEffect(() => {
     const loadVoices = () => {
       const voices = window.speechSynthesis.getVoices();
-      console.log('Available voices:', voices.length);
-      console.log('Voice list:', voices.map(v => `${v.name} (${v.lang})`));
+      // console.log('Available voices:', voices.length);
+      // console.log('Voice list:', voices.map(v => `${v.name} (${v.lang})`));
       setAvailableVoices(voices);
     };
 
@@ -575,7 +575,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      console.error('Speech Recognition API not supported in this browser');
+      // console.error('Speech Recognition API not supported in this browser');
       return;
     }
 
@@ -585,7 +585,7 @@ const App: React.FC = () => {
     recognition.lang = 'en-ZA'; // South African English
 
     recognition.onstart = () => {
-      console.log('Speech recognition started');
+      // console.log('Speech recognition started');
       setIsListening(true);
     };
 
@@ -595,7 +595,7 @@ const App: React.FC = () => {
         .map((result: any) => result.transcript)
         .join('');
 
-      console.log('Transcript:', transcript);
+      // console.log('Transcript:', transcript);
       setInput(transcript);
 
       // Reset silence timer on speech
@@ -606,7 +606,7 @@ const App: React.FC = () => {
       // Start new silence timer (3 seconds)
       silenceTimerRef.current = setTimeout(() => {
         if (transcript.trim()) {
-          console.log('Silence detected, submitting...');
+          // console.log('Silence detected, submitting...');
           // Auto-submit after 3 seconds of silence
           const form = document.querySelector('form');
           if (form) {
@@ -618,7 +618,7 @@ const App: React.FC = () => {
     };
 
     recognition.onerror = (event: any) => {
-      console.error('Speech recognition error:', event.error);
+      // console.error('Speech recognition error:', event.error);
       setIsListening(false);
 
       if (event.error === 'not-allowed') {
@@ -631,7 +631,7 @@ const App: React.FC = () => {
             try {
               recognition.start();
             } catch (err) {
-              console.error('Failed to restart after error:', err);
+              // console.error('Failed to restart after error:', err);
             }
           }, 1000);
         }
@@ -639,7 +639,7 @@ const App: React.FC = () => {
     };
 
     recognition.onend = () => {
-      console.log('Speech recognition ended');
+      // console.log('Speech recognition ended');
       setIsListening(false);
 
       // Auto-restart if voice mode is still enabled
@@ -647,9 +647,9 @@ const App: React.FC = () => {
         setTimeout(() => {
           try {
             recognition.start();
-            console.log('Restarting recognition...');
+            // console.log('Restarting recognition...');
           } catch (err) {
-            console.error('Failed to restart recognition:', err);
+            // console.error('Failed to restart recognition:', err);
           }
         }, 100);
       }
@@ -695,7 +695,7 @@ const App: React.FC = () => {
         try {
           recognitionRef.current.start();
         } catch (err) {
-          console.error('Failed to start recognition:', err);
+          // console.error('Failed to start recognition:', err);
         }
       }
     } else {
@@ -725,22 +725,25 @@ const App: React.FC = () => {
     if (currentConversationId) {
       // Update existing conversation
       conversationManagerRef.current.updateConversation(currentConversationId, messagesWithTimestamps);
-      console.log('Updated conversation:', currentConversationId);
+      // console.log('Updated conversation:', currentConversationId);
     } else {
       // Create new conversation
       const newConv = conversationManagerRef.current.createConversation(messagesWithTimestamps);
       setCurrentConversationId(newConv.id);
-      console.log('Created new conversation:', newConv.id);
+      // console.log('Created new conversation:', newConv.id);
     }
   };
 
   const loadConversation = (id: string) => {
     const conv = conversationManagerRef.current.getConversation(id);
     if (conv) {
-      setMessages(conv.messages);
-      setCurrentConversationId(id);
-      setShowChatHistory(false);
-      console.log('Loaded conversation:', id, conv.title);
+      // Use startTransition to make conversation loading non-blocking
+      startTransition(() => {
+        setMessages(conv.messages);
+        setCurrentConversationId(id);
+        setShowChatHistory(false);
+      });
+      // console.log('Loaded conversation:', id, conv.title);
     }
   };
 
@@ -755,7 +758,7 @@ const App: React.FC = () => {
     setCurrentConversationId(null);
     setInput('');
     setShowChatHistory(false);
-    console.log('Started new chat');
+    // console.log('Started new chat');
   };
 
   const deleteConversationById = (id: string) => {
@@ -766,7 +769,7 @@ const App: React.FC = () => {
         setMessages([]);
         setCurrentConversationId(null);
       }
-      console.log('Deleted conversation:', id);
+      // console.log('Deleted conversation:', id);
     }
   };
 
@@ -785,7 +788,7 @@ const App: React.FC = () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      console.log('Exported conversation:', id, format);
+      // console.log('Exported conversation:', id, format);
     }
   };
 
@@ -844,7 +847,7 @@ const App: React.FC = () => {
         throw new Error('No image data in response');
       }
     } catch (error) {
-      console.error('Image generation error:', error);
+      // console.error('Image generation error:', error);
       throw new Error('Image generation is currently unavailable. Please try text-based questions instead.');
     }
   };
@@ -866,7 +869,7 @@ const App: React.FC = () => {
     if (isImageGenerationRequest(userMessage.content)) {
       try {
         const imagePrompt = extractImagePrompt(userMessage.content);
-        console.log('Image generation requested. Prompt:', imagePrompt);
+        // console.log('Image generation requested. Prompt:', imagePrompt);
 
         const imageUrl = await generateImage(imagePrompt);
 
@@ -880,9 +883,9 @@ const App: React.FC = () => {
         };
 
         setMessages((prev) => [...prev, imageMessage]);
-        console.log('Image generated successfully:', imageUrl);
+        // console.log('Image generated successfully:', imageUrl);
       } catch (error: any) {
-        console.error('Image generation failed:', error);
+        // console.error('Image generation failed:', error);
         const errorMsg: Message = {
           role: 'assistant',
           content: `Failed to generate image: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -1011,7 +1014,7 @@ FORMATERING REËLS / FORMATTING RULES:
 
         // Track usage for pricing/billing
         usageTrackerRef.current.trackMessage(userMessage.content, assistantMessage.content);
-        console.log('Usage tracked:', usageTrackerRef.current.getUsage());
+        // console.log('Usage tracked:', usageTrackerRef.current.getUsage());
 
         // Success - exit retry loop
         break;
@@ -1022,13 +1025,13 @@ FORMATERING REËLS / FORMATTING RULES:
         if (is429 && retryCount < maxRetries) {
           // Rate limited - wait and retry with exponential backoff
           const delayMs = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
-          console.log(`Rate limited (429). Retrying in ${delayMs/1000}s... (attempt ${retryCount + 1}/${maxRetries})`);
+          // console.log(`Rate limited (429). Retrying in ${delayMs/1000}s... (attempt ${retryCount + 1}/${maxRetries})`);
           await new Promise(resolve => setTimeout(resolve, delayMs));
           retryCount++;
           continue;
         } else {
           // Non-429 error or max retries reached - show error to user
-          console.error('Error calling VCB-AI API:', error);
+          // console.error('Error calling VCB-AI API:', error);
           const errorMsg: Message = {
             role: 'assistant',
             content: is429

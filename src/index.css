@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* PERFORMANCE: Disable all animations and transitions for dumb terminal mode */
+* {
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+}
+
 /* VCB Cleaner Theme - Typography per §5.2 */
 body {
   margin: 0;
