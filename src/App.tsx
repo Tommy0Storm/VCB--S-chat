@@ -772,10 +772,11 @@ const App: React.FC = () => {
       window.speechSynthesis.cancel();
       if (speakingIndex === index) {
         setSpeakingIndex(null);
-        // Restart recognition if voice mode is enabled
-        if (voiceModeEnabled && recognitionRef.current) {
+        // Restart recognition if voice mode is enabled and was stopped
+        if (voiceModeEnabled && recognitionRef.current && !isListening) {
           try {
             recognitionRef.current.start();
+            setIsListening(true);
           } catch (err) {
             // console.error('Failed to restart recognition after stopping TTS:', err);
           }
@@ -784,16 +785,8 @@ const App: React.FC = () => {
       }
     }
 
-    // Pause speech recognition during TTS playback to prevent feedback loop
-    // Skip this on mobile to allow TTS to work
-    if (voiceModeEnabled && recognitionRef.current && isListening && !isMobile) {
-      try {
-        recognitionRef.current.stop();
-        // console.log('Paused recognition for TTS playback');
-      } catch (err) {
-        // console.error('Failed to pause recognition:', err);
-      }
-    }
+    // Recognition will be stopped in utterance.onstart event handler
+    // This ensures clean stop/start timing
 
     // Create speech synthesis utterance with en-ZA voice
     const utterance = new SpeechSynthesisUtterance(text);
@@ -837,37 +830,48 @@ const App: React.FC = () => {
     utterance.onstart = () => {
       // console.log('TTS started');
       setSpeakingIndex(index);
+      // STOP transcription when bot starts speaking (prevent echo/feedback)
+      if (voiceModeEnabled && recognitionRef.current && isListening) {
+        try {
+          recognitionRef.current.stop();
+          setIsListening(false);
+          // console.log('Stopped recognition - bot is speaking');
+        } catch (err) {
+          // console.error('Failed to stop recognition:', err);
+        }
+      }
     };
 
     utterance.onend = () => {
       // console.log('TTS ended');
       setSpeakingIndex(null);
-      // Restart speech recognition after TTS finishes (if voice mode still enabled)
-      // Skip on mobile to prevent conflicts
-      if (voiceModeEnabled && recognitionRef.current && !isMobile) {
+      // RESTART transcription after bot finishes speaking
+      if (voiceModeEnabled && recognitionRef.current && !isListening) {
         setTimeout(() => {
           try {
             recognitionRef.current.start();
-            // console.log('Resumed recognition after TTS playback');
+            setIsListening(true);
+            // console.log('Restarted recognition - bot finished speaking');
           } catch (err) {
-            // console.error('Failed to restart recognition after TTS:', err);
+            // console.error('Failed to restart recognition:', err);
           }
-        }, 500); // 500ms delay to ensure TTS has fully stopped
+        }, 300); // Small delay to ensure TTS has fully stopped
       }
     };
 
     utterance.onerror = () => {
       // console.error('TTS error:', event);
       setSpeakingIndex(null);
-      // Restart recognition on error too (skip on mobile)
-      if (voiceModeEnabled && recognitionRef.current && !isMobile) {
+      // RESTART transcription on error too
+      if (voiceModeEnabled && recognitionRef.current && !isListening) {
         setTimeout(() => {
           try {
             recognitionRef.current.start();
+            setIsListening(true);
           } catch (err) {
             // console.error('Failed to restart recognition after TTS error:', err);
           }
-        }, 500);
+        }, 300);
       }
     };
 
