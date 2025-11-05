@@ -1119,6 +1119,7 @@ const App: React.FC = () => {
 
         const client = new Cerebras({
           apiKey: apiKey,
+          maxRetries: 0,  // Disable automatic retries to prevent 429 cascades
         });
 
         // Create chat completion with VCB-AI system prompt
