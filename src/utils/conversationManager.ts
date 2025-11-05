@@ -8,6 +8,7 @@ export interface Message {
   type?: 'text' | 'image';
   imageUrl?: string;
   imagePrompt?: string;
+  model?: 'llama' | 'qwen' | 'cepo'; // Track which model generated the response
 }
 
 export interface Conversation {

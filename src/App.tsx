@@ -353,6 +353,8 @@ const MessageComponent = React.memo(({
   // Extract thinking block if present (Qwen thinking model)
   const { thinking, answer } = extractThinkingBlock(message.content);
   const displayContent = answer; // Show only the answer, not the thinking block
+  const isThinkingModel = message.model === 'qwen' || thinking !== null;
+  const isCepoModel = message.model === 'cepo';
   
   return (
     <div
@@ -383,9 +385,23 @@ const MessageComponent = React.memo(({
           </div>
           <div className="flex-1">
             <div className="flex items-center justify-between mb-1 md:mb-2">
-              <p className="text-[10px] md:text-xs font-medium text-vcb-mid-grey uppercase tracking-wide">
-                {message.role === 'user' ? '' : 'VCB-AI'}
-              </p>
+              <div className="flex items-center space-x-2">
+                <p className="text-[10px] md:text-xs font-medium text-vcb-mid-grey uppercase tracking-wide">
+                  {message.role === 'user' ? '' : 'VCB-AI'}
+                </p>
+                {message.role === 'assistant' && isThinkingModel && (
+                  <span className="flex items-center text-yellow-600 text-[10px] md:text-xs" title="Advanced Thinking Mode (Qwen)">
+                    <span className="material-icons text-sm md:text-base">psychology</span>
+                    <span className="ml-1 hidden md:inline">Thinking</span>
+                  </span>
+                )}
+                {message.role === 'assistant' && isCepoModel && (
+                  <span className="flex items-center text-blue-600 text-[10px] md:text-xs" title="CePO Reasoning Mode">
+                    <span className="material-icons text-sm md:text-base">auto_awesome</span>
+                    <span className="ml-1 hidden md:inline">CePO</span>
+                  </span>
+                )}
+              </div>
               {message.role === 'assistant' && (
                 <div className="flex items-center space-x-2">
                   <button
@@ -891,31 +907,49 @@ const App: React.FC = () => {
     };
 
     recognition.onresult = (event: any) => {
-      const transcript = Array.from(event.results)
-        .map((result: any) => result[0])
-        .map((result: any) => result.transcript)
-        .join('');
+      let finalTranscript = '';
+      let interimTranscript = '';
+      
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript + ' ';
+        } else {
+          interimTranscript += transcript;
+        }
+      }
 
-      // console.log('Transcript:', transcript);
-      setInput(transcript);
+      // Update input with final transcript, show interim in real-time
+      const currentFinal = inputRef.current?.value.replace(/\s*\[listening\.\.\.\]\s*$/, '') || '';
+      const newText = (currentFinal + finalTranscript).trim();
+      
+      if (finalTranscript) {
+        setInput(newText);
+      } else if (interimTranscript) {
+        // Show interim results while speaking
+        setInput(newText + (newText ? ' ' : '') + interimTranscript);
+      }
 
       // Reset silence timer on speech
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
       }
 
-      // Start new silence timer (3 seconds)
-      silenceTimerRef.current = setTimeout(() => {
-        if (transcript.trim()) {
-          // console.log('Silence detected, submitting...');
-          // Auto-submit after 3 seconds of silence
-          const form = document.querySelector('form');
-          if (form) {
-            const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
-            form.dispatchEvent(submitEvent);
+      // Start new silence timer (3 seconds) - only after final transcript
+      if (finalTranscript) {
+        silenceTimerRef.current = setTimeout(() => {
+          const currentInput = inputRef.current?.value.trim() || '';
+          if (currentInput && currentInput !== '[listening...]') {
+            // console.log('Silence detected, submitting...');
+            // Auto-submit after 3 seconds of silence
+            const form = document.querySelector('form');
+            if (form) {
+              const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+              form.dispatchEvent(submitEvent);
+            }
           }
-        }
-      }, 3000);
+        }, 3000);
+      }
     };
 
     recognition.onerror = (event: any) => {
@@ -980,26 +1014,39 @@ const App: React.FC = () => {
     lastMessagesLengthRef.current = messages.length;
   }, [messages, voiceModeEnabled]);
 
-  const toggleVoiceMode = () => {
+  const toggleVoiceMode = async () => {
     const newVoiceMode = !voiceModeEnabled;
-    setVoiceModeEnabled(newVoiceMode);
 
     if (newVoiceMode) {
-      // Initialize speech synthesis on mobile (required for autoplay)
-      if (isMobile) {
-        initializeSpeechSynthesis();
-      }
-
-      // Start listening
-      setIsListening(true);
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.start();
-        } catch (err) {
-          // console.error('Failed to start recognition:', err);
+      // Request microphone permission first
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Stop the stream immediately - we just needed to request permission
+        stream.getTracks().forEach(track => track.stop());
+        
+        setVoiceModeEnabled(true);
+        
+        // Initialize speech synthesis on mobile (required for autoplay)
+        if (isMobile) {
+          initializeSpeechSynthesis();
         }
+
+        // Start listening
+        setIsListening(true);
+        if (recognitionRef.current) {
+          try {
+            recognitionRef.current.start();
+          } catch (err) {
+            console.error('Failed to start recognition:', err);
+          }
+        }
+      } catch (err) {
+        console.error('Microphone permission denied:', err);
+        alert('Microphone permission is required for voice mode. Please allow microphone access in your browser settings and try again.');
+        setVoiceModeEnabled(false);
       }
     } else {
+      setVoiceModeEnabled(false);
       // Stop listening
       setIsListening(false);
       if (recognitionRef.current) {
@@ -1354,6 +1401,7 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
           role: 'assistant',
           content: processedContent,
           timestamp: Date.now(),
+          model: useStrategicMode ? 'qwen' : undefined,
         };
 
         setMessages((prev) => [...prev, assistantMessage]);
@@ -1638,6 +1686,7 @@ Winner: Solution X`;
               role: 'assistant',
               content: cepoResult,
               timestamp: Date.now(),
+              model: 'cepo',
             };
 
             setMessages((prev) => [...prev, assistantMessage]);
@@ -1785,6 +1834,7 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
           role: 'assistant',
           content: processedContent,
           timestamp: Date.now(),
+          model: useStrategicMode ? 'qwen' : undefined,
         };
 
         setMessages((prev) => [...prev, assistantMessage]);
@@ -1836,7 +1886,7 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
   return (
     <div className="flex flex-col h-screen bg-white font-quicksand font-normal">
       {/* Header - VCB Cleaner Theme per §5.1-5.3, Mobile Optimized */}
-      <header className="bg-vcb-black border-b border-vcb-mid-grey px-3 py-1.5 md:px-8 md:py-6">
+      <header className="bg-vcb-black border-b border-vcb-mid-grey px-3 py-1 md:px-8 md:py-4">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center space-x-1.5 md:space-x-6">
             {/* VCB Logo per §5.3 - must be on dark background */}
@@ -2342,10 +2392,10 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
       </div>
 
       {/* Input Container - high contrast per §5.1, Mobile Optimized */}
-      <div className="border-t border-vcb-light-grey bg-white px-2 py-2 md:px-8 md:py-6">
+      <div className="border-t border-vcb-light-grey bg-white px-1.5 py-1.5 md:px-8 md:py-6">
         <form onSubmit={handleSubmit} className="max-w-5xl mx-auto">
           {voiceModeEnabled && isListening && (
-            <div className="mb-2 md:mb-3 flex items-center justify-center space-x-2 text-vcb-mid-grey">
+            <div className="mb-1 md:mb-3 flex items-center justify-center space-x-2 text-vcb-mid-grey">
               <svg className="w-3 h-3 md:w-4 md:h-4 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
                 <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
@@ -2354,12 +2404,12 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
             </div>
           )}
           {cepoProgress && (
-            <div className="mb-2 md:mb-3 flex items-center justify-center space-x-2 text-blue-600">
+            <div className="mb-1 md:mb-3 flex items-center justify-center space-x-2 text-blue-600">
               <span className="material-icons text-base md:text-xl animate-spin">autorenew</span>
               <span className="text-[10px] md:text-sm font-medium">{cepoProgress}</span>
             </div>
           )}
-          <div className="flex items-center space-x-1.5 md:space-x-4">
+          <div className="flex items-center space-x-1 md:space-x-4">
             <img
               src="Sovereign-Chat-icon-Spin.svg"
               alt="Sovereign"
@@ -2373,82 +2423,153 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={voiceModeEnabled ? "Speak your message..." : "Type your message..."}
-              className="flex-1 bg-white text-vcb-black border border-vcb-light-grey px-2 py-2 md:px-6 md:py-4 text-sm md:text-base focus:outline-none focus:border-vcb-mid-grey resize-none font-normal leading-relaxed"
+              className="flex-1 bg-white text-vcb-black border border-vcb-light-grey px-2 py-2 md:px-6 md:py-4 text-sm md:text-base focus:outline-none focus:border-vcb-mid-grey resize-none font-normal leading-relaxed h-10 md:h-16"
               rows={1}
               disabled={isLoading}
               readOnly={voiceModeEnabled}
             />
-            <button
-              type="button"
-              onClick={() => setForceThinkingMode(!forceThinkingMode)}
-              disabled={isLoading || useCePO}
-              className={`px-3 py-2 md:px-4 md:py-4 transition-colors duration-200 border flex items-center justify-center ${
-                forceThinkingMode
-                  ? 'bg-yellow-400 text-vcb-black border-yellow-500'
-                  : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-              title={forceThinkingMode ? 'Thinking Mode ON (Qwen)' : 'Thinking Mode OFF (Click to enable)'}
-            >
-              <span className="material-icons text-lg md:text-2xl">psychology</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setUseCePO(!useCePO)}
-              disabled={isLoading || forceThinkingMode}
-              className={`px-3 py-2 md:px-4 md:py-4 transition-colors duration-200 border flex items-center justify-center ${
-                useCePO
-                  ? 'bg-blue-500 text-white border-blue-600'
-                  : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-              title={useCePO ? 'CePO Mode ON (Advanced Reasoning)' : 'CePO Mode OFF (Click to enable)'}
-            >
-              <span className="material-icons text-lg md:text-2xl">auto_awesome</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setVoiceModeEnabled(!voiceModeEnabled)}
-              disabled={isLoading}
-              className={`px-3 py-2 md:px-4 md:py-4 transition-colors duration-200 border flex items-center justify-center ${
-                isListening 
-                  ? 'bg-red-500 text-white border-red-600 animate-pulse' 
-                  : voiceModeEnabled
-                  ? 'bg-vcb-black text-vcb-white border-vcb-mid-grey hover:bg-vcb-dark-grey'
-                  : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-              title={isListening ? 'Listening... (Click to stop)' : voiceModeEnabled ? 'Voice Mode ON (Click to disable)' : 'Voice Mode OFF (Click to enable)'}
-            >
-              <span className="material-icons text-lg md:text-2xl">
-                {isListening ? 'mic' : 'mic_off'}
-              </span>
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading || !input.trim()}
-              className="bg-vcb-black hover:bg-vcb-dark-grey disabled:bg-vcb-light-grey disabled:cursor-not-allowed text-vcb-white px-3 py-2 md:px-8 md:py-4 text-[10px] md:text-sm font-medium uppercase tracking-wider transition-colors duration-200 flex items-center space-x-1 md:space-x-3 border border-vcb-mid-grey"
-            >
-              {isLoading ? (
-                <>
+            {/* Mobile: Horizontal compact buttons */}
+            <div className="flex md:hidden items-center space-x-0.5">
+              <button
+                type="button"
+                onClick={() => setForceThinkingMode(!forceThinkingMode)}
+                disabled={isLoading || useCePO}
+                className={`w-9 h-10 transition-colors duration-200 border flex items-center justify-center flex-shrink-0 ${
+                  forceThinkingMode
+                    ? 'bg-yellow-400 text-vcb-black border-yellow-500'
+                    : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                title={forceThinkingMode ? 'Thinking Mode ON (Qwen)' : 'Thinking Mode OFF (Click to enable)'}
+              >
+                <span className="material-icons text-sm">psychology</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setUseCePO(!useCePO)}
+                disabled={isLoading || forceThinkingMode}
+                className={`w-9 h-10 transition-colors duration-200 border flex items-center justify-center flex-shrink-0 ${
+                  useCePO
+                    ? 'bg-blue-500 text-white border-blue-600'
+                    : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                title={useCePO ? 'CePO Mode ON (Advanced Reasoning)' : 'CePO Mode OFF (Click to enable)'}
+              >
+                <span className="material-icons text-sm">auto_awesome</span>
+              </button>
+              <button
+                type="button"
+                onClick={toggleVoiceMode}
+                disabled={isLoading}
+                className={`w-9 h-10 transition-colors duration-200 border flex items-center justify-center flex-shrink-0 ${
+                  isListening 
+                    ? 'bg-red-500 text-white border-red-600 animate-pulse' 
+                    : voiceModeEnabled
+                    ? 'bg-vcb-black text-vcb-white border-vcb-mid-grey hover:bg-vcb-dark-grey'
+                    : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                title={isListening ? 'Listening... (Click to stop)' : voiceModeEnabled ? 'Voice Mode ON (Click to disable)' : 'Voice Mode OFF (Click to enable)'}
+              >
+                <span className="material-icons text-sm">
+                  {isListening ? 'mic' : 'mic_off'}
+                </span>
+              </button>
+              <button
+                type="submit"
+                disabled={isLoading || !input.trim()}
+                className="bg-vcb-black hover:bg-vcb-dark-grey disabled:bg-vcb-light-grey disabled:cursor-not-allowed text-vcb-white w-9 h-10 font-medium transition-colors duration-200 flex items-center justify-center border border-vcb-mid-grey flex-shrink-0"
+              >
+                {isLoading ? (
                   <img
                     src="sovereign-thinking-spinner.svg"
                     alt="Sending..."
-                    className="h-4 w-4 md:h-5 md:w-5"
+                    className="h-3.5 w-3.5"
                   />
-                  <span className="hidden md:inline">Sending...</span>
-                </>
-              ) : (
-                <>
+                ) : (
                   <svg
-                    className="w-4 h-4 md:w-5 md:h-5"
+                    className="w-3.5 h-3.5"
                     fill="currentColor"
                     viewBox="0 0 24 24"
                   >
                     <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
                     <path d="M7 9h10v2H7zm0-3h10v2H7z"/>
                   </svg>
-                  <span className="hidden md:inline">Send</span>
-                </>
-              )}
-            </button>
+                )}
+              </button>
+            </div>
+            {/* Desktop: Horizontal button layout */}
+            <div className="hidden md:flex md:items-center md:space-x-4">
+              <button
+                type="button"
+                onClick={() => setForceThinkingMode(!forceThinkingMode)}
+                disabled={isLoading || useCePO}
+                className={`px-4 h-16 transition-colors duration-200 border flex items-center justify-center ${
+                  forceThinkingMode
+                    ? 'bg-yellow-400 text-vcb-black border-yellow-500'
+                    : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                title={forceThinkingMode ? 'Thinking Mode ON (Qwen)' : 'Thinking Mode OFF (Click to enable)'}
+              >
+                <span className="material-icons text-2xl">psychology</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setUseCePO(!useCePO)}
+                disabled={isLoading || forceThinkingMode}
+                className={`px-4 h-16 transition-colors duration-200 border flex items-center justify-center ${
+                  useCePO
+                    ? 'bg-blue-500 text-white border-blue-600'
+                    : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                title={useCePO ? 'CePO Mode ON (Advanced Reasoning)' : 'CePO Mode OFF (Click to enable)'}
+              >
+                <span className="material-icons text-2xl">auto_awesome</span>
+              </button>
+              <button
+                type="button"
+                onClick={toggleVoiceMode}
+                disabled={isLoading}
+                className={`px-4 h-16 transition-colors duration-200 border flex items-center justify-center ${
+                  isListening 
+                    ? 'bg-red-500 text-white border-red-600 animate-pulse' 
+                    : voiceModeEnabled
+                    ? 'bg-vcb-black text-vcb-white border-vcb-mid-grey hover:bg-vcb-dark-grey'
+                    : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                title={isListening ? 'Listening... (Click to stop)' : voiceModeEnabled ? 'Voice Mode ON (Click to disable)' : 'Voice Mode OFF (Click to enable)'}
+              >
+                <span className="material-icons text-2xl">
+                  {isListening ? 'mic' : 'mic_off'}
+                </span>
+              </button>
+              <button
+                type="submit"
+                disabled={isLoading || !input.trim()}
+                className="bg-vcb-black hover:bg-vcb-dark-grey disabled:bg-vcb-light-grey disabled:cursor-not-allowed text-vcb-white px-8 h-16 text-sm font-medium uppercase tracking-wider transition-colors duration-200 flex items-center space-x-3 border border-vcb-mid-grey"
+              >
+                {isLoading ? (
+                  <>
+                    <img
+                      src="sovereign-thinking-spinner.svg"
+                      alt="Sending..."
+                      className="h-5 w-5"
+                    />
+                    <span>Sending...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg
+                      className="w-5 h-5"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+                      <path d="M7 9h10v2H7zm0-3h10v2H7z"/>
+                    </svg>
+                    <span>Send</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>

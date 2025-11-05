@@ -75,3 +75,17 @@ code {
 .delay-200 {
   animation-delay: 0.2s;
 }
+
+/* Prevent mobile viewport zoom on input focus */
+@media screen and (max-width: 768px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="password"],
+  textarea,
+  select {
+    font-size: 16px !important; /* Prevents iOS zoom */
+  }
+}
