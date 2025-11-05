@@ -9,6 +9,7 @@ export interface Message {
   imageUrl?: string;
   imagePrompt?: string;
   model?: 'llama' | 'qwen' | 'cepo'; // Track which model generated the response
+  isVoiceTranscription?: boolean; // Track if sent via voice transcription
 }
 
 export interface Conversation {

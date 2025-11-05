@@ -389,6 +389,12 @@ const MessageComponent = React.memo(({
                 <p className="text-[10px] md:text-xs font-medium text-vcb-mid-grey uppercase tracking-wide">
                   {message.role === 'user' ? '' : 'VCB-AI'}
                 </p>
+                {message.role === 'user' && message.isVoiceTranscription && (
+                  <span className="flex items-center text-vcb-accent text-[10px] md:text-xs" title="Voice Transcription">
+                    <span className="material-icons text-sm md:text-base">mic</span>
+                    <span className="ml-1 hidden md:inline">Voice</span>
+                  </span>
+                )}
                 {message.role === 'assistant' && isThinkingModel && (
                   <span className="flex items-center text-yellow-600 text-[10px] md:text-xs" title="Advanced Thinking Mode (Qwen)">
                     <span className="material-icons text-sm md:text-base">psychology</span>
@@ -991,8 +997,20 @@ const App: React.FC = () => {
         clearTimeout(silenceTimerRef.current);
       }
 
-      // Transcription only - no auto-submit
-      // User must manually press send button or hit Enter to submit
+      // Auto-submit after 2 seconds of silence
+      if (finalTranscript.trim()) {
+        silenceTimerRef.current = setTimeout(() => {
+          const currentInput = inputRef.current?.value.trim() || '';
+          if (currentInput) {
+            // Auto-submit the transcribed message
+            const form = document.querySelector('form');
+            if (form) {
+              const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+              form.dispatchEvent(submitEvent);
+            }
+          }
+        }, 2000);
+      }
     };
 
     recognition.onerror = (event: any) => {
@@ -1045,17 +1063,11 @@ const App: React.FC = () => {
     };
   }, []); // Only run once on mount - no dependency on voiceModeEnabled
 
-  // Auto-play AI responses in voice mode
+  // Auto-play disabled - bot only responds in text when voice mode is on
+  // User can manually click speaker icon if they want TTS
   useEffect(() => {
-    if (voiceModeEnabled && messages.length > lastMessagesLengthRef.current) {
-      const lastMessage = messages[messages.length - 1];
-      if (lastMessage.role === 'assistant') {
-        // Auto-play the AI response
-        handleSpeak(lastMessage.content, messages.length - 1);
-      }
-    }
     lastMessagesLengthRef.current = messages.length;
-  }, [messages, voiceModeEnabled]);
+  }, [messages]);
 
   const toggleVoiceMode = async () => {
     const newVoiceMode = !voiceModeEnabled;
@@ -1657,6 +1669,7 @@ Provide the improved final answer addressing any issues identified.`;
       role: 'user',
       content: input.trim(),
       timestamp: Date.now(),
+      isVoiceTranscription: voiceModeEnabled && isListening, // Mark if sent via voice transcription
     };
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
