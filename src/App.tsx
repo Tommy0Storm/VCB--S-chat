@@ -1182,8 +1182,8 @@ const App: React.FC = () => {
           maxRetries: 0,  // Disable automatic retries to prevent 429 cascades
         });
 
-        // Two-Tier Smart Router: Llama (default) → Qwen Thinking (Goldfinger for legal/complex)
-        const requiresGoldfingerMode = (query: string): boolean => {
+        // Two-Tier Smart Router: Llama (default) → Qwen Thinking (VCB-AI Legal for complex)
+        const requiresStrategicMode = (query: string): boolean => {
           const queryLower = query.toLowerCase();
           
           // Legal domain indicators (all SA languages)
@@ -1195,8 +1195,8 @@ const App: React.FC = () => {
           ];
           const hasLegalTerms = legalKeywords.some(keyword => queryLower.includes(keyword));
           
-          // Goldfinger triggers: Complex legal/strategic analysis
-          const goldfingerIndicators = [
+          // Strategic VCB-AI triggers: Complex legal/strategic analysis
+          const strategicIndicators = [
             /\b(fraud|forged|fabricate|tamper|backdated)\b/i,  // Fraud audit layer
             /\b(unfair dismissal|automatically unfair|s\.?187)\b/i,  // Labour law
             /\b(bail application|accused rights|s\.?35|criminal charge)\b/i,  // Criminal law
@@ -1206,20 +1206,20 @@ const App: React.FC = () => {
             /\b(what are my options|best approach|how should i proceed)\b/i,  // Planning
             /\b(why|how|what if|should i|hoekom|hoe|wat as|moet ek|kungani|kanjani)\b/i,  // Complex questions
           ];
-          const hasComplexPattern = goldfingerIndicators.some(pattern => pattern.test(query));
+          const hasComplexPattern = strategicIndicators.some(pattern => pattern.test(query));
           
-          // Use Goldfinger if: legal terms + complex pattern OR long legal query
+          // Use VCB-AI Strategic if: legal terms + complex pattern OR long legal query
           const isLongQuery = query.split(' ').length > 20;
           return (hasLegalTerms && hasComplexPattern) || (hasLegalTerms && isLongQuery);
         };
 
-        const useGoldfinger = requiresGoldfingerMode(userMessage.content);
-        const selectedModel = useGoldfinger
-          ? 'qwen-3-235b-a22b-thinking-2507'  // Goldfinger strategic analysis (THINKING model)
+        const useStrategicMode = requiresStrategicMode(userMessage.content);
+        const selectedModel = useStrategicMode
+          ? 'qwen-3-235b-a22b-thinking-2507'  // VCB-AI Strategic Legal Analysis (THINKING model)
           : 'llama-3.3-70b';                    // Default GOGGA
 
-        // Goldfinger System Prompt: Strategic SA Legal Framework (Labour/Criminal/General)
-        const goldfingerPrompt = `ROLE: South African Strategic Legal Advisor (Labour/Criminal/General Law). 
+        // VCB-AI Strategic System Prompt: Strategic SA Legal Framework (Labour/Criminal/General)
+        const strategicPrompt = `ROLE: South African Strategic Legal Advisor (Labour/Criminal/General Law). 
 Jurisdiction: SA law (CCMA, Labour Court, Magistrates, High Court, SCA, ConCourt). 
 Mirror user language. Default to maximum favorable outcome for client.
 
@@ -1315,8 +1315,8 @@ FORMATTING (CRITICAL):
 
 TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casual when appropriate. Match user's formality level. You're GOGGA - helpful friend with character who makes people smile while being useful!`;
 
-        // Select appropriate prompt: Goldfinger for legal/complex, GOGGA for everything else
-        const systemPromptContent = useGoldfinger ? goldfingerPrompt : goggaPrompt;
+        // Select appropriate prompt: VCB-AI Strategic for legal/complex, GOGGA for everything else
+        const systemPromptContent = useStrategicMode ? strategicPrompt : goggaPrompt;
 
         // Create chat completion with VCB-AI system prompt
         const systemMessage = {
@@ -1344,8 +1344,8 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
         const rawContent = ((response.choices as any)[0]?.message?.content as string) || 'No response received';
         
         // Add model indicator for debugging/transparency (optional - can remove in production)
-        const modelIndicator = useGoldfinger
-          ? '\n\n*[Goldfinger Strategic Analysis]*' // Show when using full legal framework
+        const modelIndicator = useStrategicMode
+          ? '\n\n*[VCB-AI Strategic Legal Analysis]*' // Show when using full legal framework
           : ''; // Clean UI for casual queries
         
         const processedContent = fixMarkdownTables(enforceFormatting(normalizeIcons(rawContent + modelIndicator)));
