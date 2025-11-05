@@ -332,6 +332,7 @@ interface MessageComponentProps {
   index: number;
   onCopy: (text: string, index: number) => void;
   onSpeak: (text: string, index: number) => void;
+  onRetry: (messageIndex: number) => void;
   copiedIndex: number | null;
   speakingIndex: number | null;
   markdownComponents: any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -342,6 +343,7 @@ const MessageComponent = React.memo(({
   index,
   onCopy,
   onSpeak,
+  onRetry,
   copiedIndex,
   speakingIndex,
   markdownComponents,
@@ -460,6 +462,37 @@ const MessageComponent = React.memo(({
                     {displayContent}
                   </ReactMarkdown>
                 </div>
+                
+                {/* Action Buttons at Bottom (for assistant messages only) */}
+                {message.role === 'assistant' && (
+                  <div className="flex gap-2 mt-4 pt-3 border-t border-vcb-light-grey">
+                    <button
+                      onClick={() => onCopy(displayContent, index)}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-vcb-mid-grey hover:text-vcb-black hover:bg-gray-100 rounded transition-colors"
+                      title="Copy response"
+                    >
+                      {copiedIndex === index ? (
+                        <>
+                          <span className="material-icons text-sm">check</span>
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="material-icons text-sm">content_copy</span>
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => onRetry(index)}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-vcb-mid-grey hover:text-vcb-black hover:bg-gray-100 rounded transition-colors"
+                      title="Retry this response"
+                    >
+                      <span className="material-icons text-sm">refresh</span>
+                      <span>Retry</span>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1115,6 +1148,227 @@ const App: React.FC = () => {
       // console.error('Image generation error:', error);
       throw new Error('Image generation is currently unavailable. Please try text-based questions instead.');
     }
+  };
+
+  // Handle retry - regenerate response for a specific message
+  const handleRetry = (messageIndex: number) => {
+    if (isLoading || messageIndex === 0) return; // Can't retry first message or while loading
+    
+    // Find the previous user message (the one before this assistant response)
+    const previousUserMessage = messages[messageIndex - 1];
+    if (!previousUserMessage || previousUserMessage.role !== 'user') return;
+    
+    // Remove the current assistant response and regenerate
+    const messagesUpToRetry = messages.slice(0, messageIndex);
+    setMessages(messagesUpToRetry);
+    setInput('');
+    setIsLoading(true);
+    
+    // Regenerate the response by calling handleSubmit logic directly
+    const regenerateResponse = async () => {
+      const userMessage = previousUserMessage;
+
+      // Check if this is an image generation request
+      if (isImageGenerationRequest(userMessage.content)) {
+        try {
+          const imagePrompt = extractImagePrompt(userMessage.content);
+          // ... (image generation logic would go here, but simplified for now)
+          setIsLoading(false);
+        } catch (error) {
+          console.error('Error generating image:', error);
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      // Regular chat completion (copy from handleSubmit)
+      try {
+        const apiKey = import.meta.env.VITE_CEREBRAS_API_KEY;
+        if (!apiKey) {
+          throw new Error('API key not configured');
+        }
+
+        const client = new Cerebras({
+          apiKey: apiKey,
+          maxRetries: 0,
+        });
+
+        // Use smart router logic
+        const requiresStrategicMode = (query: string): boolean => {
+          const queryLower = query.toLowerCase();
+          const legalKeywords = [
+            'wet', 'hof', 'regs', 'grondwet', 'prokureur', 'advokaat', 'ccma', 'arbiter',
+            'umthetho', 'inkantolo', 'isigwebo', 'molao', 'lekgotla', 'kahlolo',
+            'law', 'court', 'legal', 'case', 'contract', 'criminal', 'bail', 'dismissal', 'discrimination'
+          ];
+          const hasLegalTerms = legalKeywords.some(keyword => queryLower.includes(keyword));
+          const strategicIndicators = [
+            /\b(fraud|forged|fabricate|tamper|backdated)\b/i,
+            /\b(unfair dismissal|automatically unfair|s\.?187)\b/i,
+            /\b(bail application|accused rights|s\.?35|criminal charge)\b/i,
+            /\b(ccma arbitration|labour court|bargaining council)\b/i,
+            /\b(constitutional challenge|bill of rights|concourt)\b/i,
+            /\b(counter-argument|litigation strategy|settlement leverage)\b/i,
+            /\b(what are my options|best approach|how should i proceed)\b/i,
+            /\b(why|how|what if|should i|hoekom|hoe|wat as|moet ek|kungani|kanjani)\b/i,
+          ];
+          const hasComplexPattern = strategicIndicators.some(pattern => pattern.test(query));
+          const isLongQuery = query.split(' ').length > 20;
+          return (hasLegalTerms && hasComplexPattern) || (hasLegalTerms && isLongQuery);
+        };
+
+        const useStrategicMode = requiresStrategicMode(userMessage.content);
+        const selectedModel = useStrategicMode
+          ? 'qwen-3-235b-a22b-thinking-2507'
+          : 'llama-3.3-70b';
+
+        const strategicPrompt = `ROLE: South African Strategic Legal Advisor (Labour/Criminal/General Law). 
+Jurisdiction: SA law (CCMA, Labour Court, Magistrates, High Court, SCA, ConCourt). 
+Mirror user language. Default to maximum favorable outcome for client.
+
+CORE HIERARCHY (Auto-Check Every Query):
+1. Constitution (s.2 supremacy, s.7-39 BOR, s.35 accused rights)
+2. Domain-Specific Primary Statute:
+   └─ Labour: LRA 66/1995, BCEA 75/1997, EEA 55/1998
+   └─ Criminal: Criminal Procedure Act 51/1977, NPA Act 32/1998, bail principles s.60 CPA
+   └─ General: Common law (delict, contract, property), relevant statute (Consumer Protection Act 68/2008, etc.)
+3. ConCourt precedents (binding, cite CCT case number)
+4. Court hierarchy precedents by recency (2025>2024>2023)
+5. Ubuntu principle (restorative, but never sacrifices client advantage or justice)
+
+FRAUD DOCUMENT AUDIT LAYER (Critical Override):
+• EVERY document flagged for fraud indicators BEFORE legal analysis proceeds
+• Fraud markers: Forgery, backdating, alterations, signature inconsistencies, metadata tampering, chain-of-custody breaks
+• If fraud suspected: HALT advice → FLAG "⚠ FRAUD ALERT: [document] requires forensic verification"
+• Do not proceed with legal argument on fraudulent doc until verified authentic
+• Report fraud disclosure obligations (s.34 POCA Act 121/1998, professional duties)
+
+REASONING PROTOCOL:
+• FUZZY SCORE (0-1): Rate all ambiguous facts/rules. Output score with reasoning.
+• AUDIT TRACE: Cite statute section + case name/year/court for every claim. Never cite without anchor.
+• HALLUCINATION BLOCK: If precedent unclear, state "Requires verification: [case name]" & skip assumption.
+• ADVERSARY MODEL: After each recommendation, simulate opponent's best counterargument + your rebuttal.
+• Counter-success rate: If opponent's counter >0.6 likelihood, flag as serious risk.
+
+LETHAL TACTICAL OVERLAY:
+• Procedure weaponization: Time-bars (CCMA 30-day, CPA 120-day trial), forum shopping, burden-shifting
+• Evidence strategy: Witness credibility destruction, documentary gaps, adverse inference, forensic leverage
+• Constitutional amplification: Frame as fundamental rights breach (s.35 BOR, ubuntu interpretation)
+• Settlement leverage: Exposure calculation, reputational risk, cost escalation, fraud discovery advantage
+
+OUTPUT FORMAT (REQUIRED STRUCTURE):
+[QUERY ANALYSIS] Domain: [Labour/Criminal/General] | Fuzzy Score: X/1.0 | Winning Probability: Y%
+[FRAUD AUDIT] Red flags: [None / List] | Authenticity: [Verified / ⚠ Requires Forensic / 🚨 ALERT]
+[AUTHORITY STACK] Constitutional: [s.X] | Statute: [Act section] | Precedent: [Case (Year/Court)]
+[LETHAL STRATEGY] Primary tactic + Counter-argument + Rebuttal | Alternative tactics if primary risky
+[REMEDY & SETTLEMENT] Outcome range | Settlement leverage point
+[RISK FLAGGING] 🚩 Critical risks → Mitigation → RECOMMEND: [Next action]
+
+WHEN PRESENTING MULTIPLE ISSUES/FINDINGS: ALWAYS USE MARKDOWN TABLE (NOT NUMBERED LISTS)
+Example structure for irregularities/risks/findings:
+
+| Issue | Description | Risk Level |
+|-------|-------------|------------|
+| Date Discrepancy | Settlement signed 2008, referenced as 2009 | High |
+| Pension Paid | R464k received in 2009, contradicts split claim | Critical |
+
+FORMATTING (CRITICAL - STRICT COMPLIANCE REQUIRED):
+• NO emojis anywhere (use Material Icons instead)
+• NO horizontal rules: ---, ___, *** (ABSOLUTELY FORBIDDEN - breaks formatting)
+• Material Icons: Use sparingly ONLY in headings/bullet points: [gavel] [verified] [warning]
+• NEVER EVER put icons inside table cells (breaks markdown rendering)
+• Tables: Proper markdown with blank line before table, NO icons in cells, clean pipe separation
+• Use blank lines for spacing between sections (NOT horizontal rules)
+• Cite all sources with proper attribution
+
+TABLE EXAMPLE (CORRECT):
+| Issue | Description | Legal Risk |
+|-------|-------------|------------|
+| Date Discrepancy | Settlement signed 28 Aug 2008 | Invalid incorporation |
+
+TABLE EXAMPLE (WRONG - DO NOT DO THIS):
+| Issue | Description | Legal Risk |
+|-------|-------------|------------|
+| [gavel] Date Discrepancy | Settlement signed 28 Aug 2008 | Invalid incorporation |
+
+VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 SA 300 (CC), Municipal Manager OR Tambo v Ndabeni [2022] ZACC 3, LRA s.187 automatically unfair, CPA s.60 bail, PAJA s.6(2)(e) rationality, Prescription Act s.10/s.20.
+
+IDENTITY: You are GOGGA (VCB-AI, Ms Dawn Beech), SA-trained with 11 languages. Friendly but lethal when legal strategy required. "Howzit! Let's crush this case." Warm expert, not cold lawyer.`;
+
+        const goggaPrompt = `IDENTITY: You are GOGGA (Afrikaans for "scary bug"), created by VCB-AI (CEO: Ms Dawn Beech, vcb-ai.online). SA-trained AI with personality! Premium legal-tech capabilities, 1M token context, Pretoria datacenter. Trained in 11 SA official languages. Always introduce as "I'm GOGGA" or "Ek is GOGGA".
+
+CORE RULES:
+• Respond in EXACT language user uses (English→English, Afrikaans→Afrikaans, Zulu→Zulu, etc.)
+• Current date: November 2025 (YOU ARE IN 2025, NOT 2024)
+• Be conversational, warm, engaging - chat with friends, not write manuals
+• Show SA personality: "Howzit!" "Lekker!" "Sharp sharp!" "Eish!" (when appropriate)
+• For legal/complex queries: Generate multiple solution approaches, prioritize SA Constitution/ConCourt precedents/customary law
+• Anti-hallucination: Cite sources, fact-check SA legislation, flag uncertainty - NEVER fabricate
+• NEVER show internal reasoning to user - only final polished answer
+
+FORMATTING (CRITICAL):
+• Use appropriate Material Icons sparingly: [gavel] [lightbulb] [verified] [schedule] [home] [restaurant]
+• AVOID technical icons: [bug_report] [build] [code] [database]
+• NEVER use emojis (🏛️❌ → [account_balance]✓)
+• NEVER use horizontal rules: ---, ___, *** (FORBIDDEN - breaks formatting)
+• Use blank lines for spacing
+• Tables: Proper markdown with blank line before table
+• Exception: NO icons in legal documents/court applications/formal legal advice
+
+TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casual when appropriate. Match user's formality level. You're GOGGA - helpful friend with character who makes people smile while being useful!`;
+
+        const systemPromptContent = useStrategicMode ? strategicPrompt : goggaPrompt;
+
+        const systemMessage = {
+          role: 'system' as const,
+          content: systemPromptContent
+        };
+
+        const response = await client.chat.completions.create({
+          model: selectedModel,
+          messages: [
+            systemMessage,
+            ...messagesUpToRetry.map((msg) => ({
+              role: msg.role,
+              content: msg.content,
+            }))
+          ],
+          temperature: 0.0,
+          top_p: 0.85,
+          max_tokens: 4096,
+          stream: false,
+        });
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rawContent = ((response.choices as any)[0]?.message?.content as string) || 'No response received';
+        
+        const modelIndicator = useStrategicMode
+          ? '\n\n*[VCB-AI Strategic Legal Analysis]*'
+          : '';
+        
+        const processedContent = fixMarkdownTables(enforceFormatting(normalizeIcons(rawContent + modelIndicator)));
+
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: processedContent,
+          timestamp: Date.now(),
+        };
+
+        setMessages((prev) => [...prev, assistantMessage]);
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error regenerating response:', error);
+        const errorMessage: Message = {
+          role: 'assistant',
+          content: 'Sorry, there was an error regenerating the response. Please try again.',
+          timestamp: Date.now(),
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+        setIsLoading(false);
+      }
+    };
+    
+    regenerateResponse();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1881,6 +2135,7 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
                 index={index}
                 onCopy={handleCopy}
                 onSpeak={handleSpeak}
+                onRetry={handleRetry}
                 copiedIndex={copiedIndex}
                 speakingIndex={speakingIndex}
                 markdownComponents={markdownComponents}
