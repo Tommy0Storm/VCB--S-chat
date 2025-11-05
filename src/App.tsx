@@ -650,7 +650,7 @@ const App: React.FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ol: ({...props}: any) => <ol className="list-decimal list-inside my-3 space-y-1.5 ml-4" {...props} />,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    li: ({...props}: any) => <li className="leading-relaxed" {...props} />,
+    li: ({children, ...props}: any) => <li className="leading-relaxed" {...props}>{processIcons(children)}</li>,
     // Blockquotes
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     blockquote: ({...props}: any) => (
@@ -1171,8 +1171,7 @@ const App: React.FC = () => {
       // Check if this is an image generation request
       if (isImageGenerationRequest(userMessage.content)) {
         try {
-          const imagePrompt = extractImagePrompt(userMessage.content);
-          // ... (image generation logic would go here, but simplified for now)
+          // Image generation logic would go here, but simplified for now
           setIsLoading(false);
         } catch (error) {
           console.error('Error generating image:', error);
