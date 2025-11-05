@@ -1208,6 +1208,7 @@ FORMATERING REËLS / FORMATTING RULES:
           ],
           temperature: 0.0,  // Deterministic for consistent icon choices (A2C)
           top_p: 0.85,       // Limit sampling for consistency
+          max_tokens: 4096,  // Prevent runaway token usage on complex queries
           stream: false,
         });
 
