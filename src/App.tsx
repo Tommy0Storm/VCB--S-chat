@@ -910,7 +910,8 @@ const App: React.FC = () => {
       let finalTranscript = '';
       let interimTranscript = '';
       
-      for (let i = event.resultIndex; i < event.results.length; i++) {
+      // Get all results from this recognition session
+      for (let i = 0; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
           finalTranscript += transcript + ' ';
@@ -919,15 +920,12 @@ const App: React.FC = () => {
         }
       }
 
-      // Update input with final transcript, show interim in real-time
-      const currentFinal = inputRef.current?.value.replace(/\s*\[listening\.\.\.\]\s*$/, '') || '';
-      const newText = (currentFinal + finalTranscript).trim();
+      // Combine final and interim transcripts
+      const fullTranscript = (finalTranscript + interimTranscript).trim();
       
-      if (finalTranscript) {
-        setInput(newText);
-      } else if (interimTranscript) {
-        // Show interim results while speaking
-        setInput(newText + (newText ? ' ' : '') + interimTranscript);
+      // Update the input field with the transcript
+      if (fullTranscript) {
+        setInput(fullTranscript);
       }
 
       // Reset silence timer on speech
@@ -936,10 +934,10 @@ const App: React.FC = () => {
       }
 
       // Start new silence timer (3 seconds) - only after final transcript
-      if (finalTranscript) {
+      if (finalTranscript.trim()) {
         silenceTimerRef.current = setTimeout(() => {
-          const currentInput = inputRef.current?.value.trim() || '';
-          if (currentInput && currentInput !== '[listening...]') {
+          const currentInput = input.trim();
+          if (currentInput) {
             // console.log('Silence detected, submitting...');
             // Auto-submit after 3 seconds of silence
             const form = document.querySelector('form');
@@ -2426,7 +2424,6 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
               className="flex-1 bg-white text-vcb-black border border-vcb-light-grey px-2 py-2 md:px-6 md:py-4 text-sm md:text-base focus:outline-none focus:border-vcb-mid-grey resize-none font-normal leading-relaxed h-10 md:h-16"
               rows={1}
               disabled={isLoading}
-              readOnly={voiceModeEnabled}
             />
             {/* Mobile: Horizontal compact buttons */}
             <div className="flex md:hidden items-center space-x-0.5">
