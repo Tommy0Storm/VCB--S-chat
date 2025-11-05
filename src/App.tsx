@@ -264,33 +264,40 @@ const normalizeIcons = (text: string): string => {
 
 // Fix markdown tables that are missing header rows (GFM requirement)
 const fixMarkdownTables = (text: string): string => {
-  const lines = text.split('\n');
+  let fixed = text;
+  
+  // STEP 1: Remove standalone "---" horizontal rules (AI keeps adding them despite instructions)
+  fixed = fixed.replace(/^\s*---+\s*$/gm, '');
+  
+  // STEP 2: Fix markdown tables by ensuring proper spacing and structure
+  const lines = fixed.split('\n');
   const result: string[] = [];
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    // Detect separator line that starts a table (e.g., |:---|---| or |---|---|)
-    const isSeparatorLine = /^\|[\s]*:?-+:?[\s]*\|/.test(line);
-
-    if (isSeparatorLine) {
-      // Check if previous line is NOT a table row (missing header)
-      const prevLine = i > 0 ? lines[i - 1] : '';
-      const isPrevLineTableRow = /^\|.*\|[\s]*$/.test(prevLine);
-
-      if (!isPrevLineTableRow) {
-        // Count columns in separator
-        const columnCount = (line.match(/\|/g) || []).length - 1;
-
-        // Generate empty header row
-        const headerCells = Array(columnCount).fill('   ').join(' | ');
-        const headerRow = `| ${headerCells} |`;
-
-        result.push(headerRow);
-      }
+    const line = lines[i].trim();
+    
+    // Skip empty lines
+    if (!line) {
+      result.push('');
+      continue;
     }
 
-    result.push(line);
+    // Detect table header row (starts and ends with |)
+    const isTableRow = /^\|.*\|$/.test(line);
+    
+    if (isTableRow) {
+      const nextLine = i + 1 < lines.length ? lines[i + 1].trim() : '';
+      const isSeparatorLine = /^\|[\s:]*-+[\s:]*(\|[\s:]*-+[\s:]*)+\|$/.test(nextLine);
+      
+      // If this is a header row followed by separator, ensure blank line before table
+      if (isSeparatorLine && result.length > 0 && result[result.length - 1].trim() !== '') {
+        result.push(''); // Add blank line before table
+      }
+      
+      result.push(line);
+    } else {
+      result.push(line);
+    }
   }
 
   return result.join('\n');
@@ -1192,10 +1199,19 @@ Your name is GOGGA (Afrikaans for "insect/bug" - a scary gogga!). When greeting 
 
 TOON / TONE: Kenner, vriendelik, oplossingsgerig, SA trots. Subtiele humor waar toepaslik. UITSONDERING: Volkome ernstig in regsdokumente, hofaansoeke, formele regsadvies.
 
-FORMATERING REËLS / FORMATTING RULES:
+FORMATERING REËLS / FORMATTING RULES (CRITICAL - MUST FOLLOW):
 - Gebruik Google Material Icons [icon_name]: [gavel] [account_balance] [policy] [verified] [lightbulb] [build]
 - NOOIT emojis gebruik nie (🏛️❌→[account_balance]✓, ⚖️❌→[gavel]✓)
-- NOOIT "---" gebruik onder enig omstandighede.
+- NEVER EVER use "---" or "___" for horizontal rules - FORBIDDEN
+- NEVER use markdown horizontal rules (---, ___, ***) - they break formatting
+- Use blank lines for spacing, NOT horizontal rules
+- For tables: Always use proper markdown format with blank line before table
+  Example:
+  
+  | Header 1 | Header 2 | Header 3 |
+  |----------|----------|----------|
+  | Data 1   | Data 2   | Data 3   |
+  
 - UITSONDERING: GEEN ikone in regsdokumente, hofaansoeke, formele regsadvies
 - Skoon professionele formatering, duidelike opskrifte, georganiseerde lyste`
         };
