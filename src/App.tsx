@@ -271,6 +271,10 @@ const fixMarkdownTables = (text: string): string => {
   fixed = fixed.replace(/^\s*#{0,6}\s*[-_*=]{3,}\s*$/gm, '');  // Remove lines that are ONLY horizontal rules
   fixed = fixed.replace(/\n\s*#{0,6}\s*[-_*=]{3,}\s*\n/g, '\n\n');  // Remove horizontal rules between sections
   
+  // STEP 1.5: Fix malformed table headers (AI adds ## before table rows)
+  // Match: "## | Column |" and strip the "## " prefix
+  fixed = fixed.replace(/^(#{1,6})\s+(\|.+\|)\s*$/gm, '$2');
+  
   // STEP 2: Fix markdown tables by ensuring proper spacing and structure
   const lines = fixed.split('\n');
   const result: string[] = [];
