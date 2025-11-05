@@ -296,6 +296,124 @@ const fixMarkdownTables = (text: string): string => {
   return result.join('\n');
 };
 
+// Memoized Message Component - prevents unnecessary re-renders
+interface MessageComponentProps {
+  message: Message;
+  index: number;
+  onCopy: (text: string, index: number) => void;
+  onSpeak: (text: string, index: number) => void;
+  copiedIndex: number | null;
+  speakingIndex: number | null;
+  markdownComponents: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+}
+
+const MessageComponent = React.memo(({
+  message,
+  index,
+  onCopy,
+  onSpeak,
+  copiedIndex,
+  speakingIndex,
+  markdownComponents,
+}: MessageComponentProps) => {
+  return (
+    <div
+      className={`flex ${
+        message.role === 'user' ? 'justify-end' : 'justify-start'
+      }`}
+    >
+      <div
+        className={`max-w-3xl border px-4 py-3 md:px-8 md:py-6 ${
+          message.role === 'user'
+            ? 'bg-vcb-white border-vcb-mid-grey'
+            : 'bg-white border-vcb-light-grey'
+        }`}
+      >
+        <div className="flex items-start space-x-2 md:space-x-4">
+          <div className="flex-shrink-0">
+            {message.role === 'user' ? (
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-vcb-black border border-vcb-mid-grey flex items-center justify-center">
+                <span className="text-xs md:text-sm font-medium text-vcb-white uppercase">U</span>
+              </div>
+            ) : (
+              <img
+                src="sovereign-chat-icon-static.svg"
+                alt="VCB-AI"
+                className="w-8 h-8 md:w-10 md:h-10"
+              />
+            )}
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center justify-between mb-1 md:mb-2">
+              <p className="text-[10px] md:text-xs font-medium text-vcb-mid-grey uppercase tracking-wide">
+                {message.role === 'user' ? '' : 'VCB-AI'}
+              </p>
+              {message.role === 'assistant' && (
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => onCopy(message.content, index)}
+                    className="flex items-center space-x-1 text-vcb-mid-grey hover:text-vcb-black transition-colors"
+                    title={copiedIndex === index ? 'Copied!' : 'Copy to clipboard'}
+                  >
+                    {copiedIndex === index ? (
+                      <span className="material-icons text-base md:text-xl">check</span>
+                    ) : (
+                      <span className="material-icons text-base md:text-xl">content_copy</span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => onSpeak(message.content, index)}
+                    className="hidden flex items-center space-x-1 text-vcb-mid-grey hover:text-vcb-black transition-colors"
+                    title={speakingIndex === index ? 'Stop speaking' : 'Read aloud (en-ZA)'}
+                  >
+                    {speakingIndex === index ? (
+                      <span className="material-icons text-base md:text-xl">pause</span>
+                    ) : (
+                      <span className="material-icons text-base md:text-xl">volume_up</span>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+            {message.type === 'image' && message.imageUrl ? (
+              <div className="space-y-3">
+                <div className="text-sm md:text-base text-vcb-black break-words leading-relaxed">
+                  {message.content}
+                </div>
+                <div className="border border-vcb-light-grey p-2 bg-vcb-white">
+                  <img
+                    src={message.imageUrl}
+                    alt={message.imagePrompt || 'Generated image'}
+                    className="w-full h-auto rounded"
+                    loading="lazy"
+                  />
+                </div>
+                {message.imagePrompt && (
+                  <div className="text-xs text-vcb-mid-grey italic">
+                    Prompt: {message.imagePrompt}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-sm md:text-base text-vcb-black break-words leading-relaxed">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeRaw]}
+                  components={markdownComponents}
+                >
+                  {message.content}
+                </ReactMarkdown>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+MessageComponent.displayName = 'MessageComponent';
+
 const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -374,6 +492,93 @@ const App: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }); // Changed from 'smooth' to 'auto' for instant scrolling
   }, []);
 
+  // Memoized icon processing helper - prevents recreation on every render
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const processIcons = useCallback((children: any): any => {
+    if (typeof children === 'string') {
+      const parts = children.split(/(\[[a-z_0-9]+\])/g);
+      return parts.map((part, idx) => {
+        const iconMatch = part.match(/^\[([a-z_0-9]+)\]$/);
+        if (iconMatch) {
+          return <span key={idx} className="material-icons" style={{ fontSize: '1.8em', verticalAlign: 'middle', color: 'inherit' }}>{iconMatch[1]}</span>;
+        }
+        return part;
+      });
+    }
+    if (Array.isArray(children)) {
+      return children.map((child) => typeof child === 'string' ? processIcons(child) : child);
+    }
+    return children;
+  }, []);
+
+  // Memoized ReactMarkdown components - prevents recreation on every render
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const markdownComponents = React.useMemo(() => ({
+    // Helper to process icons in any text content
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    p: ({children, ...props}: any) => <p {...props}>{processIcons(children)}</p>,
+    // UPPERCASE headings with icon support
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    h1: ({children, ...props}: any) => <h1 {...props} className="text-2xl font-bold uppercase my-4">{processIcons(children)}</h1>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    h2: ({children, ...props}: any) => <h2 {...props} className="text-xl font-bold uppercase my-3">{processIcons(children)}</h2>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    h3: ({children, ...props}: any) => <h3 {...props} className="text-lg font-bold uppercase my-2">{processIcons(children)}</h3>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    h4: ({children, ...props}: any) => <h4 {...props} className="text-base font-bold uppercase my-2">{processIcons(children)}</h4>,
+    // Premium table styling
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    table: ({...props}: any) => (
+      <div className="overflow-x-auto my-6 border border-vcb-mid-grey rounded-lg shadow-sm">
+        <table className="min-w-full border-collapse" {...props} />
+      </div>
+    ),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    thead: ({...props}: any) => <thead className="bg-vcb-black text-white" {...props} />,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    tbody: ({...props}: any) => <tbody className="bg-white divide-y divide-vcb-light-grey" {...props} />,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    th: ({...props}: any) => <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider" {...props} />,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    td: ({...props}: any) => <td className="px-6 py-4 text-sm whitespace-normal" {...props} />,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    tr: ({...props}: any) => <tr className="hover:bg-gray-50 transition-colors duration-150" {...props} />,
+    // Code blocks
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    code: ({inline, ...props}: any) =>
+      inline ? (
+        <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono text-vcb-black" {...props} />
+      ) : (
+        <code className="block bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto font-mono text-sm my-3" {...props} />
+      ),
+    // Lists
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ul: ({...props}: any) => <ul className="list-disc list-inside my-3 space-y-1.5 ml-4" {...props} />,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ol: ({...props}: any) => <ol className="list-decimal list-inside my-3 space-y-1.5 ml-4" {...props} />,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    li: ({...props}: any) => <li className="leading-relaxed" {...props} />,
+    // Blockquotes
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    blockquote: ({...props}: any) => (
+      <blockquote className="border-l-4 border-vcb-mid-grey bg-gray-50 pl-4 py-2 my-4 italic text-gray-700" {...props} />
+    ),
+    // Links
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    a: ({...props}: any) => (
+      <a className="text-vcb-black underline hover:text-vcb-mid-grey transition-colors" target="_blank" rel="noopener noreferrer" {...props} />
+    ),
+    // Horizontal rule
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    hr: ({...props}: any) => <hr className="my-6 border-t-2 border-vcb-light-grey" {...props} />,
+    // Strong/Bold
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    strong: ({...props}: any) => <strong className="font-bold" {...props} />,
+    // Emphasis/Italic
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    em: ({...props}: any) => <em className="italic" {...props} />,
+  }), [processIcons]);
+
   // Format session time as HH:MM:SS
   const formatSessionTime = (seconds: number): string => {
     const hrs = Math.floor(seconds / 3600);
@@ -382,12 +587,12 @@ const App: React.FC = () => {
     return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Session timer - update every second
+  // Session timer - update every 60 seconds for performance
   useEffect(() => {
     const interval = setInterval(() => {
       const elapsed = Math.floor((Date.now() - sessionStartRef.current) / 1000);
       setSessionTime(elapsed);
-    }, 10000); // Update every 10 seconds instead of 1 second for performance
+    }, 60000); // Update every 60 seconds for optimal performance
 
     return () => clearInterval(interval);
   }, []);
@@ -1004,9 +1209,14 @@ FORMATERING REËLS / FORMATTING RULES:
           stream: false,
         });
 
+        // Process content ONCE when creating message (not on every render)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rawContent = ((response.choices as any)[0]?.message?.content as string) || 'No response received';
+        const processedContent = fixMarkdownTables(enforceFormatting(normalizeIcons(rawContent)));
+
         const assistantMessage: Message = {
           role: 'assistant',
-          content: (response.choices as any)[0]?.message?.content || 'No response received',
+          content: processedContent,
           timestamp: Date.now(),
         };
 
@@ -1529,217 +1739,16 @@ FORMATERING REËLS / FORMATTING RULES:
             </div>
           ) : (
             messages.map((message, index) => (
-              <div
+              <MessageComponent
                 key={index}
-                className={`flex ${
-                  message.role === 'user' ? 'justify-end' : 'justify-start'
-                }`}
-              >
-                <div
-                  className={`max-w-3xl border px-4 py-3 md:px-8 md:py-6 ${
-                    message.role === 'user'
-                      ? 'bg-vcb-white border-vcb-mid-grey'
-                      : 'bg-white border-vcb-light-grey'
-                  }`}
-                >
-                  <div className="flex items-start space-x-2 md:space-x-4">
-                    <div className="flex-shrink-0">
-                      {message.role === 'user' ? (
-                        <div className="w-8 h-8 md:w-10 md:h-10 bg-vcb-black border border-vcb-mid-grey flex items-center justify-center">
-                          <span className="text-xs md:text-sm font-medium text-vcb-white uppercase">U</span>
-                        </div>
-                      ) : (
-                        <img
-                          src="sovereign-chat-icon-static.svg"
-                          alt="VCB-AI"
-                          className="w-8 h-8 md:w-10 md:h-10"
-                        />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-1 md:mb-2">
-                        <p className="text-[10px] md:text-xs font-medium text-vcb-mid-grey uppercase tracking-wide">
-                          {message.role === 'user' ? '' : 'VCB-AI'}
-                        </p>
-                        {message.role === 'assistant' && (
-                          <div className="flex items-center space-x-2">
-                            <button
-                              onClick={() => handleCopy(message.content, index)}
-                              className="flex items-center space-x-1 text-vcb-mid-grey hover:text-vcb-black transition-colors"
-                              title={copiedIndex === index ? 'Copied!' : 'Copy to clipboard'}
-                            >
-                              {copiedIndex === index ? (
-                                <span className="material-icons text-base md:text-xl">check</span>
-                              ) : (
-                                <span className="material-icons text-base md:text-xl">content_copy</span>
-                              )}
-                            </button>
-                            <button
-                              onClick={() => handleSpeak(message.content, index)}
-                              className="hidden flex items-center space-x-1 text-vcb-mid-grey hover:text-vcb-black transition-colors"
-                              title={speakingIndex === index ? 'Stop speaking' : 'Read aloud (en-ZA)'}
-                            >
-                              {speakingIndex === index ? (
-                                <span className="material-icons text-base md:text-xl">pause</span>
-                              ) : (
-                                <span className="material-icons text-base md:text-xl">volume_up</span>
-                              )}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      {message.type === 'image' && message.imageUrl ? (
-                        <div className="space-y-3">
-                          <div className="text-sm md:text-base text-vcb-black break-words leading-relaxed">
-                            {message.content}
-                          </div>
-                          <div className="border border-vcb-light-grey p-2 bg-vcb-white">
-                            <img
-                              src={message.imageUrl}
-                              alt={message.imagePrompt || 'Generated image'}
-                              className="w-full h-auto rounded"
-                              loading="lazy"
-                            />
-                          </div>
-                          {message.imagePrompt && (
-                            <div className="text-xs text-vcb-mid-grey italic">
-                              Prompt: {message.imagePrompt}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="text-sm md:text-base text-vcb-black break-words leading-relaxed">
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            rehypePlugins={[rehypeRaw]}
-                            components={{
-                              // Helper to process icons in any text content
-                              p: ({node, children, ...props}) => {
-                                const processIcons = (children: any): any => {
-                                  if (typeof children === 'string') {
-                                    const parts = children.split(/(\[[a-z_0-9]+\])/g);
-                                    return parts.map((part, idx) => {
-                                      const iconMatch = part.match(/^\[([a-z_0-9]+)\]$/);
-                                      if (iconMatch) {
-                                        return <span key={idx} className="material-icons" style={{ fontSize: '1.8em', verticalAlign: 'middle', color: 'inherit' }}>{iconMatch[1]}</span>;
-                                      }
-                                      return part;
-                                    });
-                                  }
-                                  if (Array.isArray(children)) {
-                                    return children.map((child) => typeof child === 'string' ? processIcons(child) : child);
-                                  }
-                                  return children;
-                                };
-                                return <p {...props}>{processIcons(children)}</p>;
-                              },
-                              // UPPERCASE headings with icon support
-                              h1: ({node, children, ...props}) => {
-                                const processIcons = (children: any): any => {
-                                  if (typeof children === 'string') {
-                                    const parts = children.split(/(\[[a-z_0-9]+\])/g);
-                                    return parts.map((part, idx) => {
-                                      const iconMatch = part.match(/^\[([a-z_0-9]+)\]$/);
-                                      if (iconMatch) return <span key={idx} className="material-icons" style={{ fontSize: '1.8em', verticalAlign: 'middle', color: 'inherit' }}>{iconMatch[1]}</span>;
-                                      return part;
-                                    });
-                                  }
-                                  if (Array.isArray(children)) return children.map((child) => typeof child === 'string' ? processIcons(child) : child);
-                                  return children;
-                                };
-                                return <h1 {...props} className="text-2xl font-bold uppercase my-4">{processIcons(children)}</h1>;
-                              },
-                              h2: ({node, children, ...props}) => {
-                                const processIcons = (children: any): any => {
-                                  if (typeof children === 'string') {
-                                    const parts = children.split(/(\[[a-z_0-9]+\])/g);
-                                    return parts.map((part, idx) => {
-                                      const iconMatch = part.match(/^\[([a-z_0-9]+)\]$/);
-                                      if (iconMatch) return <span key={idx} className="material-icons" style={{ fontSize: '1.8em', verticalAlign: 'middle', color: 'inherit' }}>{iconMatch[1]}</span>;
-                                      return part;
-                                    });
-                                  }
-                                  if (Array.isArray(children)) return children.map((child) => typeof child === 'string' ? processIcons(child) : child);
-                                  return children;
-                                };
-                                return <h2 {...props} className="text-xl font-bold uppercase my-3">{processIcons(children)}</h2>;
-                              },
-                              h3: ({node, children, ...props}) => {
-                                const processIcons = (children: any): any => {
-                                  if (typeof children === 'string') {
-                                    const parts = children.split(/(\[[a-z_0-9]+\])/g);
-                                    return parts.map((part, idx) => {
-                                      const iconMatch = part.match(/^\[([a-z_0-9]+)\]$/);
-                                      if (iconMatch) return <span key={idx} className="material-icons" style={{ fontSize: '1.8em', verticalAlign: 'middle', color: 'inherit' }}>{iconMatch[1]}</span>;
-                                      return part;
-                                    });
-                                  }
-                                  if (Array.isArray(children)) return children.map((child) => typeof child === 'string' ? processIcons(child) : child);
-                                  return children;
-                                };
-                                return <h3 {...props} className="text-lg font-bold uppercase my-2">{processIcons(children)}</h3>;
-                              },
-                              h4: ({node, children, ...props}) => {
-                                const processIcons = (children: any): any => {
-                                  if (typeof children === 'string') {
-                                    const parts = children.split(/(\[[a-z_0-9]+\])/g);
-                                    return parts.map((part, idx) => {
-                                      const iconMatch = part.match(/^\[([a-z_0-9]+)\]$/);
-                                      if (iconMatch) return <span key={idx} className="material-icons" style={{ fontSize: '1.8em', verticalAlign: 'middle', color: 'inherit' }}>{iconMatch[1]}</span>;
-                                      return part;
-                                    });
-                                  }
-                                  if (Array.isArray(children)) return children.map((child) => typeof child === 'string' ? processIcons(child) : child);
-                                  return children;
-                                };
-                                return <h4 {...props} className="text-base font-bold uppercase my-2">{processIcons(children)}</h4>;
-                              },
-                              // Premium table styling
-                              table: ({node, ...props}) => (
-                                <div className="overflow-x-auto my-6 border border-vcb-mid-grey rounded-lg shadow-sm">
-                                  <table className="min-w-full border-collapse" {...props} />
-                                </div>
-                              ),
-                              thead: ({node, ...props}) => <thead className="bg-vcb-black text-white" {...props} />,
-                              tbody: ({node, ...props}) => <tbody className="bg-white divide-y divide-vcb-light-grey" {...props} />,
-                              th: ({node, ...props}) => <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider" {...props} />,
-                              td: ({node, ...props}) => <td className="px-6 py-4 text-sm whitespace-normal" {...props} />,
-                              tr: ({node, ...props}) => <tr className="hover:bg-gray-50 transition-colors duration-150" {...props} />,
-                              // Code blocks
-                              code: ({node, inline, ...props}: any) =>
-                                inline ? (
-                                  <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono text-vcb-black" {...props} />
-                                ) : (
-                                  <code className="block bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto font-mono text-sm my-3" {...props} />
-                                ),
-                              // Lists
-                              ul: ({node, ...props}) => <ul className="list-disc list-inside my-3 space-y-1.5 ml-4" {...props} />,
-                              ol: ({node, ...props}) => <ol className="list-decimal list-inside my-3 space-y-1.5 ml-4" {...props} />,
-                              li: ({node, ...props}) => <li className="leading-relaxed" {...props} />,
-                              // Blockquotes
-                              blockquote: ({node, ...props}) => (
-                                <blockquote className="border-l-4 border-vcb-mid-grey bg-gray-50 pl-4 py-2 my-4 italic text-gray-700" {...props} />
-                              ),
-                              // Links
-                              a: ({node, ...props}) => (
-                                <a className="text-vcb-black underline hover:text-vcb-mid-grey transition-colors" target="_blank" rel="noopener noreferrer" {...props} />
-                              ),
-                              // Horizontal rule
-                              hr: ({node, ...props}) => <hr className="my-6 border-t-2 border-vcb-light-grey" {...props} />,
-                              // Strong/Bold
-                              strong: ({node, ...props}) => <strong className="font-bold" {...props} />,
-                              // Emphasis/Italic
-                              em: ({node, ...props}) => <em className="italic" {...props} />,
-                            }}
-                          >
-                            {fixMarkdownTables(enforceFormatting(normalizeIcons(message.content)))}
-                          </ReactMarkdown>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
+                message={message}
+                index={index}
+                onCopy={handleCopy}
+                onSpeak={handleSpeak}
+                copiedIndex={copiedIndex}
+                speakingIndex={speakingIndex}
+                markdownComponents={markdownComponents}
+              />
             ))
           )}
           {isLoading && (
