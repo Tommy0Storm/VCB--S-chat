@@ -888,6 +888,31 @@ const App: React.FC = () => {
     }
   }, [isMobile]);
 
+  // Fix mobile viewport jumping when keyboard opens
+  useEffect(() => {
+    if (!isMobile) return;
+
+    const setViewportHeight = () => {
+      // Use visual viewport height instead of window.innerHeight
+      const vh = window.visualViewport?.height || window.innerHeight;
+      document.documentElement.style.setProperty('--vh', `${vh * 0.01}px`);
+    };
+
+    // Set initial height
+    setViewportHeight();
+
+    // Update on resize and scroll
+    window.visualViewport?.addEventListener('resize', setViewportHeight);
+    window.visualViewport?.addEventListener('scroll', setViewportHeight);
+    window.addEventListener('resize', setViewportHeight);
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', setViewportHeight);
+      window.visualViewport?.removeEventListener('scroll', setViewportHeight);
+      window.removeEventListener('resize', setViewportHeight);
+    };
+  }, [isMobile]);
+
   // Initialize speech recognition once on mount
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;

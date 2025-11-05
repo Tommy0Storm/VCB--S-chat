@@ -88,4 +88,27 @@ code {
   select {
     font-size: 16px !important; /* Prevents iOS zoom */
   }
+  
+  /* Prevent viewport jumping when keyboard opens */
+  html {
+    height: 100vh;
+    height: calc(var(--vh, 1vh) * 100);
+  }
+  
+  body {
+    height: 100vh;
+    height: calc(var(--vh, 1vh) * 100);
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+  }
+  
+  #root {
+    height: 100vh;
+    height: calc(var(--vh, 1vh) * 100);
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
 }
