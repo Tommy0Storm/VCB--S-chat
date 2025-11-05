@@ -1304,6 +1304,16 @@ const App: React.FC = () => {
 
         // Use smart router logic
         const requiresStrategicMode = (query: string): boolean => {
+          // Skip thinking mode for trivial queries (greetings, single words, etc.)
+          const wordCount = query.split(/\s+/).length;
+          const isTrivial = wordCount <= 2;
+          const greetingPatterns = /^(hi|hello|hey|howzit|hola|thanks|thank you|ok|okay|yes|no|sure|great)$/i;
+          const isSingleWordGreeting = greetingPatterns.test(query.trim());
+          
+          if (isTrivial || isSingleWordGreeting) {
+            return false; // Never use thinking mode for trivial queries
+          }
+          
           // Complexity indicators: multi-step reasoning, analysis, comparison
           const complexityIndicators = [
             // Question words suggesting deep thinking
@@ -1337,7 +1347,6 @@ const App: React.FC = () => {
           const hasComplexPattern = complexityIndicators.some(pattern => pattern.test(query));
           
           // Long queries likely need deeper reasoning
-          const wordCount = query.split(/\s+/).length;
           const isLongQuery = wordCount > 25;
           
           // Multiple questions or semicolons suggest complexity
@@ -1351,7 +1360,13 @@ const App: React.FC = () => {
           return !isVeryShort && (hasComplexPattern || isLongQuery || hasMultipleQuestions);
         };
 
-        const useStrategicMode = requiresStrategicMode(userMessage.content);
+        // Check if query is trivial (skip thinking mode even if auto-detected as complex)
+        const wordCount = userMessage.content.split(/\s+/).length;
+        const isTrivial = wordCount <= 2;
+        const greetingPatterns = /^(hi|hello|hey|howzit|hola|thanks|thank you|ok|okay|yes|no|sure|great)$/i;
+        const isTrivialQuery = isTrivial || greetingPatterns.test(userMessage.content.trim());
+
+        const useStrategicMode = !isTrivialQuery && requiresStrategicMode(userMessage.content);
         const selectedModel = useStrategicMode
           ? 'qwen-3-235b-a22b-thinking-2507'
           : 'llama-3.3-70b';
@@ -1703,6 +1718,16 @@ Provide the improved final answer addressing any issues identified.`;
 
         // Two-Tier Smart Router: Llama (default) → Qwen Thinking (VCB-AI Legal for complex)
         const requiresStrategicMode = (query: string): boolean => {
+          // Skip thinking mode for trivial queries (greetings, single words, etc.)
+          const wordCount = query.split(/\s+/).length;
+          const isTrivial = wordCount <= 2;
+          const greetingPatterns = /^(hi|hello|hey|howzit|hola|thanks|thank you|ok|okay|yes|no|sure|great)$/i;
+          const isSingleWordGreeting = greetingPatterns.test(query.trim());
+          
+          if (isTrivial || isSingleWordGreeting) {
+            return false; // Never use thinking mode for trivial queries
+          }
+          
           // Complexity indicators: multi-step reasoning, analysis, comparison
           const complexityIndicators = [
             // Question words suggesting deep thinking
@@ -1736,7 +1761,6 @@ Provide the improved final answer addressing any issues identified.`;
           const hasComplexPattern = complexityIndicators.some(pattern => pattern.test(query));
           
           // Long queries likely need deeper reasoning
-          const wordCount = query.split(/\s+/).length;
           const isLongQuery = wordCount > 25;
           
           // Multiple questions or semicolons suggest complexity
@@ -1750,7 +1774,13 @@ Provide the improved final answer addressing any issues identified.`;
           return !isVeryShort && (hasComplexPattern || isLongQuery || hasMultipleQuestions);
         };
 
-        const useStrategicMode = forceThinkingMode || requiresStrategicMode(userMessage.content);
+        // Check if query is trivial (skip thinking mode even if forced)
+        const wordCount = userMessage.content.split(/\s+/).length;
+        const isTrivial = wordCount <= 2;
+        const greetingPatterns = /^(hi|hello|hey|howzit|hola|thanks|thank you|ok|okay|yes|no|sure|great)$/i;
+        const isTrivialQuery = isTrivial || greetingPatterns.test(userMessage.content.trim());
+
+        const useStrategicMode = !isTrivialQuery && (forceThinkingMode || requiresStrategicMode(userMessage.content));
         const selectedModel = useStrategicMode
           ? 'qwen-3-235b-a22b-thinking-2507'  // VCB-AI Strategic Legal Analysis (THINKING model)
           : 'llama-3.3-70b';                    // Default GOGGA
