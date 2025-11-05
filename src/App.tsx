@@ -1056,9 +1056,9 @@ FORMATERING REËLS / FORMATTING RULES:
   return (
     <div className="flex flex-col h-screen bg-white font-quicksand font-normal">
       {/* Header - VCB Cleaner Theme per §5.1-5.3, Mobile Optimized */}
-      <header className="bg-vcb-black border-b border-vcb-mid-grey px-4 py-2 md:px-8 md:py-6">
+      <header className="bg-vcb-black border-b border-vcb-mid-grey px-3 py-1.5 md:px-8 md:py-6">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
-          <div className="flex items-center space-x-2 md:space-x-6">
+          <div className="flex items-center space-x-1.5 md:space-x-6">
             {/* VCB Logo per §5.3 - must be on dark background */}
             <a
               href="https://vcb-ai.online"
@@ -1070,14 +1070,14 @@ FORMATERING REËLS / FORMATTING RULES:
               <img
                 src="https://i.postimg.cc/xdJqP9br/logo-transparent-Black-Back.png"
                 alt="VCB Logo"
-                className="h-16 md:h-32"
+                className="h-12 md:h-32"
               />
             </a>
-            <div className="text-center">
-              <h1 className="text-sm md:text-xl font-bold text-vcb-white tracking-wider">
+            <div className="text-left">
+              <h1 className="text-xs md:text-xl font-bold text-vcb-white tracking-wider">
                 GOGGA (BETA)
               </h1>
-              <p className="text-vcb-white text-[9px] md:text-xs mt-0.5 font-medium uppercase tracking-wide">
+              <p className="text-vcb-white text-[8px] md:text-xs mt-0 md:mt-0.5 font-medium uppercase tracking-wide">
                 Powered by VCB-AI
               </p>
             </div>
@@ -1119,11 +1119,11 @@ FORMATERING REËLS / FORMATTING RULES:
               <span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">Usage</span>
             </button>
 
-            {/* Voice Mode Toggle Button */}
+            {/* Voice Mode Toggle Button - HIDDEN */}
             <button
               type="button"
               onClick={toggleVoiceMode}
-              className={`flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border transition-colors ${
+              className={`hidden flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border transition-colors ${
                 voiceModeEnabled
                   ? 'bg-vcb-white text-vcb-black border-vcb-white'
                   : 'bg-vcb-black text-vcb-white border-vcb-mid-grey hover:border-vcb-white'
@@ -1499,12 +1499,12 @@ FORMATERING REËLS / FORMATTING RULES:
       )}
 
       {/* Messages Container - 80%+ whitespace per §5.1, Mobile Optimized */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-12">
-        <div className="max-w-5xl mx-auto space-y-4 md:space-y-8">
+      <div className="flex-1 overflow-y-auto px-2 py-3 md:px-8 md:py-12">
+        <div className="max-w-5xl mx-auto space-y-3 md:space-y-8">
           {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-vcb-mid-grey py-12 md:py-24">
+            <div className="flex flex-col items-center justify-center h-full text-vcb-mid-grey py-8 md:py-24">
               <svg
-                className="w-16 h-16 md:w-20 md:h-20 mb-6 md:mb-8 stroke-current"
+                className="w-12 h-12 md:w-20 md:h-20 mb-4 md:mb-8 stroke-current"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -1517,10 +1517,10 @@ FORMATERING REËLS / FORMATTING RULES:
                   d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
                 />
               </svg>
-              <p className="text-base md:text-lg font-medium uppercase tracking-wide">
-                Start a conversation with VCB-AI
+              <p className="text-sm md:text-lg font-medium uppercase tracking-wide">
+                Start a conversation with GOGGA
               </p>
-              <p className="text-xs md:text-sm mt-2 md:mt-3 font-normal">
+              <p className="text-xs md:text-sm mt-1 md:mt-3 font-normal">
                 Type your message below to get started
               </p>
             </div>
@@ -1762,22 +1762,22 @@ FORMATERING REËLS / FORMATTING RULES:
       </div>
 
       {/* Input Container - high contrast per §5.1, Mobile Optimized */}
-      <div className="border-t border-vcb-light-grey bg-white px-4 py-3 md:px-8 md:py-6">
+      <div className="border-t border-vcb-light-grey bg-white px-2 py-2 md:px-8 md:py-6">
         <form onSubmit={handleSubmit} className="max-w-5xl mx-auto">
           {voiceModeEnabled && isListening && (
-            <div className="mb-3 flex items-center justify-center space-x-2 text-vcb-mid-grey">
-              <svg className="w-4 h-4 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
+            <div className="mb-2 md:mb-3 flex items-center justify-center space-x-2 text-vcb-mid-grey">
+              <svg className="w-3 h-3 md:w-4 md:h-4 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
                 <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
               </svg>
-              <span className="text-xs md:text-sm font-medium uppercase">Listening...</span>
+              <span className="text-[10px] md:text-sm font-medium uppercase">Listening...</span>
             </div>
           )}
-          <div className="flex items-center space-x-2 md:space-x-4">
+          <div className="flex items-center space-x-1.5 md:space-x-4">
             <img
               src="Sovereign-Chat-icon-Spin.svg"
               alt="Sovereign"
-              className="h-12 w-12 md:h-16 md:w-16 flex-shrink-0"
+              className="h-10 w-10 md:h-16 md:w-16 flex-shrink-0"
             />
             <textarea
               id="chat-input"
@@ -1787,7 +1787,7 @@ FORMATERING REËLS / FORMATTING RULES:
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={voiceModeEnabled ? "Speak your message..." : "Type your message..."}
-              className="flex-1 bg-white text-vcb-black border border-vcb-light-grey px-3 py-2 md:px-6 md:py-4 text-sm md:text-base focus:outline-none focus:border-vcb-mid-grey resize-none font-normal leading-relaxed"
+              className="flex-1 bg-white text-vcb-black border border-vcb-light-grey px-2 py-2 md:px-6 md:py-4 text-sm md:text-base focus:outline-none focus:border-vcb-mid-grey resize-none font-normal leading-relaxed"
               rows={1}
               disabled={isLoading}
               readOnly={voiceModeEnabled}
@@ -1795,7 +1795,7 @@ FORMATERING REËLS / FORMATTING RULES:
             <button
               type="submit"
               disabled={isLoading || !input.trim()}
-              className="bg-vcb-black hover:bg-vcb-dark-grey disabled:bg-vcb-light-grey disabled:cursor-not-allowed text-vcb-white px-4 py-2 md:px-8 md:py-4 text-xs md:text-sm font-medium uppercase tracking-wider transition-colors duration-200 flex items-center space-x-1 md:space-x-3 border border-vcb-mid-grey"
+              className="bg-vcb-black hover:bg-vcb-dark-grey disabled:bg-vcb-light-grey disabled:cursor-not-allowed text-vcb-white px-3 py-2 md:px-8 md:py-4 text-[10px] md:text-sm font-medium uppercase tracking-wider transition-colors duration-200 flex items-center space-x-1 md:space-x-3 border border-vcb-mid-grey"
             >
               {isLoading ? (
                 <>
