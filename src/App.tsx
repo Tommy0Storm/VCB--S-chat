@@ -489,7 +489,10 @@ const App: React.FC = () => {
   };
 
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }); // Changed from 'smooth' to 'auto' for instant scrolling
+    // Use requestAnimationFrame to prevent forced reflow during critical rendering
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+    });
   }, []);
 
   // Memoized icon processing helper - prevents recreation on every render
