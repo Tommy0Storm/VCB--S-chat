@@ -719,6 +719,29 @@ const App: React.FC = () => {
     setUserTier(usage.tier);
   }, []);
 
+  // Auto-focus on chat input on mount and after messages
+  useEffect(() => {
+    // Focus on initial load
+    inputRef.current?.focus();
+  }, []);
+
+  // Re-focus after messages are sent (after loading completes)
+  useEffect(() => {
+    if (!isLoading && !voiceModeEnabled) {
+      inputRef.current?.focus();
+    }
+  }, [isLoading, voiceModeEnabled]);
+
+  // Re-focus when modals close
+  useEffect(() => {
+    if (!showChatHistory && !showUsage) {
+      // Small delay to ensure modal close animation completes
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+    }
+  }, [showChatHistory, showUsage]);
+
   const initializeSpeechSynthesis = () => {
     // Initialize speech synthesis with a dummy utterance (required for mobile)
     if (!speechInitialized) {
