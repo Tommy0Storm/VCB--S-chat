@@ -520,6 +520,8 @@ const App: React.FC = () => {
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [forceThinkingMode, setForceThinkingMode] = useState(false);
+  const [useCePO, setUseCePO] = useState(false);
+  const [cepoProgress, setCepoProgress] = useState<string>('');
   const [sessionTime, setSessionTime] = useState(0); // Session time in seconds
   const sessionStartRef = useRef<number>(Date.now());
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1371,6 +1373,161 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
     regenerateResponse();
   };
 
+  // CePO: Cerebras Planning & Optimization - Advanced Reasoning Pipeline
+  const runCePO = async (query: string, client: Cerebras, conversationHistory: Message[]): Promise<string> => {
+    try {
+      // Stage 1: Planning - Generate step-by-step plan
+      setCepoProgress('🧠 Planning: Creating strategy...');
+      const planPrompt = `You are an expert problem solver. Break down this problem into clear, actionable steps.
+
+Problem: ${query}
+
+Create a detailed step-by-step plan to solve this problem. Be specific and thorough.`;
+
+      const planResponse = await client.chat.completions.create({
+        model: 'llama-3.3-70b',
+        messages: [
+          { role: 'system', content: 'You are a strategic planner. Create detailed, actionable plans.' },
+          { role: 'user', content: planPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 2048,
+        stream: false,
+      });
+
+      const plan = (planResponse.choices as any)[0]?.message?.content || '';
+
+      // Stage 2: Execution - Generate multiple solutions (N=3 for balance)
+      setCepoProgress('⚡ Executing: Generating solutions...');
+      const executionPromises = [];
+      
+      for (let i = 0; i < 3; i++) {
+        const execPrompt = `Problem: ${query}
+
+Plan:
+${plan}
+
+Follow the plan above to solve this problem. Show your work step by step.`;
+
+        executionPromises.push(
+          client.chat.completions.create({
+            model: 'llama-3.3-70b',
+            messages: [
+              { role: 'system', content: 'You are a problem solver. Follow plans carefully and show your reasoning.' },
+              ...conversationHistory.map(msg => ({ role: msg.role, content: msg.content })),
+              { role: 'user', content: execPrompt }
+            ],
+            temperature: 0.8 + (i * 0.1), // Vary temperature for diversity
+            max_tokens: 3072,
+            stream: false,
+          })
+        );
+      }
+
+      const executions = await Promise.all(executionPromises);
+      const solutions = executions.map((r: any) => r.choices[0]?.message?.content || '');
+
+      // Stage 3: Analysis - Compare solutions for consistency
+      setCepoProgress('🔍 Analyzing: Comparing solutions...');
+      const analysisPrompt = `Compare these solutions and identify:
+1. Common patterns and agreements
+2. Inconsistencies or contradictions
+3. Which solution(s) appear most reliable
+
+Solution 1:
+${solutions[0]}
+
+Solution 2:
+${solutions[1]}
+
+Solution 3:
+${solutions[2]}
+
+Provide a detailed analysis focusing on correctness and consistency.`;
+
+      const analysisResponse = await client.chat.completions.create({
+        model: 'llama-3.3-70b',
+        messages: [
+          { role: 'system', content: 'You are an analytical expert. Compare solutions objectively and identify the most reliable answer.' },
+          { role: 'user', content: analysisPrompt }
+        ],
+        temperature: 0.3, // Lower temperature for consistent analysis
+        max_tokens: 2048,
+        stream: false,
+      });
+
+      const analysis = (analysisResponse.choices as any)[0]?.message?.content || '';
+
+      // Stage 4: Best-of-N with Confidence Scoring
+      setCepoProgress('⭐ Selecting: Choosing best solution...');
+      const scoringPrompt = `Rate each solution's quality and confidence based on the analysis.
+
+Analysis:
+${analysis}
+
+For each solution, provide:
+1. Correctness score (0-10)
+2. Confidence score (0-10)
+3. Brief justification
+
+Solution 1:
+${solutions[0].substring(0, 500)}...
+
+Solution 2:
+${solutions[1].substring(0, 500)}...
+
+Solution 3:
+${solutions[2].substring(0, 500)}...
+
+Format:
+Solution 1: Correctness: X/10, Confidence: Y/10, Reason: ...
+Solution 2: Correctness: X/10, Confidence: Y/10, Reason: ...
+Solution 3: Correctness: X/10, Confidence: Y/10, Reason: ...
+Winner: Solution X`;
+
+      const scoringResponse = await client.chat.completions.create({
+        model: 'llama-3.3-70b',
+        messages: [
+          { role: 'system', content: 'You are an objective evaluator. Rate solutions based on correctness and confidence using the provided format.' },
+          { role: 'user', content: scoringPrompt }
+        ],
+        temperature: 0.2,
+        max_tokens: 1024,
+        stream: false,
+      });
+
+      const scoring = (scoringResponse.choices as any)[0]?.message?.content || '';
+      
+      // Extract winner
+      const winnerMatch = scoring.match(/Winner:\s*Solution\s*(\d+)/i);
+      const winnerIndex = winnerMatch ? parseInt(winnerMatch[1]) - 1 : 0;
+      const bestSolution = solutions[Math.max(0, Math.min(winnerIndex, solutions.length - 1))];
+
+      // Format final response with CePO metadata
+      const cepoResponse = `${bestSolution}
+
+---
+
+**[CePO Reasoning Process]**
+
+**Plan:** ${plan.substring(0, 200)}...
+
+**Analysis:** ${analysis.substring(0, 300)}...
+
+**Confidence Scores:** ${scoring}
+
+*CePO used ${3} iterations at ~2,200 tokens/s on Cerebras infrastructure*`;
+
+      setCepoProgress('');
+      return cepoResponse;
+
+    } catch (error) {
+      console.error('CePO pipeline error:', error);
+      setCepoProgress('');
+      throw error;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -1471,6 +1628,26 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
         const selectedModel = useStrategicMode
           ? 'qwen-3-235b-a22b-thinking-2507'  // VCB-AI Strategic Legal Analysis (THINKING model)
           : 'llama-3.3-70b';                    // Default GOGGA
+
+        // Check if CePO should be used (takes priority over other modes for complex reasoning)
+        if (useCePO && !useStrategicMode) {
+          try {
+            const cepoResult = await runCePO(userMessage.content, client, messages);
+            
+            const assistantMessage: Message = {
+              role: 'assistant',
+              content: cepoResult,
+              timestamp: Date.now(),
+            };
+
+            setMessages((prev) => [...prev, assistantMessage]);
+            usageTrackerRef.current.trackMessage(userMessage.content, cepoResult);
+            break; // Exit retry loop
+          } catch (cepoError) {
+            console.error('CePO failed, falling back to standard mode:', cepoError);
+            // Continue with standard processing
+          }
+        }
 
         // VCB-AI Strategic System Prompt: Strategic SA Legal Framework (Labour/Criminal/General)
         const strategicPrompt = `ROLE: South African Strategic Legal Advisor (Labour/Criminal/General Law). 
@@ -2176,6 +2353,12 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
               <span className="text-[10px] md:text-sm font-medium uppercase">Listening...</span>
             </div>
           )}
+          {cepoProgress && (
+            <div className="mb-2 md:mb-3 flex items-center justify-center space-x-2 text-blue-600">
+              <span className="material-icons text-base md:text-xl animate-spin">autorenew</span>
+              <span className="text-[10px] md:text-sm font-medium">{cepoProgress}</span>
+            </div>
+          )}
           <div className="flex items-center space-x-1.5 md:space-x-4">
             <img
               src="Sovereign-Chat-icon-Spin.svg"
@@ -2198,7 +2381,7 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
             <button
               type="button"
               onClick={() => setForceThinkingMode(!forceThinkingMode)}
-              disabled={isLoading}
+              disabled={isLoading || useCePO}
               className={`px-3 py-2 md:px-4 md:py-4 transition-colors duration-200 border flex items-center justify-center ${
                 forceThinkingMode
                   ? 'bg-yellow-400 text-vcb-black border-yellow-500'
@@ -2207,6 +2390,19 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
               title={forceThinkingMode ? 'Thinking Mode ON (Qwen)' : 'Thinking Mode OFF (Click to enable)'}
             >
               <span className="material-icons text-lg md:text-2xl">psychology</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setUseCePO(!useCePO)}
+              disabled={isLoading || forceThinkingMode}
+              className={`px-3 py-2 md:px-4 md:py-4 transition-colors duration-200 border flex items-center justify-center ${
+                useCePO
+                  ? 'bg-blue-500 text-white border-blue-600'
+                  : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              title={useCePO ? 'CePO Mode ON (Advanced Reasoning)' : 'CePO Mode OFF (Click to enable)'}
+            >
+              <span className="material-icons text-lg md:text-2xl">auto_awesome</span>
             </button>
             <button
               type="button"
