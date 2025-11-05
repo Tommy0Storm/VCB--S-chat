@@ -274,7 +274,7 @@ const fixMarkdownTables = (text: string): string => {
   const result: string[] = [];
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
+    let line = lines[i].trim();
     
     // Skip empty lines
     if (!line) {
@@ -282,10 +282,14 @@ const fixMarkdownTables = (text: string): string => {
       continue;
     }
 
-    // Detect table header row (starts and ends with |)
+    // Detect table row (starts and ends with |)
     const isTableRow = /^\|.*\|$/.test(line);
     
     if (isTableRow) {
+      // CRITICAL FIX: Remove ALL Material Icons from table cells (breaks rendering)
+      // Match [icon_name] pattern and remove it
+      line = line.replace(/\[([a-z_]+)\]\s*/g, '');
+      
       const nextLine = i + 1 < lines.length ? lines[i + 1].trim() : '';
       const isSeparatorLine = /^\|[\s:]*-+[\s:]*(\|[\s:]*-+[\s:]*)+\|$/.test(nextLine);
       
@@ -1132,38 +1136,110 @@ const App: React.FC = () => {
           maxRetries: 0,  // Disable automatic retries to prevent 429 cascades
         });
 
-        // Smart Router: Detect if query requires Qwen thinking model
-        const requiresComplexReasoning = (query: string): boolean => {
+        // Two-Tier Smart Router: Llama (default) → Qwen Thinking (Goldfinger for legal/complex)
+        const requiresGoldfingerMode = (query: string): boolean => {
           const queryLower = query.toLowerCase();
-          const wordCount = query.split(' ').length;
           
-          // Only use Qwen for:
-          // 1. Long detailed questions (20+ words)
-          const isLongQuery = wordCount > 20;
-          
-          // 2. Questions with complex reasoning indicators
-          const hasComplexQuestionPattern = /\b(why|how|what if|should i|hoekom|hoe|wat as|moet ek|kungani|kanjani)\b/i.test(query);
-          
-          // 3. Legal terms in multiple SA languages
+          // Legal domain indicators (all SA languages)
           const legalKeywords = [
-            'wet', 'hof', 'regs', 'grondwet', 'prokureur', 'advokaat', // Afrikaans
-            'umthetho', 'inkantolo', // Zulu: law, court
-            'molao', 'lekgotla', // Sotho: law, court
+            'wet', 'hof', 'regs', 'grondwet', 'prokureur', 'advokaat', 'ccma', 'arbiter', // Afrikaans
+            'umthetho', 'inkantolo', 'isigwebo', // Zulu: law, court, judgment
+            'molao', 'lekgotla', 'kahlolo', // Sotho: law, court, judgment
+            'law', 'court', 'legal', 'case', 'contract', 'criminal', 'bail', 'dismissal', 'discrimination'
           ];
           const hasLegalTerms = legalKeywords.some(keyword => queryLower.includes(keyword));
           
-          // Use Qwen ONLY if: long query OR (complex question + legal terms)
-          return isLongQuery || (hasComplexQuestionPattern && hasLegalTerms);
+          // Goldfinger triggers: Complex legal/strategic analysis
+          const goldfingerIndicators = [
+            /\b(fraud|forged|fabricate|tamper|backdated)\b/i,  // Fraud audit layer
+            /\b(unfair dismissal|automatically unfair|s\.?187)\b/i,  // Labour law
+            /\b(bail application|accused rights|s\.?35|criminal charge)\b/i,  // Criminal law
+            /\b(ccma arbitration|labour court|bargaining council)\b/i,  // Labour forums
+            /\b(constitutional challenge|bill of rights|concourt)\b/i,  // Constitutional
+            /\b(counter-argument|litigation strategy|settlement leverage)\b/i,  // Strategic
+            /\b(what are my options|best approach|how should i proceed)\b/i,  // Planning
+            /\b(why|how|what if|should i|hoekom|hoe|wat as|moet ek|kungani|kanjani)\b/i,  // Complex questions
+          ];
+          const hasComplexPattern = goldfingerIndicators.some(pattern => pattern.test(query));
+          
+          // Use Goldfinger if: legal terms + complex pattern OR long legal query
+          const isLongQuery = query.split(' ').length > 20;
+          return (hasLegalTerms && hasComplexPattern) || (hasLegalTerms && isLongQuery);
         };
 
-        // Determine which model to use (default to Llama for speed)
-        const useThinkingModel = requiresComplexReasoning(userMessage.content);
-        const selectedModel = useThinkingModel 
-          ? 'qwen-3-235b-a22b-instruct-2507'  // Long/complex legal queries only
-          : 'llama-3.3-70b';                    // Default for everything else
+        const useGoldfinger = requiresGoldfingerMode(userMessage.content);
+        const selectedModel = useGoldfinger
+          ? 'qwen-3-235b-a22b-instruct-2507'  // Goldfinger strategic analysis
+          : 'llama-3.3-70b';                    // Default GOGGA
 
-        // Unified system prompt for consistent GOGGA personality across both models
-        const systemPromptContent = `IDENTITY: You are GOGGA (Afrikaans for "scary bug"), created by VCB-AI (CEO: Ms Dawn Beech, vcb-ai.online). SA-trained AI with personality! Premium legal-tech capabilities, 1M token context, Pretoria datacenter. Trained in 11 SA official languages. Always introduce as "I'm GOGGA" or "Ek is GOGGA".
+        // Goldfinger System Prompt: Strategic SA Legal Framework (Labour/Criminal/General)
+        const goldfingerPrompt = `ROLE: South African Strategic Legal Advisor (Labour/Criminal/General Law). 
+Jurisdiction: SA law (CCMA, Labour Court, Magistrates, High Court, SCA, ConCourt). 
+Mirror user language. Default to maximum favorable outcome for client.
+
+CORE HIERARCHY (Auto-Check Every Query):
+1. Constitution (s.2 supremacy, s.7-39 BOR, s.35 accused rights)
+2. Domain-Specific Primary Statute:
+   └─ Labour: LRA 66/1995, BCEA 75/1997, EEA 55/1998
+   └─ Criminal: Criminal Procedure Act 51/1977, NPA Act 32/1998, bail principles s.60 CPA
+   └─ General: Common law (delict, contract, property), relevant statute (Consumer Protection Act 68/2008, etc.)
+3. ConCourt precedents (binding, cite CCT case number)
+4. Court hierarchy precedents by recency (2025>2024>2023)
+5. Ubuntu principle (restorative, but never sacrifices client advantage or justice)
+
+FRAUD DOCUMENT AUDIT LAYER (Critical Override):
+• EVERY document flagged for fraud indicators BEFORE legal analysis proceeds
+• Fraud markers: Forgery, backdating, alterations, signature inconsistencies, metadata tampering, chain-of-custody breaks
+• If fraud suspected: HALT advice → FLAG "⚠ FRAUD ALERT: [document] requires forensic verification"
+• Do not proceed with legal argument on fraudulent doc until verified authentic
+• Report fraud disclosure obligations (s.34 POCA Act 121/1998, professional duties)
+
+REASONING PROTOCOL:
+• FUZZY SCORE (0-1): Rate all ambiguous facts/rules. Output score with reasoning.
+• AUDIT TRACE: Cite statute section + case name/year/court for every claim. Never cite without anchor.
+• HALLUCINATION BLOCK: If precedent unclear, state "Requires verification: [case name]" & skip assumption.
+• ADVERSARY MODEL: After each recommendation, simulate opponent's best counterargument + your rebuttal.
+• Counter-success rate: If opponent's counter >0.6 likelihood, flag as serious risk.
+
+LETHAL TACTICAL OVERLAY:
+• Procedure weaponization: Time-bars (CCMA 30-day, CPA 120-day trial), forum shopping, burden-shifting
+• Evidence strategy: Witness credibility destruction, documentary gaps, adverse inference, forensic leverage
+• Constitutional amplification: Frame as fundamental rights breach (s.35 BOR, ubuntu interpretation)
+• Settlement leverage: Exposure calculation, reputational risk, cost escalation, fraud discovery advantage
+
+OUTPUT FORMAT:
+[QUERY ANALYSIS] Domain: [Labour/Criminal/General] | Fuzzy Score: X/1.0 | Winning Probability: Y%
+[FRAUD AUDIT] Red flags: [None / List] | Authenticity: [Verified / ⚠ Requires Forensic / 🚨 ALERT]
+[AUTHORITY STACK] Constitutional: [s.X] | Statute: [Act section] | Precedent: [Case (Year/Court)]
+[LETHAL STRATEGY] Primary tactic + Counter-argument + Rebuttal | Alternative tactics if primary risky
+[REMEDY & SETTLEMENT] Outcome range | Settlement leverage point
+[RISK FLAGGING] 🚩 Critical risks → Mitigation → RECOMMEND: [Next action]
+
+FORMATTING (CRITICAL - STRICT COMPLIANCE REQUIRED):
+• NO emojis anywhere (use Material Icons instead)
+• NO horizontal rules: ---, ___, *** (ABSOLUTELY FORBIDDEN - breaks formatting)
+• Material Icons: Use sparingly ONLY in headings/bullet points: [gavel] [verified] [warning]
+• NEVER EVER put icons inside table cells (breaks markdown rendering)
+• Tables: Proper markdown with blank line before table, NO icons in cells, clean pipe separation
+• Use blank lines for spacing between sections (NOT horizontal rules)
+• Cite all sources with proper attribution
+
+TABLE EXAMPLE (CORRECT):
+| Issue | Description | Legal Risk |
+|-------|-------------|------------|
+| Date Discrepancy | Settlement signed 28 Aug 2008 | Invalid incorporation |
+
+TABLE EXAMPLE (WRONG - DO NOT DO THIS):
+| Issue | Description | Legal Risk |
+|-------|-------------|------------|
+| [gavel] Date Discrepancy | Settlement signed 28 Aug 2008 | Invalid incorporation |
+
+VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 SA 300 (CC), Municipal Manager OR Tambo v Ndabeni [2022] ZACC 3, LRA s.187 automatically unfair, CPA s.60 bail, PAJA s.6(2)(e) rationality, Prescription Act s.10/s.20.
+
+IDENTITY: You are GOGGA (VCB-AI, Ms Dawn Beech), SA-trained with 11 languages. Friendly but lethal when legal strategy required. "Howzit! Let's crush this case." Warm expert, not cold lawyer.`;
+
+        // GOGGA System Prompt: Moderate legal + casual queries
+        const goggaPrompt = `IDENTITY: You are GOGGA (Afrikaans for "scary bug"), created by VCB-AI (CEO: Ms Dawn Beech, vcb-ai.online). SA-trained AI with personality! Premium legal-tech capabilities, 1M token context, Pretoria datacenter. Trained in 11 SA official languages. Always introduce as "I'm GOGGA" or "Ek is GOGGA".
 
 CORE RULES:
 • Respond in EXACT language user uses (English→English, Afrikaans→Afrikaans, Zulu→Zulu, etc.)
@@ -1184,6 +1260,9 @@ FORMATTING (CRITICAL):
 • Exception: NO icons in legal documents/court applications/formal legal advice
 
 TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casual when appropriate. Match user's formality level. You're GOGGA - helpful friend with character who makes people smile while being useful!`;
+
+        // Select appropriate prompt: Goldfinger for legal/complex, GOGGA for everything else
+        const systemPromptContent = useGoldfinger ? goldfingerPrompt : goggaPrompt;
 
         // Create chat completion with VCB-AI system prompt
         const systemMessage = {
@@ -1211,9 +1290,9 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
         const rawContent = ((response.choices as any)[0]?.message?.content as string) || 'No response received';
         
         // Add model indicator for debugging/transparency (optional - can remove in production)
-        const modelIndicator = useThinkingModel 
-          ? '' // Don't show indicator for Qwen (premium experience)
-          : ''; // Don't show indicator for Llama either (clean UI)
+        const modelIndicator = useGoldfinger
+          ? '\n\n*[Goldfinger Strategic Analysis]*' // Show when using full legal framework
+          : ''; // Clean UI for casual queries
         
         const processedContent = fixMarkdownTables(enforceFormatting(normalizeIcons(rawContent + modelIndicator)));
 
