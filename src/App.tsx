@@ -1295,26 +1295,51 @@ const App: React.FC = () => {
 
         // Use smart router logic
         const requiresStrategicMode = (query: string): boolean => {
-          const queryLower = query.toLowerCase();
-          const legalKeywords = [
-            'wet', 'hof', 'regs', 'grondwet', 'prokureur', 'advokaat', 'ccma', 'arbiter',
-            'umthetho', 'inkantolo', 'isigwebo', 'molao', 'lekgotla', 'kahlolo',
-            'law', 'court', 'legal', 'case', 'contract', 'criminal', 'bail', 'dismissal', 'discrimination'
+          // Complexity indicators: multi-step reasoning, analysis, comparison
+          const complexityIndicators = [
+            // Question words suggesting deep thinking
+            /\b(why|how|what if|explain|analyze|compare|evaluate|assess)\b/i,
+            /\b(hoekom|hoe|wat as|verduidelik|vergelyk)\b/i,  // Afrikaans
+            /\b(kungani|kanjani|chaza)\b/i,  // Zulu
+            
+            // Multi-part questions
+            /\band\s+(also|how|what|why|when)\b/i,
+            /\bor\s+(should|could|would|can)\b/i,
+            
+            // Strategic/planning language
+            /\b(options|alternatives|best approach|strategy|plan|solution|recommendation)\b/i,
+            /\b(what should i|how should i|what would you|should i)\b/i,
+            
+            // Analysis/reasoning requests
+            /\b(implications|consequences|impact|result|outcome|effect)\b/i,
+            /\b(pros and cons|advantages|disadvantages|trade[-\s]?offs?)\b/i,
+            
+            // Complex domains (legal, technical, financial, medical, etc.)
+            /\b(law|legal|court|contract|regulation|compliance|statute)\b/i,
+            /\b(algorithm|architecture|design pattern|optimization|debugging)\b/i,
+            /\b(investment|financial|tax|accounting|risk assessment)\b/i,
+            /\b(diagnosis|treatment|medical|symptoms|condition)\b/i,
+            
+            // Step-by-step or detailed requests
+            /\b(step by step|in detail|thoroughly|comprehensive|breakdown)\b/i,
+            /\b(walk me through|guide me|show me how)\b/i,
           ];
-          const hasLegalTerms = legalKeywords.some(keyword => queryLower.includes(keyword));
-          const strategicIndicators = [
-            /\b(fraud|forged|fabricate|tamper|backdated)\b/i,
-            /\b(unfair dismissal|automatically unfair|s\.?187)\b/i,
-            /\b(bail application|accused rights|s\.?35|criminal charge)\b/i,
-            /\b(ccma arbitration|labour court|bargaining council)\b/i,
-            /\b(constitutional challenge|bill of rights|concourt)\b/i,
-            /\b(counter-argument|litigation strategy|settlement leverage)\b/i,
-            /\b(what are my options|best approach|how should i proceed)\b/i,
-            /\b(why|how|what if|should i|hoekom|hoe|wat as|moet ek|kungani|kanjani)\b/i,
-          ];
-          const hasComplexPattern = strategicIndicators.some(pattern => pattern.test(query));
-          const isLongQuery = query.split(' ').length > 20;
-          return (hasLegalTerms && hasComplexPattern) || (hasLegalTerms && isLongQuery);
+          
+          const hasComplexPattern = complexityIndicators.some(pattern => pattern.test(query));
+          
+          // Long queries likely need deeper reasoning
+          const wordCount = query.split(/\s+/).length;
+          const isLongQuery = wordCount > 25;
+          
+          // Multiple questions or semicolons suggest complexity
+          const questionCount = (query.match(/\?/g) || []).length;
+          const hasMultipleQuestions = questionCount > 1;
+          
+          // Very short queries are usually simple (< 5 words)
+          const isVeryShort = wordCount < 5;
+          
+          // Use thinking mode if: complex pattern OR long query OR multiple questions (unless very short)
+          return !isVeryShort && (hasComplexPattern || isLongQuery || hasMultipleQuestions);
         };
 
         const useStrategicMode = requiresStrategicMode(userMessage.content);
@@ -1694,33 +1719,51 @@ Winner: Solution X`;
 
         // Two-Tier Smart Router: Llama (default) → Qwen Thinking (VCB-AI Legal for complex)
         const requiresStrategicMode = (query: string): boolean => {
-          const queryLower = query.toLowerCase();
-          
-          // Legal domain indicators (all SA languages)
-          const legalKeywords = [
-            'wet', 'hof', 'regs', 'grondwet', 'prokureur', 'advokaat', 'ccma', 'arbiter', // Afrikaans
-            'umthetho', 'inkantolo', 'isigwebo', // Zulu: law, court, judgment
-            'molao', 'lekgotla', 'kahlolo', // Sotho: law, court, judgment
-            'law', 'court', 'legal', 'case', 'contract', 'criminal', 'bail', 'dismissal', 'discrimination'
+          // Complexity indicators: multi-step reasoning, analysis, comparison
+          const complexityIndicators = [
+            // Question words suggesting deep thinking
+            /\b(why|how|what if|explain|analyze|compare|evaluate|assess)\b/i,
+            /\b(hoekom|hoe|wat as|verduidelik|vergelyk)\b/i,  // Afrikaans
+            /\b(kungani|kanjani|chaza)\b/i,  // Zulu
+            
+            // Multi-part questions
+            /\band\s+(also|how|what|why|when)\b/i,
+            /\bor\s+(should|could|would|can)\b/i,
+            
+            // Strategic/planning language
+            /\b(options|alternatives|best approach|strategy|plan|solution|recommendation)\b/i,
+            /\b(what should i|how should i|what would you|should i)\b/i,
+            
+            // Analysis/reasoning requests
+            /\b(implications|consequences|impact|result|outcome|effect)\b/i,
+            /\b(pros and cons|advantages|disadvantages|trade[-\s]?offs?)\b/i,
+            
+            // Complex domains (legal, technical, financial, medical, etc.)
+            /\b(law|legal|court|contract|regulation|compliance|statute)\b/i,
+            /\b(algorithm|architecture|design pattern|optimization|debugging)\b/i,
+            /\b(investment|financial|tax|accounting|risk assessment)\b/i,
+            /\b(diagnosis|treatment|medical|symptoms|condition)\b/i,
+            
+            // Step-by-step or detailed requests
+            /\b(step by step|in detail|thoroughly|comprehensive|breakdown)\b/i,
+            /\b(walk me through|guide me|show me how)\b/i,
           ];
-          const hasLegalTerms = legalKeywords.some(keyword => queryLower.includes(keyword));
           
-          // Strategic VCB-AI triggers: Complex legal/strategic analysis
-          const strategicIndicators = [
-            /\b(fraud|forged|fabricate|tamper|backdated)\b/i,  // Fraud audit layer
-            /\b(unfair dismissal|automatically unfair|s\.?187)\b/i,  // Labour law
-            /\b(bail application|accused rights|s\.?35|criminal charge)\b/i,  // Criminal law
-            /\b(ccma arbitration|labour court|bargaining council)\b/i,  // Labour forums
-            /\b(constitutional challenge|bill of rights|concourt)\b/i,  // Constitutional
-            /\b(counter-argument|litigation strategy|settlement leverage)\b/i,  // Strategic
-            /\b(what are my options|best approach|how should i proceed)\b/i,  // Planning
-            /\b(why|how|what if|should i|hoekom|hoe|wat as|moet ek|kungani|kanjani)\b/i,  // Complex questions
-          ];
-          const hasComplexPattern = strategicIndicators.some(pattern => pattern.test(query));
+          const hasComplexPattern = complexityIndicators.some(pattern => pattern.test(query));
           
-          // Use VCB-AI Strategic if: legal terms + complex pattern OR long legal query
-          const isLongQuery = query.split(' ').length > 20;
-          return (hasLegalTerms && hasComplexPattern) || (hasLegalTerms && isLongQuery);
+          // Long queries likely need deeper reasoning
+          const wordCount = query.split(/\s+/).length;
+          const isLongQuery = wordCount > 25;
+          
+          // Multiple questions or semicolons suggest complexity
+          const questionCount = (query.match(/\?/g) || []).length;
+          const hasMultipleQuestions = questionCount > 1;
+          
+          // Very short queries are usually simple (< 5 words)
+          const isVeryShort = wordCount < 5;
+          
+          // Use thinking mode if: complex pattern OR long query OR multiple questions (unless very short)
+          return !isVeryShort && (hasComplexPattern || isLongQuery || hasMultipleQuestions);
         };
 
         const useStrategicMode = forceThinkingMode || requiresStrategicMode(userMessage.content);
