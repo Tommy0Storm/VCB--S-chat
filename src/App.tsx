@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -370,9 +370,9 @@ const App: React.FC = () => {
     return text.trim();
   };
 
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  }, []);
 
   // Format session time as HH:MM:SS
   const formatSessionTime = (seconds: number): string => {
@@ -387,14 +387,14 @@ const App: React.FC = () => {
     const interval = setInterval(() => {
       const elapsed = Math.floor((Date.now() - sessionStartRef.current) / 1000);
       setSessionTime(elapsed);
-    }, 1000);
+    }, 10000); // Update every 10 seconds instead of 1 second for performance
 
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, scrollToBottom]);
 
   // Load tier from usage tracker on mount
   useEffect(() => {
@@ -789,12 +789,12 @@ const App: React.FC = () => {
     }
   };
 
-  // Auto-save conversation when messages change
+  // Auto-save conversation when messages change (debounced for performance)
   useEffect(() => {
     if (messages.length > 0) {
       const timeoutId = setTimeout(() => {
         saveCurrentConversation();
-      }, 2000); // Auto-save after 2 seconds of inactivity
+      }, 5000); // Auto-save after 5 seconds of inactivity (increased from 2s for better performance)
 
       return () => clearTimeout(timeoutId);
     }
