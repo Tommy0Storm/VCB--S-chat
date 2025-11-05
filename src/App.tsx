@@ -958,20 +958,21 @@ const App: React.FC = () => {
         clearTimeout(silenceTimerRef.current);
       }
 
-      // Start new silence timer (3 seconds) - only after final transcript
+      // Start new silence timer (2 seconds) - only after final transcript
       if (finalTranscript.trim()) {
         silenceTimerRef.current = setTimeout(() => {
-          const currentInput = input.trim();
+          // Get current value from the textarea directly to avoid stale closure
+          const currentInput = inputRef.current?.value.trim() || '';
           if (currentInput) {
             // console.log('Silence detected, submitting...');
-            // Auto-submit after 3 seconds of silence
+            // Auto-submit after 2 seconds of silence
             const form = document.querySelector('form');
             if (form) {
               const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
               form.dispatchEvent(submitEvent);
             }
           }
-        }, 3000);
+        }, 2000); // Reduced from 3000ms to 2000ms
       }
     };
 
