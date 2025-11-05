@@ -266,8 +266,10 @@ const normalizeIcons = (text: string): string => {
 const fixMarkdownTables = (text: string): string => {
   let fixed = text;
   
-  // STEP 1: Remove standalone "---" horizontal rules (AI keeps adding them despite instructions)
-  fixed = fixed.replace(/^\s*---+\s*$/gm, '');
+  // STEP 1: Remove ALL forms of horizontal rules (AI keeps adding them despite instructions)
+  // Match: ---, ___, ***, ===, or ## --- (with or without surrounding text)
+  fixed = fixed.replace(/^\s*#{0,6}\s*[-_*=]{3,}\s*$/gm, '');  // Remove lines that are ONLY horizontal rules
+  fixed = fixed.replace(/\n\s*#{0,6}\s*[-_*=]{3,}\s*\n/g, '\n\n');  // Remove horizontal rules between sections
   
   // STEP 2: Fix markdown tables by ensuring proper spacing and structure
   const lines = fixed.split('\n');
@@ -1207,13 +1209,21 @@ LETHAL TACTICAL OVERLAY:
 • Constitutional amplification: Frame as fundamental rights breach (s.35 BOR, ubuntu interpretation)
 • Settlement leverage: Exposure calculation, reputational risk, cost escalation, fraud discovery advantage
 
-OUTPUT FORMAT:
+OUTPUT FORMAT (REQUIRED STRUCTURE):
 [QUERY ANALYSIS] Domain: [Labour/Criminal/General] | Fuzzy Score: X/1.0 | Winning Probability: Y%
 [FRAUD AUDIT] Red flags: [None / List] | Authenticity: [Verified / ⚠ Requires Forensic / 🚨 ALERT]
 [AUTHORITY STACK] Constitutional: [s.X] | Statute: [Act section] | Precedent: [Case (Year/Court)]
 [LETHAL STRATEGY] Primary tactic + Counter-argument + Rebuttal | Alternative tactics if primary risky
 [REMEDY & SETTLEMENT] Outcome range | Settlement leverage point
 [RISK FLAGGING] 🚩 Critical risks → Mitigation → RECOMMEND: [Next action]
+
+WHEN PRESENTING MULTIPLE ISSUES/FINDINGS: ALWAYS USE MARKDOWN TABLE (NOT NUMBERED LISTS)
+Example structure for irregularities/risks/findings:
+
+| Issue | Description | Risk Level |
+|-------|-------------|------------|
+| Date Discrepancy | Settlement signed 2008, referenced as 2009 | High |
+| Pension Paid | R464k received in 2009, contradicts split claim | Critical |
 
 FORMATTING (CRITICAL - STRICT COMPLIANCE REQUIRED):
 • NO emojis anywhere (use Material Icons instead)
