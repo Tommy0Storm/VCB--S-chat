@@ -1132,10 +1132,50 @@ const App: React.FC = () => {
           maxRetries: 0,  // Disable automatic retries to prevent 429 cascades
         });
 
-        // Create chat completion with VCB-AI system prompt
-        const systemMessage = {
-          role: 'system' as const,
-          content: `IDENTITY: You are GOGGA (Afrikaans for "scary bug"), created by VCB-AI (CEO: Ms Dawn Beech, vcb-ai.online). Premium SA legal-tech LLM with 1M token context. Pretoria datacenter. Trained in 11 SA official languages. Expert in judicial reasoning, precedent analysis, outcome prediction. Always introduce as "I'm GOGGA" or "Ek is GOGGA".
+        // Smart Router: Detect if query requires complex/legal reasoning
+        const requiresComplexReasoning = (query: string): boolean => {
+          const legalKeywords = [
+            'law', 'legal', 'court', 'judge', 'case', 'legislation', 'act', 'statute', 
+            'constitution', 'rights', 'contract', 'eviction', 'tenant', 'landlord',
+            'labour', 'employment', 'divorce', 'custody', 'criminal', 'civil',
+            'appeal', 'precedent', 'ruling', 'attorney', 'lawyer', 'advocate',
+            'wet', 'hof', 'regs', 'grondwet', 'prokureur', 'advokaat',
+            'umthetho', 'inkantolo', // Zulu: law, court
+            'molao', 'lekgotla', // Sotho: law, court
+          ];
+          
+          const complexKeywords = [
+            'explain', 'analyze', 'compare', 'evaluate', 'assess', 'advise',
+            'strategy', 'plan', 'research', 'detailed', 'comprehensive',
+            'verduidelik', 'ontleed', 'vergelyk', // Afrikaans
+          ];
+
+          const queryLower = query.toLowerCase();
+          
+          // Check for legal keywords
+          const hasLegalTerms = legalKeywords.some(keyword => queryLower.includes(keyword));
+          
+          // Check for complex analysis requests
+          const hasComplexTerms = complexKeywords.some(keyword => queryLower.includes(keyword));
+          
+          // Check query length (longer queries often need deeper reasoning)
+          const isLongQuery = query.split(' ').length > 20;
+          
+          // Check for question words indicating complex queries
+          const hasComplexQuestionPattern = /\b(why|how|what if|explain|difference|compare|should i)\b/i.test(query);
+          
+          return hasLegalTerms || (hasComplexTerms && (isLongQuery || hasComplexQuestionPattern));
+        };
+
+        // Determine which model to use
+        const useThinkingModel = requiresComplexReasoning(userMessage.content);
+        const selectedModel = useThinkingModel 
+          ? 'qwen-3-235b-a22b-instruct-2507'  // Complex/legal queries
+          : 'llama-3.3-70b';                    // General queries
+
+        // Adjust system prompt based on model
+        const systemPromptContent = useThinkingModel
+          ? `IDENTITY: You are GOGGA (Afrikaans for "scary bug"), created by VCB-AI (CEO: Ms Dawn Beech, vcb-ai.online). Premium SA legal-tech LLM with 1M token context. Pretoria datacenter. Trained in 11 SA official languages. Expert in judicial reasoning, precedent analysis, outcome prediction. Always introduce as "I'm GOGGA" or "Ek is GOGGA".
 
 CORE REASONING (SA Framework):
 • Generate 3-5 solution approaches (K branches), score each: Coverage (0-10), Novelty (0-10), SA-law Feasibility (0-10)
@@ -1176,10 +1216,27 @@ FORMATTING RULES (CRITICAL):
 • Clean professional formatting, clear headings, organized lists
 
 TONE: Expert, friendly, solution-focused, SA proud. Subtle humor where appropriate. EXCEPTION: Completely serious in legal documents/court applications/formal legal advice.`
+          : `IDENTITY: You are GOGGA (Afrikaans for "scary bug"), created by VCB-AI. SA-trained AI assistant. Always introduce as "I'm GOGGA" or "Ek is GOGGA".
+
+KEY RULES:
+• Respond in EXACT language user uses (English→English, Afrikaans→Afrikaans, Zulu→Zulu, etc.)
+• Friendly, helpful, SA-localized tone
+• Current date: November 2025 (you are in 2025, not 2024)
+• Use Material Icons: [lightbulb] [build] [verified] - NEVER emojis
+• NEVER use horizontal rules: ---, ___, *** (FORBIDDEN)
+• Use blank lines for spacing
+• Clean formatting with organized lists
+
+TONE: Friendly, helpful, solution-focused, SA proud.`;
+
+        // Create chat completion with VCB-AI system prompt
+        const systemMessage = {
+          role: 'system' as const,
+          content: systemPromptContent
         };
 
         const response = await client.chat.completions.create({
-          model: 'qwen-3-235b-a22b-instruct-2507',
+          model: selectedModel,
           messages: [
             systemMessage,
             ...[...messages, userMessage].map((msg) => ({
@@ -1196,7 +1253,13 @@ TONE: Expert, friendly, solution-focused, SA proud. Subtle humor where appropria
         // Process content ONCE when creating message (not on every render)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const rawContent = ((response.choices as any)[0]?.message?.content as string) || 'No response received';
-        const processedContent = fixMarkdownTables(enforceFormatting(normalizeIcons(rawContent)));
+        
+        // Add model indicator for debugging/transparency (optional - can remove in production)
+        const modelIndicator = useThinkingModel 
+          ? '' // Don't show indicator for Qwen (premium experience)
+          : ''; // Don't show indicator for Llama either (clean UI)
+        
+        const processedContent = fixMarkdownTables(enforceFormatting(normalizeIcons(rawContent + modelIndicator)));
 
         const assistantMessage: Message = {
           role: 'assistant',
