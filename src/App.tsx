@@ -1175,7 +1175,7 @@ const App: React.FC = () => {
 
         const useGoldfinger = requiresGoldfingerMode(userMessage.content);
         const selectedModel = useGoldfinger
-          ? 'qwen-3-235b-a22b-instruct-2507'  // Goldfinger strategic analysis
+          ? 'qwen-3-235b-a22b-thinking-2507'  // Goldfinger strategic analysis (THINKING model)
           : 'llama-3.3-70b';                    // Default GOGGA
 
         // Goldfinger System Prompt: Strategic SA Legal Framework (Labour/Criminal/General)
