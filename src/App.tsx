@@ -924,16 +924,16 @@ const App: React.FC = () => {
         alert('Microphone permission denied. Please allow microphone access and try again.');
         setVoiceModeEnabled(false);
       } else if (event.error === 'no-speech' || event.error === 'audio-capture') {
-        // Try to restart if voice mode is still enabled
-        if (voiceModeEnabled) {
-          setTimeout(() => {
-            try {
+        // Try to restart if voice mode is still enabled (check ref for latest state)
+        setTimeout(() => {
+          try {
+            if (recognitionRef.current && voiceModeEnabled) {
               recognition.start();
-            } catch (err) {
-              // console.error('Failed to restart after error:', err);
             }
-          }, 1000);
-        }
+          } catch (err) {
+            // console.error('Failed to restart after error:', err);
+          }
+        }, 1000);
       }
     };
 
@@ -941,17 +941,17 @@ const App: React.FC = () => {
       // console.log('Speech recognition ended');
       setIsListening(false);
 
-      // Auto-restart if voice mode is still enabled
-      if (voiceModeEnabled) {
-        setTimeout(() => {
-          try {
+      // Auto-restart if voice mode is still enabled (check ref for latest state)
+      setTimeout(() => {
+        try {
+          if (recognitionRef.current && voiceModeEnabled) {
             recognition.start();
             // console.log('Restarting recognition...');
-          } catch (err) {
-            // console.error('Failed to restart recognition:', err);
           }
-        }, 100);
-      }
+        } catch (err) {
+          // console.error('Failed to restart recognition:', err);
+        }
+      }, 100);
     };
 
     recognitionRef.current = recognition;
@@ -964,7 +964,7 @@ const App: React.FC = () => {
         clearTimeout(silenceTimerRef.current);
       }
     };
-  }, []);
+  }, [voiceModeEnabled]);
 
   // Auto-play AI responses in voice mode
   useEffect(() => {
@@ -1677,17 +1677,6 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
               />
             </a>
             <div className="text-left">
-              {/* Thinking Mode Toggle Button */}
-              <button
-                type="button"
-                onClick={() => setForceThinkingMode(!forceThinkingMode)}
-                className={`mb-1 transition-colors ${
-                  forceThinkingMode ? 'text-yellow-400' : 'text-vcb-mid-grey hover:text-vcb-white'
-                }`}
-                title={forceThinkingMode ? 'Thinking Mode ON (Qwen)' : 'Thinking Mode OFF (Click to enable)'}
-              >
-                <span className="material-icons text-lg md:text-2xl">psychology</span>
-              </button>
               <h1 className="text-xs md:text-xl font-bold text-vcb-white tracking-wider">
                 GOGGA (BETA)
               </h1>
@@ -2206,6 +2195,19 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
               disabled={isLoading}
               readOnly={voiceModeEnabled}
             />
+            <button
+              type="button"
+              onClick={() => setForceThinkingMode(!forceThinkingMode)}
+              disabled={isLoading}
+              className={`px-3 py-2 md:px-4 md:py-4 transition-colors duration-200 border flex items-center justify-center ${
+                forceThinkingMode
+                  ? 'bg-yellow-400 text-vcb-black border-yellow-500'
+                  : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              title={forceThinkingMode ? 'Thinking Mode ON (Qwen)' : 'Thinking Mode OFF (Click to enable)'}
+            >
+              <span className="material-icons text-lg md:text-2xl">psychology</span>
+            </button>
             <button
               type="button"
               onClick={() => setVoiceModeEnabled(!voiceModeEnabled)}
