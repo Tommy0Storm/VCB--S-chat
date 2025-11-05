@@ -519,6 +519,7 @@ const App: React.FC = () => {
   const [showChatHistory, setShowChatHistory] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [forceThinkingMode, setForceThinkingMode] = useState(false);
   const [sessionTime, setSessionTime] = useState(0); // Session time in seconds
   const sessionStartRef = useRef<number>(Date.now());
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1466,7 +1467,7 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
           return (hasLegalTerms && hasComplexPattern) || (hasLegalTerms && isLongQuery);
         };
 
-        const useStrategicMode = requiresStrategicMode(userMessage.content);
+        const useStrategicMode = forceThinkingMode || requiresStrategicMode(userMessage.content);
         const selectedModel = useStrategicMode
           ? 'qwen-3-235b-a22b-thinking-2507'  // VCB-AI Strategic Legal Analysis (THINKING model)
           : 'llama-3.3-70b';                    // Default GOGGA
@@ -1676,6 +1677,17 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
               />
             </a>
             <div className="text-left">
+              {/* Thinking Mode Toggle Button */}
+              <button
+                type="button"
+                onClick={() => setForceThinkingMode(!forceThinkingMode)}
+                className={`mb-1 transition-colors ${
+                  forceThinkingMode ? 'text-yellow-400' : 'text-vcb-mid-grey hover:text-vcb-white'
+                }`}
+                title={forceThinkingMode ? 'Thinking Mode ON (Qwen)' : 'Thinking Mode OFF (Click to enable)'}
+              >
+                <span className="material-icons text-lg md:text-2xl">psychology</span>
+              </button>
               <h1 className="text-xs md:text-xl font-bold text-vcb-white tracking-wider">
                 GOGGA (BETA)
               </h1>
@@ -2194,6 +2206,23 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
               disabled={isLoading}
               readOnly={voiceModeEnabled}
             />
+            <button
+              type="button"
+              onClick={() => setVoiceModeEnabled(!voiceModeEnabled)}
+              disabled={isLoading}
+              className={`px-3 py-2 md:px-4 md:py-4 transition-colors duration-200 border flex items-center justify-center ${
+                isListening 
+                  ? 'bg-red-500 text-white border-red-600 animate-pulse' 
+                  : voiceModeEnabled
+                  ? 'bg-vcb-black text-vcb-white border-vcb-mid-grey hover:bg-vcb-dark-grey'
+                  : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              title={isListening ? 'Listening... (Click to stop)' : voiceModeEnabled ? 'Voice Mode ON (Click to disable)' : 'Voice Mode OFF (Click to enable)'}
+            >
+              <span className="material-icons text-lg md:text-2xl">
+                {isListening ? 'mic' : 'mic_off'}
+              </span>
+            </button>
             <button
               type="submit"
               disabled={isLoading || !input.trim()}
