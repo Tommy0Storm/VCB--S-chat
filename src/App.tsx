@@ -1530,58 +1530,52 @@ Create a detailed step-by-step plan to solve this problem. Be specific and thoro
 
       const plan = (planResponse.choices as any)[0]?.message?.content || '';
 
-      // Stage 2: Execution - Generate multiple solutions (N=3 for balance)
-      setCepoProgress('⚡ Executing: Generating solutions...');
-      const executionPromises = [];
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Stage 2: Execution - Generate solution (N=1 to avoid rate limits)
+      setCepoProgress('⚡ Executing: Generating solution...');
       
-      for (let i = 0; i < 3; i++) {
-        const execPrompt = `Problem: ${query}
+      const execPrompt = `Problem: ${query}
 
 Plan:
 ${plan}
 
 Follow the plan above to solve this problem. Show your work step by step.`;
 
-        executionPromises.push(
-          client.chat.completions.create({
-            model: 'llama-3.3-70b',
-            messages: [
-              { role: 'system', content: 'You are a problem solver. Follow plans carefully and show your reasoning.' },
-              ...conversationHistory.map(msg => ({ role: msg.role, content: msg.content })),
-              { role: 'user', content: execPrompt }
-            ],
-            temperature: 0.8 + (i * 0.1), // Vary temperature for diversity
-            max_tokens: 3072,
-            stream: false,
-          })
-        );
-      }
+      const execution = await client.chat.completions.create({
+        model: 'llama-3.3-70b',
+        messages: [
+          { role: 'system', content: 'You are a problem solver. Follow plans carefully and show your reasoning.' },
+          ...conversationHistory.map(msg => ({ role: msg.role, content: msg.content })),
+          { role: 'user', content: execPrompt }
+        ],
+        temperature: 0.8,
+        max_tokens: 3072,
+        stream: false,
+      });
 
-      const executions = await Promise.all(executionPromises);
-      const solutions = executions.map((r: any) => r.choices[0]?.message?.content || '');
+      const solution = (execution.choices as any)[0]?.message?.content || '';
 
-      // Stage 3: Analysis - Compare solutions for consistency
-      setCepoProgress('🔍 Analyzing: Comparing solutions...');
-      const analysisPrompt = `Compare these solutions and identify:
-1. Common patterns and agreements
-2. Inconsistencies or contradictions
-3. Which solution(s) appear most reliable
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-Solution 1:
-${solutions[0]}
+      // Stage 3: Analysis - Verify solution quality
+      setCepoProgress('🔍 Analyzing: Verifying solution...');
+      const analysisPrompt = `Review this solution and identify:
+1. Is the reasoning sound and logical?
+2. Are there any errors or gaps?
+3. Can this be improved?
 
-Solution 2:
-${solutions[1]}
+Solution:
+${solution}
 
-Solution 3:
-${solutions[2]}
-
-Provide a detailed analysis focusing on correctness and consistency.`;
+Provide a detailed analysis focusing on correctness and areas for improvement.`;
 
       const analysisResponse = await client.chat.completions.create({
         model: 'llama-3.3-70b',
         messages: [
-          { role: 'system', content: 'You are an analytical expert. Compare solutions objectively and identify the most reliable answer.' },
+          { role: 'system', content: 'You are an analytical expert. Review solutions objectively and identify improvements.' },
           { role: 'user', content: analysisPrompt }
         ],
         temperature: 0.3, // Lower temperature for consistent analysis
@@ -1591,53 +1585,36 @@ Provide a detailed analysis focusing on correctness and consistency.`;
 
       const analysis = (analysisResponse.choices as any)[0]?.message?.content || '';
 
-      // Stage 4: Best-of-N with Confidence Scoring
-      setCepoProgress('⭐ Selecting: Choosing best solution...');
-      const scoringPrompt = `Rate each solution's quality and confidence based on the analysis.
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-Analysis:
+      // Stage 4: Refinement with feedback
+      setCepoProgress('⭐ Refining: Improving solution...');
+      const refinementPrompt = `Based on this analysis, provide the final refined solution:
+
+Original Solution:
+${solution}
+
+Analysis & Feedback:
 ${analysis}
 
-For each solution, provide:
-1. Correctness score (0-10)
-2. Confidence score (0-10)
-3. Brief justification
+Provide the improved final answer addressing any issues identified.`;
 
-Solution 1:
-${solutions[0].substring(0, 500)}...
-
-Solution 2:
-${solutions[1].substring(0, 500)}...
-
-Solution 3:
-${solutions[2].substring(0, 500)}...
-
-Format:
-Solution 1: Correctness: X/10, Confidence: Y/10, Reason: ...
-Solution 2: Correctness: X/10, Confidence: Y/10, Reason: ...
-Solution 3: Correctness: X/10, Confidence: Y/10, Reason: ...
-Winner: Solution X`;
-
-      const scoringResponse = await client.chat.completions.create({
+      const refinementResponse = await client.chat.completions.create({
         model: 'llama-3.3-70b',
         messages: [
-          { role: 'system', content: 'You are an objective evaluator. Rate solutions based on correctness and confidence using the provided format.' },
-          { role: 'user', content: scoringPrompt }
+          { role: 'system', content: 'You are a solution refiner. Take feedback and improve solutions while maintaining clarity.' },
+          { role: 'user', content: refinementPrompt }
         ],
-        temperature: 0.2,
-        max_tokens: 1024,
+        temperature: 0.5,
+        max_tokens: 3072,
         stream: false,
       });
 
-      const scoring = (scoringResponse.choices as any)[0]?.message?.content || '';
-      
-      // Extract winner
-      const winnerMatch = scoring.match(/Winner:\s*Solution\s*(\d+)/i);
-      const winnerIndex = winnerMatch ? parseInt(winnerMatch[1]) - 1 : 0;
-      const bestSolution = solutions[Math.max(0, Math.min(winnerIndex, solutions.length - 1))];
+      const finalSolution = (refinementResponse.choices as any)[0]?.message?.content || '';
 
       // Format final response with CePO metadata
-      const cepoResponse = `${bestSolution}
+      const cepoResponse = `${finalSolution}
 
 ---
 
@@ -1647,9 +1624,7 @@ Winner: Solution X`;
 
 **Analysis:** ${analysis.substring(0, 300)}...
 
-**Confidence Scores:** ${scoring}
-
-*CePO used ${3} iterations at ~2,200 tokens/s on Cerebras infrastructure*`;
+*CePO used 4 sequential stages with rate-limit protection on Cerebras infrastructure*`;
 
       setCepoProgress('');
       return cepoResponse;
