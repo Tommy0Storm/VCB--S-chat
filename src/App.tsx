@@ -313,6 +313,19 @@ const fixMarkdownTables = (text: string): string => {
   return result.join('\n');
 };
 
+// Extract thinking block from Qwen thinking model responses
+const extractThinkingBlock = (content: string): { thinking: string | null; answer: string } => {
+  const thinkingMatch = content.match(/<think>([\s\S]*?)<\/think>/);
+  
+  if (thinkingMatch) {
+    const thinking = thinkingMatch[1].trim();
+    const answer = content.replace(/<think>[\s\S]*?<\/think>/, '').trim();
+    return { thinking, answer };
+  }
+  
+  return { thinking: null, answer: content };
+};
+
 // Memoized Message Component - prevents unnecessary re-renders
 interface MessageComponentProps {
   message: Message;
@@ -333,6 +346,12 @@ const MessageComponent = React.memo(({
   speakingIndex,
   markdownComponents,
 }: MessageComponentProps) => {
+  const [showThinking, setShowThinking] = React.useState(false);
+  
+  // Extract thinking block if present (Qwen thinking model)
+  const { thinking, answer } = extractThinkingBlock(message.content);
+  const displayContent = answer; // Show only the answer, not the thinking block
+  
   return (
     <div
       className={`flex ${
@@ -412,14 +431,35 @@ const MessageComponent = React.memo(({
                 )}
               </div>
             ) : (
-              <div className="text-sm md:text-base text-vcb-black break-words leading-relaxed">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeRaw]}
-                  components={markdownComponents}
-                >
-                  {message.content}
-                </ReactMarkdown>
+              <div className="space-y-3">
+                {/* Collapsible Thinking Block (Qwen Thinking Model) */}
+                {thinking && (
+                  <div className="border border-vcb-light-grey bg-gray-50 rounded">
+                    <button
+                      onClick={() => setShowThinking(!showThinking)}
+                      className="w-full px-3 py-2 text-left text-sm font-medium text-vcb-mid-grey hover:bg-gray-100 flex items-center justify-between"
+                    >
+                      <span>🧠 Internal Reasoning (Thinking Block)</span>
+                      <span className="text-xs">{showThinking ? '▼' : '▶'}</span>
+                    </button>
+                    {showThinking && (
+                      <div className="px-3 py-2 text-xs text-gray-700 font-mono whitespace-pre-wrap border-t border-vcb-light-grey max-h-96 overflow-y-auto">
+                        {thinking}
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {/* Main Answer Content */}
+                <div className="text-sm md:text-base text-vcb-black break-words leading-relaxed">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeRaw]}
+                    components={markdownComponents}
+                  >
+                    {displayContent}
+                  </ReactMarkdown>
+                </div>
               </div>
             )}
           </div>
