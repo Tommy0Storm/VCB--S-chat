@@ -544,6 +544,7 @@ const App: React.FC = () => {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
   const voiceModeEnabledRef = useRef<boolean>(false); // Track voice mode state for callbacks
+  const isSpeakingRef = useRef<boolean>(false); // Track if bot is currently speaking
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessagesLengthRef = useRef(0);
   const usageTrackerRef = useRef<UsageTracker>(new UsageTracker());
@@ -773,6 +774,7 @@ const App: React.FC = () => {
       window.speechSynthesis.cancel();
       if (speakingIndex === index) {
         setSpeakingIndex(null);
+        isSpeakingRef.current = false; // Reset speaking state when manually stopped
         // Restart recognition if voice mode is enabled and was stopped
         if (voiceModeEnabled && recognitionRef.current && !isListening) {
           try {
@@ -831,6 +833,7 @@ const App: React.FC = () => {
     utterance.onstart = () => {
       // console.log('TTS started');
       setSpeakingIndex(index);
+      isSpeakingRef.current = true; // Mark that bot is speaking
       // STOP transcription when bot starts speaking (prevent echo/feedback)
       if (voiceModeEnabledRef.current && recognitionRef.current && isListening) {
         try {
@@ -846,6 +849,7 @@ const App: React.FC = () => {
     utterance.onend = () => {
       // console.log('TTS ended');
       setSpeakingIndex(null);
+      isSpeakingRef.current = false; // Mark that bot finished speaking
       // RESTART transcription after bot finishes speaking
       if (voiceModeEnabledRef.current && recognitionRef.current && !isListening) {
         setTimeout(() => {
@@ -863,6 +867,7 @@ const App: React.FC = () => {
     utterance.onerror = () => {
       // console.error('TTS error:', event);
       setSpeakingIndex(null);
+      isSpeakingRef.current = false; // Mark that bot finished speaking (even on error)
       // RESTART transcription on error too
       if (voiceModeEnabledRef.current && recognitionRef.current && !isListening) {
         setTimeout(() => {
@@ -1012,10 +1017,10 @@ const App: React.FC = () => {
         alert('Microphone permission denied. Please allow microphone access and try again.');
         setVoiceModeEnabled(false);
       } else if (event.error === 'no-speech' || event.error === 'audio-capture') {
-        // Try to restart if voice mode is still enabled
+        // Try to restart ONLY if voice mode is enabled AND bot is NOT speaking
         setTimeout(() => {
           try {
-            if (recognitionRef.current && voiceModeEnabledRef.current) {
+            if (recognitionRef.current && voiceModeEnabledRef.current && !isSpeakingRef.current) {
               recognition.start();
             }
           } catch (err) {
@@ -1029,10 +1034,10 @@ const App: React.FC = () => {
       // console.log('Speech recognition ended');
       setIsListening(false);
 
-      // Auto-restart if voice mode is still enabled
+      // Auto-restart ONLY if voice mode is enabled AND bot is NOT speaking
       setTimeout(() => {
         try {
-          if (recognitionRef.current && voiceModeEnabledRef.current) {
+          if (recognitionRef.current && voiceModeEnabledRef.current && !isSpeakingRef.current) {
             recognition.start();
             // console.log('Restarting recognition...');
           }
@@ -1101,6 +1106,7 @@ const App: React.FC = () => {
     } else {
       setVoiceModeEnabled(false);
       voiceModeEnabledRef.current = false; // Update ref for callbacks
+      isSpeakingRef.current = false; // Reset speaking state
       // Stop listening
       setIsListening(false);
       if (recognitionRef.current) {
