@@ -2334,37 +2334,34 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
                   <path d="M9 9c0-1.65 1.35-3 3-3s3 1.35 3 3c0 1.66-1.35 3-3 3s-3-1.34-3-3m3 8c-4.34 0-6.29 2.28-6.29 2.28L7.5 21s1.93-2.3 4.5-2.3 4.5 2.3 4.5 2.3l1.79-1.72S16.34 17 12 17zm7-11.2V2h-2v3.8h-3.8v2H17v3.8h2V7.8h3.8v-2H19z"/>
                 )}
               </svg>
-              <span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">
+              <span className="hidden md:inline text-white text-[10px] font-medium uppercase tracking-wide">
                 {voiceGender === 'female' ? '♀ Female' : '♂ Male'}
               </span>
             </button>
 
-            {/* Voice Mode Toggle Button - HIDDEN */}
+            {/* Chat to GOGGA Button */}
             <button
               type="button"
               onClick={toggleVoiceMode}
-              className={`hidden flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border transition-colors ${
+              disabled={isLoading}
+              className={`flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border transition-colors ${
                 voiceModeEnabled
-                  ? 'bg-vcb-white text-vcb-black border-vcb-white'
-                  : 'bg-vcb-black text-vcb-white border-vcb-mid-grey hover:border-vcb-white'
-              }`}
-              title={voiceModeEnabled ? 'Stop Voice Mode' : 'Start Voice Mode (en-ZA)'}
+                  ? 'bg-vcb-accent text-vcb-black border-vcb-accent'
+                  : 'bg-vcb-black text-white border-vcb-mid-grey hover:border-vcb-white'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              title={voiceModeEnabled ? 'Stop Voice Mode' : 'Start Voice Chat with GOGGA'}
             >
-              {voiceModeEnabled && isListening ? (
-                <svg className="w-4 h-4 md:w-5 md:h-5 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                  <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-                </svg>
-              ) : (
-                <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                  <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-                </svg>
-              )}
-              <span className="hidden md:inline text-xs font-medium uppercase tracking-wide">
-                {voiceModeEnabled ? 'Voice On' : 'Voice Mode'}
+              <span className="material-icons text-sm md:text-base">
+                {voiceModeEnabled && isListening ? 'mic' : voiceModeEnabled ? 'mic_off' : 'chat'}
+              </span>
+              <span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">
+                {voiceModeEnabled && isListening ? 'Listening' : voiceModeEnabled ? 'Voice On' : 'Chat to GOGGA'}
               </span>
             </button>
+
+            {/* Voice Mode Toggle Button - HIDDEN */}
+            <div className="hidden">
+            </div>
           </div>
         </div>
       </header>
@@ -2882,7 +2879,7 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
                 disabled={isLoading || useCePO}
                 className={`w-9 h-10 transition-colors duration-200 border flex items-center justify-center flex-shrink-0 ${
                   forceThinkingMode
-                    ? 'bg-yellow-400 text-vcb-black border-yellow-500'
+                    ? 'bg-[#DC143C] text-white border-[#DC143C]'
                     : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
                 title={forceThinkingMode ? 'Thinking Mode ON (Qwen)' : 'Thinking Mode OFF (Click to enable)'}
@@ -2895,7 +2892,7 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
                 disabled={isLoading || forceThinkingMode}
                 className={`w-9 h-10 transition-colors duration-200 border flex items-center justify-center flex-shrink-0 ${
                   useCePO
-                    ? 'bg-blue-500 text-white border-blue-600'
+                    ? 'bg-[#4169E1] text-white border-[#4169E1]'
                     : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
                 title={useCePO ? 'CePO Mode ON (Advanced Reasoning)' : 'CePO Mode OFF (Click to enable)'}
@@ -2906,7 +2903,7 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
                 type="button"
                 onClick={() => setShowImagePrompt(!showImagePrompt)}
                 disabled={isLoading || isGeneratingImage}
-                className="w-9 h-10 transition-colors duration-200 border bg-[#4169E1] text-white border-[#4169E1] hover:bg-[#315AC1] hover:border-[#315AC1] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center flex-shrink-0"
+                className="w-9 h-10 transition-colors duration-200 border bg-[#28a745] text-white border-[#28a745] hover:bg-[#218838] hover:border-[#218838] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center flex-shrink-0"
                 title="Generate Image with FLUX"
               >
                 <span className="material-icons text-sm">image</span>
@@ -2959,7 +2956,7 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
                 disabled={isLoading || useCePO}
                 className={`px-4 h-16 transition-colors duration-200 border flex items-center justify-center ${
                   forceThinkingMode
-                    ? 'bg-yellow-400 text-vcb-black border-yellow-500'
+                    ? 'bg-[#DC143C] text-white border-[#DC143C]'
                     : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
                 title={forceThinkingMode ? 'Thinking Mode ON (Qwen)' : 'Thinking Mode OFF (Click to enable)'}
@@ -2972,7 +2969,7 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
                 disabled={isLoading || forceThinkingMode}
                 className={`px-4 h-16 transition-colors duration-200 border flex items-center justify-center ${
                   useCePO
-                    ? 'bg-blue-500 text-white border-blue-600'
+                    ? 'bg-[#4169E1] text-white border-[#4169E1]'
                     : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
                 title={useCePO ? 'CePO Mode ON (Advanced Reasoning)' : 'CePO Mode OFF (Click to enable)'}
@@ -2983,7 +2980,7 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
                 type="button"
                 onClick={() => setShowImagePrompt(!showImagePrompt)}
                 disabled={isLoading || isGeneratingImage}
-                className="px-4 h-16 transition-colors duration-200 border bg-[#4169E1] text-white border-[#4169E1] hover:bg-[#315AC1] hover:border-[#315AC1] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                className="px-4 h-16 transition-colors duration-200 border bg-[#28a745] text-white border-[#28a745] hover:bg-[#218838] hover:border-[#218838] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                 title="Generate Image with FLUX"
               >
                 <span className="material-icons text-2xl">image</span>
