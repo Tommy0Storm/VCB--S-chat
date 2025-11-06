@@ -2347,7 +2347,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
               <button
                 type="button"
                 onClick={() => setShowChatHistory(!showChatHistory)}
-                className="flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white hover:border-vcb-white transition-colors"
+                className="flex items-center justify-center space-x-1 w-24 md:w-32 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white hover:border-vcb-white transition-colors"
                 title="Chat History"
               >
                 <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -2357,7 +2357,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
               </button>
 
               {/* Session Timer */}
-              <div className="flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white">
+              <div className="flex items-center justify-center space-x-1 w-24 md:w-32 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white">
                 <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61l1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42C16.07 4.74 14.12 4 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
                 </svg>
@@ -2373,7 +2373,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
               <button
                 type="button"
                 onClick={() => setShowUsage(!showUsage)}
-                className="flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white hover:border-vcb-white transition-colors"
+                className="flex items-center justify-center space-x-1 w-24 md:w-32 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white hover:border-vcb-white transition-colors"
                 title="View Usage & Pricing"
               >
                 <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -2386,7 +2386,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
               <button
                 type="button"
                 onClick={toggleVoiceGender}
-                className="flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-accent bg-vcb-black text-vcb-accent hover:bg-vcb-accent hover:text-vcb-black transition-colors"
+                className="flex items-center justify-center space-x-1 w-24 md:w-32 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-accent bg-vcb-black text-vcb-accent hover:bg-vcb-accent hover:text-vcb-black transition-colors"
                 title={`Switch to ${voiceGender === 'female' ? 'Male' : 'Female'} Voice`}
               >
                 <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -2403,21 +2403,21 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                 </span>
               </button>
 
-              {/* Create Image Button */}
+              {/* Create Image Button - VCB-AI FLUX Model */}
               <button
                 type="button"
                 onClick={() => setShowImagePrompt(!showImagePrompt)}
-                className={`flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border transition-colors ${
+                className={`flex items-center justify-center space-x-1 w-24 md:w-32 px-2 py-1.5 md:px-3 md:py-2 border transition-colors ${
                   showImagePrompt 
                     ? 'bg-[#28a745] text-white border-[#28a745]' 
                     : 'bg-vcb-black text-vcb-white border-vcb-mid-grey hover:border-vcb-white'
                 }`}
-                title="Generate Image"
+                title="Test VCB-AI latest image model"
               >
-                <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24" style={{ transform: 'rotate(10deg)' }}>
+                <svg className="w-4 h-4 md:w-5 md:h-5" fill="white" viewBox="0 0 24 24" style={{ transform: 'rotate(10deg)' }}>
                   <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
                 </svg>
-                <span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">Create Image</span>
+                <span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">Test Image</span>
               </button>
             </div>
           </div>
