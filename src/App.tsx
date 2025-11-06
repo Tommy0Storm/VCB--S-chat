@@ -1232,8 +1232,8 @@ const App: React.FC = () => {
       audio.preload = 'auto';
       audio.volume = 0.9;
       
-      const setupTime = performance.now() - playbackStart;
-      console.log(`🔊 Audio element created in ${setupTime.toFixed(1)}ms`);
+      const setupTime2 = performance.now() - playbackStart;
+      console.log(`🔊 Audio element created in ${setupTime2.toFixed(1)}ms`);
         
         setCurrentAudio(audio);
 
@@ -1289,14 +1289,14 @@ const App: React.FC = () => {
         const apiTime = apiEnd - apiStart;
         const parseTime2 = parseEnd - parseStart;
         const decodeTime = decodeEnd - decodeStart;
-        const setupTime = performance.now() - playbackStart;
+        const setupTime3 = performance.now() - playbackStart;
         
         console.log(`⚡ TOTAL TTS PIPELINE: ${totalTime.toFixed(1)}ms (${(totalTime/1000).toFixed(2)}s) - Ready to play`);
         console.log(`📊 Performance Breakdown:`);
         console.log(`   🌐 API Request: ${apiTime.toFixed(1)}ms (${((apiTime/totalTime)*100).toFixed(1)}%)`);
         console.log(`   📦 JSON Parse: ${parseTime2.toFixed(1)}ms (${((parseTime2/totalTime)*100).toFixed(1)}%)`);
         console.log(`   🔄 Audio Decode: ${decodeTime.toFixed(1)}ms (${((decodeTime/totalTime)*100).toFixed(1)}%)`);
-        console.log(`   🔊 Playback Setup: ${setupTime.toFixed(1)}ms (${((setupTime/totalTime)*100).toFixed(1)}%)`);
+        console.log(`   🔊 Playback Setup: ${setupTime3.toFixed(1)}ms (${((setupTime3/totalTime)*100).toFixed(1)}%)`);
         console.log(`   💾 Cache Status: ${ttsCache.current.size} entries`);
         
         // Performance target tracking
