@@ -10,6 +10,7 @@ export interface Message {
   imagePrompt?: string;
   model?: 'llama' | 'qwen' | 'cepo'; // Track which model generated the response
   isVoiceTranscription?: boolean; // Track if sent via voice transcription
+  language?: string; // SA language code (af, zu, xh, etc.)
 }
 
 export interface Conversation {

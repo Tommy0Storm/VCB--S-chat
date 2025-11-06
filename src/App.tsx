@@ -5,6 +5,7 @@ import rehypeRaw from 'rehype-raw';
 import { Cerebras } from '@cerebras/cerebras_cloud_sdk';
 import { UsageTracker, TierType } from './utils/usageTracker';
 import { ConversationManager, Message } from './utils/conversationManager';
+import { detectSALanguage } from './utils/saLanguageDetector';
 
 // ==================== CONSTANTS ====================
 
@@ -15,8 +16,21 @@ const QWEN_IDENTITY_PROMPT = `IDENTITY: You are GOGGA (VCB-AI, Ms Dawn Beech), S
 
 const GOGGA_BASE_PROMPT = `IDENTITY: You are GOGGA (Afrikaans for "scary bug"), created by VCB-AI (CEO: Ms Dawn Beech, vcb-ai.online). SA-trained AI with personality! Premium legal-tech capabilities, 1M token context, Pretoria datacenter. Trained in 11 SA official languages. Always introduce as "I'm GOGGA" or "Ek is GOGGA".
 
+MULTILINGUAL SA SUPPORT: Detect and respond in user's language:
+- Afrikaans: "Hallo! Ek is GOGGA, lekker om jou te ontmoet!"
+- isiZulu: "Sawubona! NginguGOGGA, ngiyajabula ukukubona!"
+- isiXhosa: "Molo! NdinguGOGGA, ndiyavuya ukukubona!"
+- Sepedi: "Dumela! Ke GOGGA, ke thabetše go go bona!"
+- Setswana: "Dumela! Ke GOGGA, ke itumetse go go bona!"
+- Sesotho: "Dumela! Ke GOGGA, ke thabetše ho u bona!"
+- Xitsonga: "Avuxeni! Ndzi GOGGA, ndzi tsakile ku mi vona!"
+- siSwati: "Sawubona! NginguGOGGA, ngiyajabula kukubona!"
+- Tshivenda: "Ndaa! Ndi GOGGA, ndo takala u ni vhona!"
+- isiNdebele: "Lotjhani! NginguGOGGA, ngiyathokoza ukukubona!"
+- English: "Hello! I'm GOGGA, great to meet you!"
+
 PERSONALITY: Professional yet playful! Add subtle personality:
-- Occasional Afrikaans expressions (e.g., "lekker", "jy weet", "dankie")
+- Use detected language expressions naturally
 - Culturally aware (reference SA context naturally)
 - Crisp delivery—NO small talk unless asked
 - Be warm, not cold/sterile
@@ -503,6 +517,12 @@ const MessageComponent = React.memo(({
                   <span className="flex items-center text-blue-600 text-[10px] md:text-xs" title="CePO Reasoning Mode">
                     <span className="material-icons text-sm md:text-base">auto_awesome</span>
                     <span className="ml-1 hidden md:inline">CePO</span>
+                  </span>
+                )}
+                {message.language && message.language !== 'en' && (
+                  <span className="flex items-center text-green-600 text-[10px] md:text-xs" title={`Language: ${message.language.toUpperCase()}`}>
+                    <span className="material-icons text-sm md:text-base">language</span>
+                    <span className="ml-1 hidden md:inline">{message.language.toUpperCase()}</span>
                   </span>
                 )}
               </div>
@@ -1482,7 +1502,16 @@ const App: React.FC = () => {
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = 'en-ZA'; // South African English
+    recognition.lang = 'en-ZA'; // Default to South African English
+    
+    // Support multiple SA languages for speech recognition
+    const supportedSpeechLangs = {
+      'af': 'af-ZA',    // Afrikaans
+      'en': 'en-ZA',    // English (SA)
+      'zu': 'zu-ZA',    // Zulu
+      'xh': 'xh-ZA',    // Xhosa
+      // Others fall back to en-ZA
+    };
 
     recognition.onstart = () => {
       // console.log('Speech recognition started');
@@ -1510,6 +1539,16 @@ const App: React.FC = () => {
       if (fullTranscript) {
         setInput(fullTranscript);
         hasVoiceTranscriptionRef.current = true; // Mark that we have voice transcription
+        
+        // Auto-detect language and switch recognition if needed
+        const detected = detectSALanguage(fullTranscript);
+        if (detected.confidence > 80 && detected.code !== 'en') {
+          const newLang = supportedSpeechLangs[detected.code as keyof typeof supportedSpeechLangs];
+          if (newLang && recognition.lang !== newLang) {
+            console.log(`🎤 Switching speech recognition to ${detected.language} (${newLang})`);
+            recognition.lang = newLang;
+          }
+        }
       }
 
       // Reset silence timer on speech
@@ -2230,11 +2269,16 @@ Provide the improved final answer addressing any issues identified.`;
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
+    // Detect SA language
+    const languageDetection = detectSALanguage(input.trim());
+    console.log('🌍 Language detected:', languageDetection);
+
     const userMessage: Message = {
       role: 'user',
       content: input.trim(),
       timestamp: Date.now(),
       isVoiceTranscription: hasVoiceTranscriptionRef.current, // Mark if sent via voice transcription
+      language: languageDetection.code,
     };
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
@@ -2404,8 +2448,15 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
         // GOGGA System Prompt: Moderate legal + casual queries
         const goggaPrompt = GOGGA_BASE_PROMPT;
 
+        // Add language context to prompts
+        const languageContext = languageDetection.confidence > 70 && languageDetection.code !== 'en' 
+          ? `\n\nUSER LANGUAGE DETECTED: ${languageDetection.language} (${languageDetection.code}) - Confidence: ${languageDetection.confidence.toFixed(1)}%\nRespond naturally in this language when appropriate. Use ${languageDetection.greeting} style greetings.`
+          : '';
+
         // Select appropriate prompt: VCB-AI Strategic for legal/complex, GOGGA for everything else
-        const systemPromptContent = useStrategicMode ? strategicPrompt : goggaPrompt;        // Create chat completion with VCB-AI system prompt
+        const systemPromptContent = (useStrategicMode ? strategicPrompt : goggaPrompt) + languageContext;
+
+        // Create chat completion with VCB-AI system prompt
         const systemMessage = {
           role: 'system' as const,
           content: systemPromptContent
