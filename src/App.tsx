@@ -6,6 +6,7 @@ import { Cerebras } from '@cerebras/cerebras_cloud_sdk';
 import { UsageTracker, TierType } from './utils/usageTracker';
 import { ConversationManager, Message } from './utils/conversationManager';
 import { detectSALanguage } from './utils/saLanguageDetector';
+import { PiperTTSClient, BrowserTTSFallback } from './utils/piperTTS';
 
 // ==================== CONSTANTS ====================
 
@@ -668,9 +669,7 @@ const App: React.FC = () => {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [voiceModeEnabled, setVoiceModeEnabled] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [speechInitialized, setSpeechInitialized] = useState(false);
-  const [availableVoices, setAvailableVoices] = useState<any[]>([]);
-  const [selectedVoiceId, setSelectedVoiceId] = useState<string>('');
+
   const [voiceGender, setVoiceGender] = useState<'male' | 'female'>('female'); // Default to female
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
   const [showUsage, setShowUsage] = useState(false);
@@ -698,6 +697,8 @@ const App: React.FC = () => {
   const lastMessagesLengthRef = useRef(0);
   const usageTrackerRef = useRef<UsageTracker>(new UsageTracker());
   const conversationManagerRef = useRef<ConversationManager>(new ConversationManager());
+  const piperTTSRef = useRef<PiperTTSClient>(new PiperTTSClient());
+  const browserTTSRef = useRef<BrowserTTSFallback>(new BrowserTTSFallback());
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   // Detect if user wants image generation (temporarily disabled)
@@ -894,161 +895,38 @@ const App: React.FC = () => {
     }
   }, [voiceModeEnabled, isListening]);
 
-  // Load DeepInfra voices
-  const loadDeepInfraVoices = async () => {
-    const deepinfraApiKey = import.meta.env.VITE_DEEPINFRA_API_KEY;
-    if (!deepinfraApiKey) {
-      console.warn('DeepInfra API key not configured');
-      return;
-    }
 
-    try {
-      const response = await fetch('https://api.deepinfra.com/v1/voices', {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${deepinfraApiKey}`,
-        },
-      });
 
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Filter voices: get 1 male and 1 female
-        // You'll need to create/upload these voices in DeepInfra dashboard first
-        // For now, we'll take the first two voices and assign genders
-        const voices = data.voices || [];
-        setAvailableVoices(voices);
-        
-        // Set default voice based on selected gender
-        if (voices.length > 0) {
-          // Assuming first voice is female, second is male (update based on your actual voices)
-          const defaultVoice = voiceGender === 'female' ? voices[0] : voices[1] || voices[0];
-          setSelectedVoiceId(defaultVoice.voice_id);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load DeepInfra voices:', error);
-    }
-  };
 
-  const initializeSpeechSynthesis = () => {
-    if (!speechInitialized) {
-      loadDeepInfraVoices();
-      setSpeechInitialized(true);
-    }
-  };
-
-  // Performance cache for TTS requests - avoid duplicate API calls
-  const ttsCache = useRef<Map<string, { audioBlob: Blob; timestamp: number }>>(new Map());
-  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
-  
-  // Request deduplication - prevent identical simultaneous requests
-  const activeRequests = useRef<Set<string>>(new Set());
   
   const handleSpeak = useCallback(async (text: string, index: number) => {
-    // Initialize on first use
-    if (!speechInitialized) {
-      initializeSpeechSynthesis();
-    }
-
     // Stop any ongoing audio
     if (currentAudio) {
       currentAudio.pause();
       currentAudio.currentTime = 0;
       if (speakingIndex === index) {
-        // User clicked the same message again - stop playback
         setSpeakingIndex(null);
         setCurrentAudio(null);
         isSpeakingRef.current = false;
-        // Restart recognition if voice mode is enabled
-        if (voiceModeEnabled && recognitionRef.current && !isListening) {
-          try {
-            recognitionRef.current.start();
-            setIsListening(true);
-          } catch (err) {
-            console.error('Failed to restart recognition:', err);
-          }
-        }
+        browserTTSRef.current.stop();
         return;
       }
     }
 
-    // Prevent multiple simultaneous requests - AGGRESSIVE BLOCKING
+    // Prevent multiple simultaneous requests
     if (isSpeakingRef.current || speakingIndex !== null) {
-      console.log('TTS already in progress, blocking request. Current speaking index:', speakingIndex);
-      // Don't stop current audio - just reject the new request completely
+      console.log('🔄 TTS already in progress, blocking request');
       return;
     }
 
-    const deepinfraApiKey = import.meta.env.VITE_DEEPINFRA_API_KEY;
-    if (!deepinfraApiKey) {
-      console.error('DeepInfra API key not configured');
-      return;
-    }
-
-    // Truncate text for faster processing - OPTIMIZED TO 250 CHARS
-    const truncatedText = text.substring(0, 250);
-    if (text.length > 250) {
-      console.log(`⚡ Text truncated from ${text.length} to 250 chars for maximum TTS speed`);
-    }
-    
-    // Create cache key for deduplication
-    const cacheKey = `${truncatedText.trim()}_${voiceGender}`;
-    
-    // Check cache first - INSTANT PLAYBACK for repeated requests
-    const cached = ttsCache.current.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
-      console.log('🚀 CACHE HIT: Instant TTS playback (0ms)');
-      setSpeakingIndex(index);
-      isSpeakingRef.current = true;
-      
-      const audioUrl = URL.createObjectURL(cached.audioBlob);
-      const audio = new Audio(audioUrl);
-      setCurrentAudio(audio);
-      
-      audio.onended = () => {
-        setSpeakingIndex(null);
-        isSpeakingRef.current = false;
-        setCurrentAudio(null);
-        URL.revokeObjectURL(audioUrl);
-        if (voiceModeEnabledRef.current && recognitionRef.current && !isListening) {
-          setTimeout(() => {
-            try {
-              recognitionRef.current.start();
-              setIsListening(true);
-            } catch (err) {
-              console.error('Failed to restart recognition:', err);
-            }
-          }, 300);
-        }
-      };
-      
-      audio.play().catch(err => {
-        console.error('❌ Failed to play cached audio:', err);
-        setSpeakingIndex(null);
-        isSpeakingRef.current = false;
-        setCurrentAudio(null);
-        URL.revokeObjectURL(audioUrl);
-      });
-      return;
-    }
-    
-    // Prevent duplicate requests for same text
-    if (activeRequests.current.has(cacheKey)) {
-      console.log('🔄 Duplicate request blocked, already processing:', cacheKey.substring(0, 50));
-      return;
-    }
-    activeRequests.current.add(cacheKey);
-
-    // Enhanced performance timing with microsecond precision
     const perfStart = performance.now();
-    let apiStart = 0;
-    let apiEnd = 0;
-    let parseStart = 0;
-    let parseEnd = 0;
-    let decodeStart = 0;
-    let decodeEnd = 0;
-    let playbackStart = 0;
+    const truncatedText = text.substring(0, 300);
+    
+    // Detect language for appropriate voice
+    const languageDetection = detectSALanguage(truncatedText);
+    const languageCode = languageDetection.confidence > 60 ? languageDetection.code : 'en';
+    
+    console.log(`🎤 Piper TTS Request: ${truncatedText.length} chars, Language: ${languageCode}`);
 
     try {
       setSpeakingIndex(index);
@@ -1064,74 +942,31 @@ const App: React.FC = () => {
         }
       }
 
-      // Call DeepInfra TTS API with aggressive 10-second timeout
-      let response;
-      let usedEndpoint = '';
-      
-      // Try Chatterbox with 10-second timeout for faster fallback
-      try {
-        usedEndpoint = 'ResembleAI/chatterbox';
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => {
-          controller.abort();
-          console.log('⏱️ TTS request timed out after 10 seconds - no charge');
-        }, 10000); // 10 seconds - proven working timeout
-        
-        apiStart = performance.now();
-        console.log(`🎤 TTS Request started - Text: ${truncatedText.length} chars, Cache key: ${cacheKey.substring(0, 30)}...`);
-        
-        response = await fetch(`https://api.deepinfra.com/v1/inference/${usedEndpoint}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${deepinfraApiKey}`,
-            'Accept': 'application/json',
-            'Cache-Control': 'no-cache',
-          },
-          body: JSON.stringify({
-            text: truncatedText,
-            // PROVEN FAST SETTINGS - Validated at 5.6s performance
-            exaggeration: 0.1, // Minimal exaggeration (tested working)
-            cfg: 0.3, // Minimal CFG guidance (tested working)
-            temperature: 0.4, // Lower temperature (tested working)
-            speed: 1.2, // Faster speech rate (tested working)
-          }),
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-        
-        apiEnd = performance.now();
-        const apiTime = apiEnd - apiStart;
-        console.log(`✅ TTS API responded in ${apiTime.toFixed(1)}ms (${(apiTime/1000).toFixed(2)}s)`);
-      } catch (err) {
-        apiEnd = performance.now();
-        const apiTime = apiEnd - apiStart;
-        console.error(`❌ Chatterbox TTS failed after ${apiTime.toFixed(1)}ms - no API charge, using browser TTS...`, err);
-        response = null;
-      } finally {
-        activeRequests.current.delete(cacheKey);
-      }
+      let audioBlob: Blob;
+      let usedPiper = false;
 
-      // Fast fallback to browser TTS if API failed or timed out (NO CHARGE)
-      if (!response || !response.ok) {
-        console.log('🔄 Using instant browser TTS fallback (no API charge)');
+      // Try Piper TTS first
+      try {
+        const piperAvailable = await piperTTSRef.current.isAvailable();
+        if (piperAvailable) {
+          audioBlob = await piperTTSRef.current.synthesize(truncatedText, languageCode, 'medium');
+          usedPiper = true;
+          console.log(`✅ Piper TTS success: ${languageCode} (${audioBlob.size} bytes)`);
+        } else {
+          throw new Error('Piper server not available');
+        }
+      } catch (piperError) {
+        console.log(`⚠️ Piper TTS failed, using browser fallback:`, piperError);
         
-        // Clean up request tracking since we're not using API
-        activeRequests.current.delete(cacheKey);
-        
-        // INSTANT browser TTS fallback
-        const utterance = new SpeechSynthesisUtterance(truncatedText);
-        utterance.rate = 1.4;
-        utterance.pitch = 1.0;
-        utterance.volume = 0.9;
-        
-        utterance.onend = () => {
+        // Fallback to browser TTS
+        try {
+          await browserTTSRef.current.synthesize(truncatedText, languageCode);
+          console.log(`🔊 Browser TTS completed: ${languageCode}`);
+          
           setSpeakingIndex(null);
           isSpeakingRef.current = false;
-          setCurrentAudio(null);
-          console.log('🔊 Browser TTS completed (no charge)');
           
-          // Restart recognition if voice mode enabled
+          // Restart recognition
           if (voiceModeEnabledRef.current && recognitionRef.current && !isListening) {
             setTimeout(() => {
               try {
@@ -1142,135 +977,18 @@ const App: React.FC = () => {
               }
             }, 300);
           }
-        };
-        
-        utterance.onerror = () => {
-          setSpeakingIndex(null);
-          isSpeakingRef.current = false;
-          setCurrentAudio(null);
-        };
-        
-        window.speechSynthesis.speak(utterance);
-        console.log('🔊 Browser TTS started (instant, no API charge)');
-        return; // Exit early - no API charge
-      }
-
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => response.statusText);
-        console.error(`TTS API error (${usedEndpoint}):`, errorText);
-        throw new Error(`TTS API failed: ${response.status} ${response.statusText}`);
-      }
-
-      parseStart = performance.now();
-      const data = await response.json();
-      parseEnd = performance.now();
-      const parseTime = parseEnd - parseStart;
-      console.log(`📦 JSON parsed in ${parseTime.toFixed(1)}ms`);
-      console.log(`TTS API response from ${usedEndpoint}:`, {
-        hasAudio: !!data.audio,
-        audioType: typeof data.audio,
-        audioLength: data.audio?.length,
-        status: data.inference_status
-      });
-      
-      // Check if inference succeeded
-      if (data.inference_status?.status === 'failed') {
-        throw new Error(`TTS inference failed: ${JSON.stringify(data.inference_status)}`);
-      }
-      
-      if (!data.audio || data.audio === null) {
-        console.error('No audio data returned. Full response:', data);
-        throw new Error('TTS API returned no audio data. Service may be temporarily unavailable.');
-      }
-      
-      if (typeof data.audio !== 'string') {
-        console.error('Audio is not a string:', typeof data.audio);
-        throw new Error('Invalid audio data format received from TTS API');
-      }
-
-      let audioBlob: Blob;
-      decodeStart = performance.now();
-      
-      // Check if audio is a URL or base64 data
-      if (data.audio.startsWith('http://') || data.audio.startsWith('https://')) {
-        // Audio is a URL - fetch it with optimizations
-        console.log('🌐 Audio is URL, fetching with compression...');
-        const fetchStart = performance.now();
-        const audioResponse = await fetch(data.audio, {
-          headers: {
-            'Accept-Encoding': 'gzip, deflate, br',
-          }
-        });
-        audioBlob = await audioResponse.blob();
-        const fetchTime = performance.now() - fetchStart;
-        console.log(`🌐 URL fetch completed in ${fetchTime.toFixed(1)}ms, size: ${audioBlob.size} bytes (${(audioBlob.size/1024).toFixed(1)} KB)`);
-      } else {
-        // Audio is base64-encoded data - OPTIMIZED DECODING
-        try {
-          console.log(`🔄 Decoding base64 audio, length: ${data.audio.length} chars`);
-          
-          // OPTIMIZED: Clean the base64 string in one pass
-          const cleanStart = performance.now();
-          let cleanedAudio = data.audio.trim();
-          
-          // Remove data URI prefix if present (e.g., "data:audio/wav;base64,")
-          if (cleanedAudio.includes(',')) {
-            cleanedAudio = cleanedAudio.split(',')[1];
-          }
-          
-          // Remove any whitespace characters
-          cleanedAudio = cleanedAudio.replace(/\s/g, '');
-          const cleanTime = performance.now() - cleanStart;
-          console.log(`🧹 Base64 cleaned in ${cleanTime.toFixed(1)}ms, length: ${cleanedAudio.length}`);
-          
-          // OPTIMIZED: Skip validation for speed (trust API response)
-          
-          // OPTIMIZED: Direct decode to Uint8Array
-          const decodeStart2 = performance.now();
-          const binaryString = atob(cleanedAudio);
-          const bytes = new Uint8Array(binaryString.length);
-          
-          // OPTIMIZED: Batch byte conversion (faster than loop)
-          for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-          }
-          const decodeTime = performance.now() - decodeStart2;
-          console.log(`🔓 Optimized decode in ${decodeTime.toFixed(1)}ms, binary length: ${binaryString.length}`);
-          
-          audioBlob = new Blob([bytes], { type: 'audio/wav' });
-          decodeEnd = performance.now();
-          const totalDecodeTime = decodeEnd - decodeStart;
-          console.log(`✅ Audio blob created in ${totalDecodeTime.toFixed(1)}ms, size: ${audioBlob.size} bytes (${(audioBlob.size/1024).toFixed(1)} KB)`);
-        } catch (decodeError) {
-          console.error('❌ Base64 decode error:', decodeError);
-          console.error('First 100 chars of audio data:', data.audio.substring(0, 100));
-          throw new Error(`Failed to decode audio data: ${decodeError instanceof Error ? decodeError.message : 'Unknown error'}`);
+          return;
+        } catch (browserError) {
+          throw new Error(`Both Piper and browser TTS failed: ${browserError}`);
         }
       }
-      
-      // Cache the audio blob for future use
-      ttsCache.current.set(cacheKey, { audioBlob, timestamp: Date.now() });
-      
-      // Clean old cache entries (keep cache size manageable)
-      if (ttsCache.current.size > 20) {
-        const now = Date.now();
-        for (const [key, value] of ttsCache.current.entries()) {
-          if (now - value.timestamp > CACHE_DURATION) {
-            ttsCache.current.delete(key);
-          }
-        }
-      }
-      
-      playbackStart = performance.now();
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
-      
-      // OPTIMIZED: Preload for faster playback
-      audio.preload = 'auto';
-      audio.volume = 0.9;
-      
-      const setupTime2 = performance.now() - playbackStart;
-      console.log(`🔊 Audio element created in ${setupTime2.toFixed(1)}ms`);
+
+      // Play Piper audio
+      if (usedPiper && audioBlob) {
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        audio.preload = 'auto';
+        audio.volume = 0.9;
         
         setCurrentAudio(audio);
 
@@ -1280,7 +998,7 @@ const App: React.FC = () => {
           setCurrentAudio(null);
           URL.revokeObjectURL(audioUrl);
 
-          // Restart transcription after bot finishes speaking
+          // Restart transcription
           if (voiceModeEnabledRef.current && recognitionRef.current && !isListening) {
             setTimeout(() => {
               try {
@@ -1294,62 +1012,23 @@ const App: React.FC = () => {
         };
 
         audio.onerror = (e) => {
-          console.error('Audio playback error:', e);
+          console.error('Piper audio playback error:', e);
           setSpeakingIndex(null);
           isSpeakingRef.current = false;
           setCurrentAudio(null);
           URL.revokeObjectURL(audioUrl);
-
-          // Restart transcription on error
-          if (voiceModeEnabledRef.current && recognitionRef.current && !isListening) {
-            setTimeout(() => {
-              try {
-                recognitionRef.current.start();
-                setIsListening(true);
-              } catch (err) {
-                console.error('Failed to restart recognition after error:', err);
-              }
-            }, 300);
-          }
         };
 
-        audio.play().catch(err => {
-          console.error('❌ Failed to play audio:', err);
-          setSpeakingIndex(null);
-          isSpeakingRef.current = false;
-          setCurrentAudio(null);
-          URL.revokeObjectURL(audioUrl);
-        });
+        await audio.play();
         
-        // ENHANCED: Log comprehensive performance metrics
         const totalTime = performance.now() - perfStart;
-        const apiTime = apiEnd - apiStart;
-        const parseTime2 = parseEnd - parseStart;
-        const decodeTime = decodeEnd - decodeStart;
-        const setupTime3 = performance.now() - playbackStart;
-        
-        console.log(`⚡ TOTAL TTS PIPELINE: ${totalTime.toFixed(1)}ms (${(totalTime/1000).toFixed(2)}s) - Ready to play`);
-        console.log(`📊 Performance Breakdown:`);
-        console.log(`   🌐 API Request: ${apiTime.toFixed(1)}ms (${((apiTime/totalTime)*100).toFixed(1)}%)`);
-        console.log(`   📦 JSON Parse: ${parseTime2.toFixed(1)}ms (${((parseTime2/totalTime)*100).toFixed(1)}%)`);
-        console.log(`   🔄 Audio Decode: ${decodeTime.toFixed(1)}ms (${((decodeTime/totalTime)*100).toFixed(1)}%)`);
-        console.log(`   🔊 Playback Setup: ${setupTime3.toFixed(1)}ms (${((setupTime3/totalTime)*100).toFixed(1)}%)`);
-        console.log(`   💾 Cache Status: ${ttsCache.current.size} entries`);
-        
-        // Performance target tracking
-        if (totalTime < 4000) {
-          console.log(`🎯 PERFORMANCE TARGET MET: ${totalTime.toFixed(1)}ms < 4000ms target`);
-        } else {
-          console.log(`⚠️ Performance target missed: ${totalTime.toFixed(1)}ms > 4000ms target`);
-        }
+        console.log(`⚡ Piper TTS Pipeline: ${totalTime.toFixed(1)}ms - ${usedPiper ? 'Piper' : 'Browser'} (${languageCode})`);
+      }
+      
     } catch (error) {
-      const totalTime = performance.now() - perfStart;
-      console.error(`❌ DeepInfra TTS error after ${totalTime.toFixed(1)}ms:`, error);
+      console.error('❌ TTS error:', error);
       setSpeakingIndex(null);
       isSpeakingRef.current = false;
-      
-      // Clean up request tracking
-      activeRequests.current.delete(cacheKey);
       
       // Restart transcription on error
       if (voiceModeEnabledRef.current && recognitionRef.current && !isListening) {
@@ -1363,7 +1042,7 @@ const App: React.FC = () => {
         }, 300);
       }
     }
-  }, [speechInitialized, currentAudio, speakingIndex, selectedVoiceId, voiceModeEnabled, isListening]);
+  }, [currentAudio, speakingIndex, voiceModeEnabled, isListening]);
 
   const handleCopy = async (text: string, index: number) => {
     try {
@@ -1442,29 +1121,7 @@ const App: React.FC = () => {
     }
   }, [showChatHistory, showUsage]);
 
-  // Load voices when component mounts
-  useEffect(() => {
-    const loadVoices = () => {
-      const voices = window.speechSynthesis.getVoices();
-      // console.log('Available voices:', voices.length);
-      // console.log('Voice list:', voices.map(v => `${v.name} (${v.lang})`));
-      setAvailableVoices(voices);
-    };
 
-    // Load immediately
-    loadVoices();
-
-    // Also load when voices change (important for mobile)
-    if (window.speechSynthesis.onvoiceschanged !== undefined) {
-      window.speechSynthesis.onvoiceschanged = loadVoices;
-    }
-
-    // For mobile: try loading again after a delay
-    if (isMobile) {
-      setTimeout(loadVoices, 100);
-      setTimeout(loadVoices, 500);
-    }
-  }, [isMobile]);
 
   // Fix mobile viewport jumping when keyboard opens
   useEffect(() => {
@@ -1642,11 +1299,6 @@ const App: React.FC = () => {
         
         setVoiceModeEnabled(true);
         voiceModeEnabledRef.current = true; // Update ref for callbacks
-        
-        // Initialize speech synthesis on mobile (required for autoplay)
-        if (isMobile) {
-          initializeSpeechSynthesis();
-        }
 
         // Start listening
         if (recognitionRef.current) {
@@ -1687,14 +1339,10 @@ const App: React.FC = () => {
     const newGender = voiceGender === 'female' ? 'male' : 'female';
     setVoiceGender(newGender);
     
-    // Update selected voice based on gender
-    if (availableVoices.length >= 2) {
-      const newVoice = newGender === 'female' ? availableVoices[0] : availableVoices[1] || availableVoices[0];
-      setSelectedVoiceId(newVoice.voice_id);
-    }
-    
     // Save preference to localStorage
     localStorage.setItem('voiceGender', newGender);
+    
+    console.log(`🎤 Voice gender switched to: ${newGender}`);
   };
 
   // Conversation Management Functions
