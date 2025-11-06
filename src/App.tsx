@@ -697,8 +697,7 @@ const App: React.FC = () => {
   const lastMessagesLengthRef = useRef(0);
   const usageTrackerRef = useRef<UsageTracker>(new UsageTracker());
   const conversationManagerRef = useRef<ConversationManager>(new ConversationManager());
-  const piperTTSRef = useRef<PiperTTSClient>(new PiperTTSClient());
-  const browserTTSRef = useRef<BrowserTTSFallback>(new BrowserTTSFallback());
+  // Removed Piper client refs - now using streaming backend
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   // Detect if user wants image generation (temporarily disabled)
@@ -908,7 +907,6 @@ const App: React.FC = () => {
         setSpeakingIndex(null);
         setCurrentAudio(null);
         isSpeakingRef.current = false;
-        browserTTSRef.current.stop();
         return;
       }
     }
@@ -924,9 +922,15 @@ const App: React.FC = () => {
     
     // Detect language for appropriate voice
     const languageDetection = detectSALanguage(truncatedText);
-    const languageCode = languageDetection.confidence > 60 ? languageDetection.code : 'en';
+    const voiceMap = {
+      'af': 'twi',        // Afrikaans -> Twi (closest available)
+      'zu': 'chichewa',   // Zulu -> Chichewa
+      'xh': 'makhuwa',    // Xhosa -> Makhuwa
+      'en': voiceGender === 'female' ? 'twi' : 'chichewa'
+    };
+    const selectedVoice = voiceMap[languageDetection.code as keyof typeof voiceMap] || 'twi';
     
-    console.log(`🎤 Piper TTS Request: ${truncatedText.length} chars, Language: ${languageCode}`);
+    console.log(`🎤 Piper Streaming TTS: ${truncatedText.length} chars, Voice: ${selectedVoice}`);
 
     try {
       setSpeakingIndex(index);
@@ -942,30 +946,78 @@ const App: React.FC = () => {
         }
       }
 
-      let audioBlob: Blob;
-      let usedPiper = false;
+      // Use Piper streaming backend
+      const response = await fetch('http://localhost:5000/tts-stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: truncatedText,
+          voice: selectedVoice
+        })
+      });
 
-      // Try Piper TTS first
-      try {
-        const piperAvailable = await piperTTSRef.current.isAvailable();
-        if (piperAvailable) {
-          audioBlob = await piperTTSRef.current.synthesize(truncatedText, languageCode, 'medium');
-          usedPiper = true;
-          console.log(`✅ Piper TTS success: ${languageCode} (${audioBlob.size} bytes)`);
-        } else {
-          throw new Error('Piper server not available');
+      if (!response.ok) {
+        throw new Error(`Piper server error: ${response.status}`);
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      audio.preload = 'auto';
+      audio.volume = 0.9;
+      
+      setCurrentAudio(audio);
+
+      audio.onended = () => {
+        setSpeakingIndex(null);
+        isSpeakingRef.current = false;
+        setCurrentAudio(null);
+        URL.revokeObjectURL(audioUrl);
+
+        // Restart transcription
+        if (voiceModeEnabledRef.current && recognitionRef.current && !isListening) {
+          setTimeout(() => {
+            try {
+              recognitionRef.current.start();
+              setIsListening(true);
+            } catch (err) {
+              console.error('Failed to restart recognition:', err);
+            }
+          }, 300);
         }
-      } catch (piperError) {
-        console.log(`⚠️ Piper TTS failed, using browser fallback:`, piperError);
-        
-        // Fallback to browser TTS
-        try {
-          await browserTTSRef.current.synthesize(truncatedText, languageCode);
-          console.log(`🔊 Browser TTS completed: ${languageCode}`);
-          
+      };
+
+      audio.onerror = (e) => {
+        console.error('Audio playback error:', e);
+        setSpeakingIndex(null);
+        isSpeakingRef.current = false;
+        setCurrentAudio(null);
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      await audio.play();
+      
+      const totalTime = performance.now() - perfStart;
+      console.log(`⚡ Piper Streaming: ${totalTime.toFixed(1)}ms (${selectedVoice})`);
+      
+    } catch (error) {
+      console.error('❌ Piper TTS error:', error);
+      setSpeakingIndex(null);
+      isSpeakingRef.current = false;
+      
+      // Fallback to browser TTS
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(truncatedText);
+        const voices = window.speechSynthesis.getVoices();
+        const selectedVoice = voices.find(voice => 
+          voiceGender === 'female' 
+            ? voice.name.toLowerCase().includes('female') || voice.name.toLowerCase().includes('zira')
+            : voice.name.toLowerCase().includes('male') || voice.name.toLowerCase().includes('david')
+        );
+        if (selectedVoice) utterance.voice = selectedVoice;
+        utterance.onend = () => {
           setSpeakingIndex(null);
-          isSpeakingRef.current = false;
-          
           // Restart recognition
           if (voiceModeEnabledRef.current && recognitionRef.current && !isListening) {
             setTimeout(() => {
@@ -977,72 +1029,16 @@ const App: React.FC = () => {
               }
             }, 300);
           }
-          return;
-        } catch (browserError) {
-          throw new Error(`Both Piper and browser TTS failed: ${browserError}`);
-        }
-      }
-
-      // Play Piper audio
-      if (usedPiper && audioBlob) {
-        const audioUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio(audioUrl);
-        audio.preload = 'auto';
-        audio.volume = 0.9;
-        
-        setCurrentAudio(audio);
-
-        audio.onended = () => {
-          setSpeakingIndex(null);
-          isSpeakingRef.current = false;
-          setCurrentAudio(null);
-          URL.revokeObjectURL(audioUrl);
-
-          // Restart transcription
-          if (voiceModeEnabledRef.current && recognitionRef.current && !isListening) {
-            setTimeout(() => {
-              try {
-                recognitionRef.current.start();
-                setIsListening(true);
-              } catch (err) {
-                console.error('Failed to restart recognition:', err);
-              }
-            }, 300);
-          }
         };
-
-        audio.onerror = (e) => {
-          console.error('Piper audio playback error:', e);
-          setSpeakingIndex(null);
-          isSpeakingRef.current = false;
-          setCurrentAudio(null);
-          URL.revokeObjectURL(audioUrl);
-        };
-
-        await audio.play();
-        
-        const totalTime = performance.now() - perfStart;
-        console.log(`⚡ Piper TTS Pipeline: ${totalTime.toFixed(1)}ms - ${usedPiper ? 'Piper' : 'Browser'} (${languageCode})`);
-      }
-      
-    } catch (error) {
-      console.error('❌ TTS error:', error);
-      setSpeakingIndex(null);
-      isSpeakingRef.current = false;
-      
-      // Restart transcription on error
-      if (voiceModeEnabledRef.current && recognitionRef.current && !isListening) {
-        setTimeout(() => {
-          try {
-            recognitionRef.current.start();
-            setIsListening(true);
-          } catch (err) {
-            console.error('Failed to restart recognition after TTS error:', err);
-          }
-        }, 300);
+        window.speechSynthesis.speak(utterance);
+        console.log('🔊 Browser TTS fallback used');
+      } catch (fallbackError) {
+        console.error('Fallback TTS failed:', fallbackError);
+        setSpeakingIndex(null);
+        isSpeakingRef.current = false;
       }
     }
-  }, [currentAudio, speakingIndex, voiceModeEnabled, isListening]);
+  }, [currentAudio, speakingIndex, voiceGender, voiceModeEnabled, isListening]);
 
   const handleCopy = async (text: string, index: number) => {
     try {
