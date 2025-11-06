@@ -544,6 +544,9 @@ const App: React.FC = () => {
   const [forceThinkingMode, setForceThinkingMode] = useState(false);
   const [useCePO, setUseCePO] = useState(false);
   const [cepoProgress, setCepoProgress] = useState<string>('');
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [imagePrompt, setImagePrompt] = useState('');
+  const [showImagePrompt, setShowImagePrompt] = useState(false);
   const [sessionTime, setSessionTime] = useState(0); // Session time in seconds
   const sessionStartRef = useRef<number>(Date.now());
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1668,6 +1671,117 @@ Provide the improved final answer addressing any issues identified.`;
     }
   };
 
+  // FLUX1.1 [pro] Image Generation
+  const generateFluxImage = async (prompt: string): Promise<string> => {
+    const bflApiKey = import.meta.env.VITE_BFL_API_KEY;
+    if (!bflApiKey) {
+      throw new Error('BFL API key not configured. Please add VITE_BFL_API_KEY to your .env file.');
+    }
+
+    try {
+      // Step 1: Create the image generation request
+      const createResponse = await fetch('https://api.bfl.ai/v1/flux-pro-1.1', {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'x-key': bflApiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: prompt,
+          width: 1024,
+          height: 1024,
+          output_format: 'jpeg',
+          safety_tolerance: 2,
+        }),
+      });
+
+      if (!createResponse.ok) {
+        throw new Error(`Failed to create image request: ${createResponse.statusText}`);
+      }
+
+      const createData = await createResponse.json();
+      const requestId = createData.id;
+      const pollingUrl = `https://api.bfl.ai/v1/get_result?id=${requestId}`;
+
+      // Step 2: Poll for the result
+      let attempts = 0;
+      const maxAttempts = 120; // 60 seconds max (500ms * 120)
+
+      while (attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const pollResponse = await fetch(pollingUrl, {
+          headers: {
+            'accept': 'application/json',
+            'x-key': bflApiKey,
+          },
+        });
+
+        if (!pollResponse.ok) {
+          throw new Error(`Failed to poll result: ${pollResponse.statusText}`);
+        }
+
+        const pollData = await pollResponse.json();
+
+        if (pollData.status === 'Ready') {
+          return pollData.result.sample; // Return the signed URL
+        } else if (pollData.status === 'Error' || pollData.status === 'Failed') {
+          throw new Error(`Image generation failed: ${JSON.stringify(pollData)}`);
+        }
+
+        attempts++;
+      }
+
+      throw new Error('Image generation timed out after 60 seconds');
+    } catch (error) {
+      console.error('FLUX image generation error:', error);
+      throw error;
+    }
+  };
+
+  const handleGenerateImage = async () => {
+    if (!imagePrompt.trim()) {
+      alert('Please enter an image description');
+      return;
+    }
+
+    setIsGeneratingImage(true);
+    setShowImagePrompt(false);
+
+    const userMessage: Message = {
+      role: 'user',
+      content: `Generate image: "${imagePrompt.trim()}"`,
+      timestamp: Date.now(),
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    setImagePrompt('');
+
+    try {
+      const imageUrl = await generateFluxImage(imagePrompt.trim());
+
+      const imageMessage: Message = {
+        role: 'assistant',
+        content: `Generated image: "${imagePrompt.trim()}"`,
+        timestamp: Date.now(),
+        type: 'image',
+        imageUrl: imageUrl,
+        imagePrompt: imagePrompt.trim(),
+      };
+
+      setMessages((prev) => [...prev, imageMessage]);
+    } catch (error: any) {
+      const errorMsg: Message = {
+        role: 'assistant',
+        content: `Failed to generate image: ${error.message || 'Unknown error'}`,
+        timestamp: Date.now(),
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -2039,7 +2153,7 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
               <p className="text-vcb-white text-[8px] md:text-xs mt-0 md:mt-0.5 font-medium uppercase tracking-wide">
                 Powered by VCB-AI
               </p>
-              <p className="text-vcb-accent text-[6px] md:text-[10px] mt-0.5 font-medium uppercase tracking-wide">
+              <p className="text-vcb-accent text-[7px] md:text-xs mt-0.5 font-medium uppercase tracking-wide">
                 Cognitive Execution Pipeline Optimization
               </p>
             </div>
@@ -2535,6 +2649,47 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
               <span className="text-[10px] md:text-sm font-medium uppercase">Listening...</span>
             </div>
           )}
+          {showImagePrompt && (
+            <div className="mb-1 md:mb-3 bg-vcb-light-grey border border-vcb-mid-grey p-4 rounded">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm md:text-base font-medium text-vcb-black uppercase tracking-wide">Generate Image with FLUX1.1 [pro]</h3>
+                <button
+                  onClick={() => setShowImagePrompt(false)}
+                  className="text-vcb-mid-grey hover:text-vcb-black"
+                >
+                  <span className="material-icons">close</span>
+                </button>
+              </div>
+              <input
+                type="text"
+                value={imagePrompt}
+                onChange={(e) => setImagePrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleGenerateImage();
+                  }
+                }}
+                placeholder="Describe the image you want to generate..."
+                className="w-full bg-white text-vcb-black border border-vcb-mid-grey px-3 py-2 text-sm focus:outline-none focus:border-vcb-black mb-2"
+                disabled={isGeneratingImage}
+              />
+              <button
+                onClick={handleGenerateImage}
+                disabled={!imagePrompt.trim() || isGeneratingImage}
+                className="w-full bg-vcb-black hover:bg-vcb-dark-grey disabled:bg-vcb-light-grey disabled:cursor-not-allowed text-vcb-white px-4 py-2 text-sm font-medium uppercase tracking-wide transition-colors"
+              >
+                {isGeneratingImage ? (
+                  <span className="flex items-center justify-center space-x-2">
+                    <span className="material-icons animate-spin">autorenew</span>
+                    <span>Generating...</span>
+                  </span>
+                ) : (
+                  'Generate Image'
+                )}
+              </button>
+            </div>
+          )}
           {cepoProgress && (
             <div className="mb-1 md:mb-3 flex items-center justify-center space-x-2 text-vcb-accent">
               <span className="material-icons text-base md:text-xl animate-spin">
@@ -2591,6 +2746,15 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
                 title={useCePO ? 'CePO Mode ON (Advanced Reasoning)' : 'CePO Mode OFF (Click to enable)'}
               >
                 <span className="material-icons text-sm">auto_awesome</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowImagePrompt(!showImagePrompt)}
+                disabled={isLoading || isGeneratingImage}
+                className="w-9 h-10 transition-colors duration-200 border bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center flex-shrink-0"
+                title="Generate Image"
+              >
+                <span className="material-icons text-sm">image</span>
               </button>
               <button
                 type="button"
@@ -2659,6 +2823,15 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
                 title={useCePO ? 'CePO Mode ON (Advanced Reasoning)' : 'CePO Mode OFF (Click to enable)'}
               >
                 <span className="material-icons text-2xl">auto_awesome</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowImagePrompt(!showImagePrompt)}
+                disabled={isLoading || isGeneratingImage}
+                className="px-4 h-16 transition-colors duration-200 border bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                title="Generate Image with FLUX1.1 [pro]"
+              >
+                <span className="material-icons text-2xl">image</span>
               </button>
               <button
                 type="button"
