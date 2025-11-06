@@ -1535,7 +1535,7 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
   const runCePO = async (query: string, client: Cerebras, conversationHistory: Message[]): Promise<string> => {
     try {
       // Stage 1: Planning - Generate step-by-step plan
-      setCepoProgress('🧠 Planning: Creating strategy...');
+      setCepoProgress('Planning: Creating strategy...');
       const planPrompt = `You are an expert problem solver. Break down this problem into clear, actionable steps.
 
 Problem: ${query}
@@ -1559,7 +1559,7 @@ Create a detailed step-by-step plan to solve this problem. Be specific and thoro
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Stage 2: Execution - Generate solution (N=1 to avoid rate limits)
-      setCepoProgress('⚡ Executing: Generating solution...');
+      setCepoProgress('Executing: Generating solution...');
       
       const execPrompt = `Problem: ${query}
 
@@ -1586,7 +1586,7 @@ Follow the plan above to solve this problem. Show your work step by step.`;
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Stage 3: Analysis - Verify solution quality
-      setCepoProgress('🔍 Analyzing: Verifying solution...');
+      setCepoProgress('Analyzing: Verifying solution...');
       const analysisPrompt = `Review this solution and identify:
 1. Is the reasoning sound and logical?
 2. Are there any errors or gaps?
@@ -1614,7 +1614,7 @@ Provide a detailed analysis focusing on correctness and areas for improvement.`;
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Stage 4: Refinement with feedback
-      setCepoProgress('⭐ Refining: Improving solution...');
+      setCepoProgress('Refining: Improving solution...');
       const refinementPrompt = `Based on this analysis, provide the final refined solution:
 
 Original Solution:
@@ -2028,6 +2028,9 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
               </h1>
               <p className="text-vcb-white text-[8px] md:text-xs mt-0 md:mt-0.5 font-medium uppercase tracking-wide">
                 Powered by VCB-AI
+              </p>
+              <p className="text-vcb-accent text-[6px] md:text-[10px] mt-0.5 font-medium uppercase tracking-wide">
+                Cognitive Execution Pipeline Optimization
               </p>
             </div>
           </div>
@@ -2523,8 +2526,13 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
             </div>
           )}
           {cepoProgress && (
-            <div className="mb-1 md:mb-3 flex items-center justify-center space-x-2 text-blue-600">
-              <span className="material-icons text-base md:text-xl animate-spin">autorenew</span>
+            <div className="mb-1 md:mb-3 flex items-center justify-center space-x-2 text-vcb-accent">
+              <span className="material-icons text-base md:text-xl animate-spin">
+                {cepoProgress.includes('Planning') ? 'psychology' : 
+                 cepoProgress.includes('Executing') ? 'bolt' : 
+                 cepoProgress.includes('Analyzing') ? 'search' : 
+                 cepoProgress.includes('Refining') ? 'auto_awesome' : 'autorenew'}
+              </span>
               <span className="text-[10px] md:text-sm font-medium">{cepoProgress}</span>
             </div>
           )}
