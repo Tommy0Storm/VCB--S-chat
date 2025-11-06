@@ -833,6 +833,7 @@ const App: React.FC = () => {
       currentAudio.pause();
       currentAudio.currentTime = 0;
       if (speakingIndex === index) {
+        // User clicked the same message again - stop playback
         setSpeakingIndex(null);
         setCurrentAudio(null);
         isSpeakingRef.current = false;
@@ -847,6 +848,12 @@ const App: React.FC = () => {
         }
         return;
       }
+    }
+
+    // Prevent multiple simultaneous requests
+    if (isSpeakingRef.current) {
+      console.log('TTS already in progress, please wait...');
+      return;
     }
 
     const deepinfraApiKey = import.meta.env.VITE_DEEPINFRA_API_KEY;
@@ -878,7 +885,8 @@ const App: React.FC = () => {
         },
         body: JSON.stringify({
           text: text,
-          voice_id: selectedVoiceId || undefined, // Use selected voice or default
+          // Only include voice_id if one is selected, otherwise use default
+          ...(selectedVoiceId ? { voice_id: selectedVoiceId } : {}),
           exaggeration: 0.8, // Increased for more expressive and lively speech
           cfg: 0.9, // Increased for higher quality and stronger emotion
           temperature: 1.0, // Increased for maximum dynamic range and emotional variation
@@ -886,7 +894,9 @@ const App: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error(`TTS API failed: ${response.statusText}`);
+        const errorText = await response.text().catch(() => response.statusText);
+        console.error('TTS API error response:', errorText);
+        throw new Error(`TTS API failed: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
@@ -1877,25 +1887,41 @@ Provide the improved final answer addressing any issues identified.`;
       timestamp: Date.now(),
     };
     setMessages((prev) => [...prev, userMessage]);
+
+    // Add progress message
+    const progressMessage: Message = {
+      role: 'assistant',
+      content: `🎨 Generating image with FLUX-1.1-pro...\n\nPrompt: "${imagePrompt.trim()}"\n\nThis may take 10-30 seconds. Please wait...`,
+      timestamp: Date.now(),
+    };
+    setMessages((prev) => [...prev, progressMessage]);
+
+    const promptToGenerate = imagePrompt.trim();
     setImagePrompt('');
 
     try {
-      const imageUrl = await generateFluxImage(imagePrompt.trim());
+      const imageUrl = await generateFluxImage(promptToGenerate);
+
+      // Remove progress message
+      setMessages((prev) => prev.filter(msg => msg !== progressMessage));
 
       const imageMessage: Message = {
         role: 'assistant',
-        content: `Generated image: "${imagePrompt.trim()}"`,
+        content: `Generated image: "${promptToGenerate}"`,
         timestamp: Date.now(),
         type: 'image',
         imageUrl: imageUrl,
-        imagePrompt: imagePrompt.trim(),
+        imagePrompt: promptToGenerate,
       };
 
       setMessages((prev) => [...prev, imageMessage]);
     } catch (error: any) {
+      // Remove progress message
+      setMessages((prev) => prev.filter(msg => msg !== progressMessage));
+
       const errorMsg: Message = {
         role: 'assistant',
-        content: `Failed to generate image: ${error.message || 'Unknown error'}`,
+        content: `❌ Failed to generate image: ${error.message || 'Unknown error'}`,
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errorMsg]);
