@@ -2112,8 +2112,8 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
               <p className="text-vcb-white text-[8px] md:text-xs mt-0 md:mt-0.5 font-medium uppercase tracking-wide">
                 Powered by VCB-AI
               </p>
-              <p className="text-vcb-accent text-[7px] md:text-xs mt-0.5 font-medium uppercase tracking-wide">
-                Cognitive Execution Pipeline Optimization
+              <p className="text-vcb-white text-[7px] md:text-xs mt-0.5 font-medium uppercase tracking-wide">
+                Now with Cognitive Execution Pipeline Optimization
               </p>
             </div>
           </div>
@@ -2609,42 +2609,52 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
             </div>
           )}
           {showImagePrompt && (
-            <div className="mb-1 md:mb-3 bg-vcb-light-grey border border-vcb-mid-grey p-4 rounded">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm md:text-base font-medium text-vcb-black uppercase tracking-wide">Generate Image with FLUX-1.1-pro via DeepInfra</h3>
+            <div className="mb-2 md:mb-4 bg-gradient-to-r from-vcb-black to-vcb-dark-grey border-2 border-vcb-accent p-4 md:p-6 rounded-lg shadow-lg">
+              <div className="flex items-center justify-between mb-3 md:mb-4">
+                <div className="flex items-center space-x-2">
+                  <span className="material-icons text-vcb-accent text-xl md:text-2xl">image</span>
+                  <h3 className="text-sm md:text-lg font-bold text-vcb-white uppercase tracking-wider">AI Image Generator</h3>
+                </div>
                 <button
                   onClick={() => setShowImagePrompt(false)}
-                  className="text-vcb-mid-grey hover:text-vcb-black"
+                  className="text-vcb-white hover:text-vcb-accent transition-colors"
+                  title="Close"
                 >
-                  <span className="material-icons">close</span>
+                  <span className="material-icons text-xl">close</span>
                 </button>
               </div>
-              <input
-                type="text"
-                value={imagePrompt}
-                onChange={(e) => setImagePrompt(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleGenerateImage();
-                  }
-                }}
-                placeholder="Describe the image you want to generate..."
-                className="w-full bg-white text-vcb-black border border-vcb-mid-grey px-3 py-2 text-sm focus:outline-none focus:border-vcb-black mb-2"
-                disabled={isGeneratingImage}
-              />
+              <p className="text-vcb-mid-grey text-xs md:text-sm mb-3">Powered by FLUX-1.1-pro via DeepInfra</p>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={imagePrompt}
+                  onChange={(e) => setImagePrompt(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleGenerateImage();
+                    }
+                  }}
+                  placeholder="Describe your image... (e.g., 'A futuristic city at sunset with flying cars')"
+                  className="w-full bg-vcb-white text-vcb-black border-2 border-vcb-mid-grey focus:border-vcb-accent px-4 py-3 text-sm md:text-base rounded-lg focus:outline-none transition-colors placeholder:text-vcb-mid-grey mb-3"
+                  disabled={isGeneratingImage}
+                />
+              </div>
               <button
                 onClick={handleGenerateImage}
                 disabled={!imagePrompt.trim() || isGeneratingImage}
-                className="w-full bg-vcb-black hover:bg-vcb-dark-grey disabled:bg-vcb-light-grey disabled:cursor-not-allowed text-vcb-white px-4 py-2 text-sm font-medium uppercase tracking-wide transition-colors"
+                className="w-full bg-vcb-accent hover:bg-yellow-500 disabled:bg-vcb-mid-grey disabled:cursor-not-allowed text-vcb-black px-6 py-3 text-sm md:text-base font-bold uppercase tracking-wider transition-all duration-200 rounded-lg shadow-md hover:shadow-xl disabled:shadow-none flex items-center justify-center space-x-2"
               >
                 {isGeneratingImage ? (
-                  <span className="flex items-center justify-center space-x-2">
+                  <>
                     <span className="material-icons animate-spin">autorenew</span>
-                    <span>Generating...</span>
-                  </span>
+                    <span>Generating Your Image...</span>
+                  </>
                 ) : (
-                  'Generate Image'
+                  <>
+                    <span className="material-icons">auto_awesome</span>
+                    <span>Generate Image</span>
+                  </>
                 )}
               </button>
             </div>
