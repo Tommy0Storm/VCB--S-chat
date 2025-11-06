@@ -876,43 +876,107 @@ const App: React.FC = () => {
         }
       }
 
-      // Call DeepInfra Chatterbox TTS API
-      const response = await fetch('https://api.deepinfra.com/v1/inference/ResembleAI/chatterbox', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${deepinfraApiKey}`,
-        },
-        body: JSON.stringify({
-          text: text,
-          // Only include voice_id if one is selected, otherwise use default
-          ...(selectedVoiceId ? { voice_id: selectedVoiceId } : {}),
-          exaggeration: 0.8, // Increased for more expressive and lively speech
-          cfg: 0.9, // Increased for higher quality and stronger emotion
-          temperature: 1.0, // Increased for maximum dynamic range and emotional variation
-        }),
-      });
+      // Call DeepInfra TTS API - try multiple endpoints
+      let response;
+      let usedEndpoint = '';
+      
+      // Try Chatterbox first (more natural voice)
+      try {
+        usedEndpoint = 'ResembleAI/chatterbox';
+        response = await fetch(`https://api.deepinfra.com/v1/inference/${usedEndpoint}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${deepinfraApiKey}`,
+          },
+          body: JSON.stringify({
+            text: text,
+            // Don't include voice_id for now as it may cause issues
+            exaggeration: 0.5,
+            cfg: 0.7,
+            temperature: 0.8,
+          }),
+        });
+      } catch (err) {
+        console.error('Chatterbox TTS failed, trying alternative...', err);
+      }
+
+      if (!response || !response.ok) {
+        // Fallback to a simpler TTS model if Chatterbox fails
+        console.log('Trying alternative TTS endpoint...');
+        usedEndpoint = 'microsoft/speecht5_tts';
+        try {
+          response = await fetch(`https://api.deepinfra.com/v1/inference/${usedEndpoint}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${deepinfraApiKey}`,
+            },
+            body: JSON.stringify({
+              text: text,
+            }),
+          });
+        } catch (err) {
+          console.error('Alternative TTS also failed:', err);
+          throw new Error('All TTS endpoints failed');
+        }
+      }
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => response.statusText);
-        console.error('TTS API error response:', errorText);
+        console.error(`TTS API error (${usedEndpoint}):`, errorText);
         throw new Error(`TTS API failed: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
-      console.log('TTS API response:', { hasAudio: !!data.audio, status: data.inference_status });
+      console.log(`TTS API response from ${usedEndpoint}:`, {
+        hasAudio: !!data.audio,
+        audioType: typeof data.audio,
+        status: data.inference_status
+      });
       
-      if (data.audio) {
-        // The audio field contains base64-encoded binary audio data
-        // Convert base64 to blob
-        const binaryString = atob(data.audio);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
+      // Check if inference succeeded
+      if (data.inference_status?.status === 'failed') {
+        throw new Error(`TTS inference failed: ${JSON.stringify(data.inference_status)}`);
+      }
+      
+      if (!data.audio || data.audio === null) {
+        console.error('No audio data returned. Full response:', data);
+        throw new Error('TTS API returned no audio data. Service may be temporarily unavailable.');
+      }
+      
+      if (typeof data.audio !== 'string') {
+        console.error('Audio is not a string:', typeof data.audio);
+        throw new Error('Invalid audio data format received from TTS API');
+      }
+
+      let audioBlob: Blob;
+      
+      // Check if audio is a URL or base64 data
+      if (data.audio.startsWith('http://') || data.audio.startsWith('https://')) {
+        // Audio is a URL - fetch it
+        console.log('Audio is URL, fetching...');
+        const audioResponse = await fetch(data.audio);
+        audioBlob = await audioResponse.blob();
+      } else {
+        // Audio is base64-encoded data
+        try {
+          console.log('Decoding base64 audio, length:', data.audio.length);
+          const binaryString = atob(data.audio);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          audioBlob = new Blob([bytes], { type: 'audio/wav' });
+          console.log('Audio blob created, size:', audioBlob.size);
+        } catch (decodeError) {
+          console.error('Base64 decode error:', decodeError);
+          throw new Error(`Failed to decode audio data: ${decodeError instanceof Error ? decodeError.message : 'Unknown error'}`);
         }
-        const audioBlob = new Blob([bytes], { type: 'audio/wav' });
-        const audioUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio(audioUrl);
+      }
+      
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
         
         setCurrentAudio(audio);
 
@@ -962,10 +1026,6 @@ const App: React.FC = () => {
           setCurrentAudio(null);
           URL.revokeObjectURL(audioUrl);
         });
-      } else {
-        console.error('No audio data in response:', data);
-        throw new Error('No audio data returned from TTS API');
-      }
     } catch (error) {
       console.error('DeepInfra TTS error:', error);
       setSpeakingIndex(null);
@@ -2321,86 +2381,68 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
               </p>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
-            {/* Chat History Button */}
-            <button
-              type="button"
-              onClick={() => setShowChatHistory(!showChatHistory)}
-              className="flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white hover:border-vcb-white transition-colors"
-              title="Chat History"
-            >
-              <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/>
-              </svg>
-              <span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">History</span>
-            </button>
+          <div className="flex flex-col space-y-2">
+            {/* Row 1: History and Timer */}
+            <div className="flex items-center space-x-2">
+              {/* Chat History Button */}
+              <button
+                type="button"
+                onClick={() => setShowChatHistory(!showChatHistory)}
+                className="flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white hover:border-vcb-white transition-colors"
+                title="Chat History"
+              >
+                <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/>
+                </svg>
+                <span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">History</span>
+              </button>
 
-            {/* Session Timer */}
-            <div className="flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white">
-              <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61l1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42C16.07 4.74 14.12 4 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
-              </svg>
-              <span className="text-[10px] md:text-xs font-mono font-medium tracking-wide">
-                {formatSessionTime(sessionTime)}
-              </span>
+              {/* Session Timer */}
+              <div className="flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white">
+                <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61l1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42C16.07 4.74 14.12 4 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+                </svg>
+                <span className="text-[10px] md:text-xs font-mono font-medium tracking-wide">
+                  {formatSessionTime(sessionTime)}
+                </span>
+              </div>
             </div>
 
-            {/* Usage Stats Button */}
-            <button
-              type="button"
-              onClick={() => setShowUsage(!showUsage)}
-              className="flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white hover:border-vcb-white transition-colors"
-              title="View Usage & Pricing"
-            >
-              <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/>
-              </svg>
-              <span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">Usage</span>
-            </button>
+            {/* Row 2: Usage and Voice Gender */}
+            <div className="flex items-center space-x-2">
+              {/* Usage Stats Button */}
+              <button
+                type="button"
+                onClick={() => setShowUsage(!showUsage)}
+                className="flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white hover:border-vcb-white transition-colors"
+                title="View Usage & Pricing"
+              >
+                <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/>
+                </svg>
+                <span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">Usage</span>
+              </button>
 
-            {/* Voice Gender Toggle Button */}
-            <button
-              type="button"
-              onClick={toggleVoiceGender}
-              className="flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-accent bg-vcb-black text-vcb-accent hover:bg-vcb-accent hover:text-vcb-black transition-colors"
-              title={`Switch to ${voiceGender === 'female' ? 'Male' : 'Female'} Voice`}
-            >
-              <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
-                {voiceGender === 'female' ? (
-                  // Female icon
-                  <path d="M17.5 9.5C17.5 6.46 15.04 4 12 4S6.5 6.46 6.5 9.5c0 2.7 1.94 4.93 4.5 5.4V17H9v2h2v2h2v-2h2v-2h-2v-2.1c2.56-.47 4.5-2.7 4.5-5.4zm-9 0C8.5 7.57 10.07 6 12 6s3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5z"/>
-                ) : (
-                  // Male icon
-                  <path d="M9 9c0-1.65 1.35-3 3-3s3 1.35 3 3c0 1.66-1.35 3-3 3s-3-1.34-3-3m3 8c-4.34 0-6.29 2.28-6.29 2.28L7.5 21s1.93-2.3 4.5-2.3 4.5 2.3 4.5 2.3l1.79-1.72S16.34 17 12 17zm7-11.2V2h-2v3.8h-3.8v2H17v3.8h2V7.8h3.8v-2H19z"/>
-                )}
-              </svg>
-              <span className="hidden md:inline text-white text-[10px] font-medium uppercase tracking-wide">
-                {voiceGender === 'female' ? '♀ Female' : '♂ Male'}
-              </span>
-            </button>
-
-            {/* Chat to GOGGA Button */}
-            <button
-              type="button"
-              onClick={toggleVoiceMode}
-              disabled={isLoading}
-              className={`flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border transition-colors ${
-                voiceModeEnabled
-                  ? 'bg-vcb-accent text-vcb-black border-vcb-accent'
-                  : 'bg-vcb-black text-white border-vcb-mid-grey hover:border-vcb-white'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-              title={voiceModeEnabled ? 'Stop Voice Mode' : 'Start Voice Chat with GOGGA'}
-            >
-              <span className="material-icons text-sm md:text-base">
-                {voiceModeEnabled && isListening ? 'mic' : voiceModeEnabled ? 'mic_off' : 'chat'}
-              </span>
-              <span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">
-                {voiceModeEnabled && isListening ? 'Listening' : voiceModeEnabled ? 'Voice On' : 'Chat to GOGGA'}
-              </span>
-            </button>
-
-            {/* Voice Mode Toggle Button - HIDDEN */}
-            <div className="hidden">
+              {/* Voice Gender Toggle Button */}
+              <button
+                type="button"
+                onClick={toggleVoiceGender}
+                className="flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-accent bg-vcb-black text-vcb-accent hover:bg-vcb-accent hover:text-vcb-black transition-colors"
+                title={`Switch to ${voiceGender === 'female' ? 'Male' : 'Female'} Voice`}
+              >
+                <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
+                  {voiceGender === 'female' ? (
+                    // Female icon
+                    <path d="M17.5 9.5C17.5 6.46 15.04 4 12 4S6.5 6.46 6.5 9.5c0 2.7 1.94 4.93 4.5 5.4V17H9v2h2v2h2v-2h2v-2h-2v-2.1c2.56-.47 4.5-2.7 4.5-5.4zm-9 0C8.5 7.57 10.07 6 12 6s3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5z"/>
+                  ) : (
+                    // Male icon
+                    <path d="M9 9c0-1.65 1.35-3 3-3s3 1.35 3 3c0 1.66-1.35 3-3 3s-3-1.34-3-3m3 8c-4.34 0-6.29 2.28-6.29 2.28L7.5 21s1.93-2.3 4.5-2.3 4.5 2.3 4.5 2.3l1.79-1.72S16.34 17 12 17zm7-11.2V2h-2v3.8h-3.8v2H17v3.8h2V7.8h3.8v-2H19z"/>
+                  )}
+                </svg>
+                <span className="hidden md:inline text-white text-[10px] font-medium uppercase tracking-wide">
+                  {voiceGender === 'female' ? '♀ Female' : '♂ Male'}
+                </span>
+              </button>
             </div>
           </div>
         </div>
@@ -2943,7 +2985,11 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
                 type="button"
                 onClick={() => setShowImagePrompt(!showImagePrompt)}
                 disabled={isLoading || isGeneratingImage}
-                className="w-9 h-10 transition-colors duration-200 border bg-[#28a745] text-white border-[#28a745] hover:bg-[#218838] hover:border-[#218838] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center flex-shrink-0"
+                className={`w-9 h-10 transition-colors duration-200 border flex items-center justify-center flex-shrink-0 ${
+                  showImagePrompt
+                    ? 'bg-[#28a745] text-white border-[#28a745]'
+                    : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
                 title="Generate Image with FLUX"
               >
                 <span className="material-icons text-sm">image</span>
@@ -3020,7 +3066,11 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
                 type="button"
                 onClick={() => setShowImagePrompt(!showImagePrompt)}
                 disabled={isLoading || isGeneratingImage}
-                className="px-4 h-16 transition-colors duration-200 border bg-[#28a745] text-white border-[#28a745] hover:bg-[#218838] hover:border-[#218838] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                className={`px-4 h-16 transition-colors duration-200 border flex items-center justify-center ${
+                  showImagePrompt
+                    ? 'bg-[#28a745] text-white border-[#28a745]'
+                    : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
                 title="Generate Image with FLUX"
               >
                 <span className="material-icons text-2xl">image</span>
