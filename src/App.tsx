@@ -552,6 +552,7 @@ const App: React.FC = () => {
   const voiceModeEnabledRef = useRef<boolean>(false); // Track voice mode state for callbacks
   const isSpeakingRef = useRef<boolean>(false); // Track if bot is currently speaking
   const isProcessingMessageRef = useRef<boolean>(false); // Track if we're processing a message
+  const hasVoiceTranscriptionRef = useRef<boolean>(false); // Track if current input is from voice
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessagesLengthRef = useRef(0);
   const usageTrackerRef = useRef<UsageTracker>(new UsageTracker());
@@ -991,6 +992,7 @@ const App: React.FC = () => {
       // Update the input field with the transcript
       if (fullTranscript) {
         setInput(fullTranscript);
+        hasVoiceTranscriptionRef.current = true; // Mark that we have voice transcription
       }
 
       // Reset silence timer on speech
@@ -1109,6 +1111,7 @@ const App: React.FC = () => {
       voiceModeEnabledRef.current = false; // Update ref for callbacks
       isSpeakingRef.current = false; // Reset speaking state
       isProcessingMessageRef.current = false; // Reset processing state
+      hasVoiceTranscriptionRef.current = false; // Reset voice transcription flag
       // Stop listening
       setIsListening(false);
       if (recognitionRef.current) {
@@ -1673,12 +1676,13 @@ Provide the improved final answer addressing any issues identified.`;
       role: 'user',
       content: input.trim(),
       timestamp: Date.now(),
-      isVoiceTranscription: voiceModeEnabled && isListening, // Mark if sent via voice transcription
+      isVoiceTranscription: hasVoiceTranscriptionRef.current, // Mark if sent via voice transcription
     };
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
     isProcessingMessageRef.current = true; // Mark that we're processing a message
+    hasVoiceTranscriptionRef.current = false; // Reset voice transcription flag
 
     // Check if this is an image generation request
     if (isImageGenerationRequest(userMessage.content)) {
