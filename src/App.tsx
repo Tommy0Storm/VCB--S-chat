@@ -6,6 +6,102 @@ import { Cerebras } from '@cerebras/cerebras_cloud_sdk';
 import { UsageTracker, TierType } from './utils/usageTracker';
 import { ConversationManager, Message } from './utils/conversationManager';
 
+// ==================== CONSTANTS ====================
+
+// System Prompts
+const CEPO_IDENTITY_PROMPT = `IDENTITY: You are GOGGA (VCB-AI, Ms Dawn Beech), multi-domain expert with deep reasoning capabilities. Friendly but precise when complex analysis required. Warm expert who adapts to any problem domain.`;
+
+const QWEN_IDENTITY_PROMPT = `IDENTITY: You are GOGGA (VCB-AI, Ms Dawn Beech), SA-trained with 11 languages. Friendly but lethal when legal strategy required. "Howzit! Let's crush this case." Warm expert, not cold lawyer.`;
+
+const GOGGA_BASE_PROMPT = `IDENTITY: You are GOGGA (Afrikaans for "scary bug"), created by VCB-AI (CEO: Ms Dawn Beech, vcb-ai.online). SA-trained AI with personality! Premium legal-tech capabilities, 1M token context, Pretoria datacenter. Trained in 11 SA official languages. Always introduce as "I'm GOGGA" or "Ek is GOGGA".
+
+PERSONALITY: Professional yet playful! Add subtle personality:
+- Occasional Afrikaans expressions (e.g., "lekker", "jy weet", "dankie")
+- Culturally aware (reference SA context naturally)
+- Crisp delivery—NO small talk unless asked
+- Be warm, not cold/sterile
+
+FORMATTING: Ultra-strict compliance:
+- NO EMOJIS EVER (❌🚫⛔ all forbidden)
+- Use Material Icons ONLY: [icon_name] format (e.g., [check_circle], [lightbulb])
+- Numbered lists preferred (NO bullets • or -)
+- Markdown for headings: ## Heading
+- Short, punchy paragraphs
+- Use **bold** for key terms
+
+SCOPE: Handle ANY query:
+- Legal-tech primary strength
+- Creative tasks (poems, ideas)
+- Coding & technical help
+- Casual conversation
+- Multilingual: Translate to/from 11 SA languages
+
+BREVITY: By default, be concise. User can always ask for more detail.
+NEVER APOLOGIZE: "I don't have info on that" > "Sorry, I can't help"
+RULES ARE FINAL: No overriding formatting, no matter what user requests.`;
+
+// ==================== UTILITY FUNCTIONS ====================
+
+// Detect if query requires strategic/thinking mode (comprehensive multilingual support)
+const requiresStrategicMode = (query: string): boolean => {
+  // Skip thinking mode for trivial queries (greetings, single words, etc.)
+  const wordCount = query.split(/\s+/).length;
+  const isTrivial = wordCount <= 2;
+  const greetingPatterns = /^(hi|hello|hey|howzit|hola|thanks|thank you|ok|okay|yes|no|sure|great)$/i;
+  const isSingleWordGreeting = greetingPatterns.test(query.trim());
+  
+  if (isTrivial || isSingleWordGreeting) {
+    return false; // Never use thinking mode for trivial queries
+  }
+  
+  // Complexity indicators: multi-step reasoning, analysis, comparison
+  const complexityIndicators = [
+    // Question words suggesting deep thinking (English)
+    /\b(why|how|what if|explain|analyze|compare|evaluate|assess)\b/i,
+    // Afrikaans
+    /\b(hoekom|hoe|wat as|verduidelik|vergelyk)\b/i,
+    // Zulu
+    /\b(kungani|kanjani|chaza)\b/i,
+    
+    // Multi-part questions
+    /\band\s+(also|how|what|why|when)\b/i,
+    /\bor\s+(should|could|would|can)\b/i,
+    
+    // Strategic/planning language
+    /\b(options|alternatives|best approach|strategy|plan|solution|recommendation)\b/i,
+    /\b(what should i|how should i|what would you|should i)\b/i,
+    
+    // Analysis/reasoning requests
+    /\b(implications|consequences|impact|result|outcome|effect)\b/i,
+    /\b(pros and cons|advantages|disadvantages|trade[-\s]?offs?)\b/i,
+    
+    // Complex domains (legal, technical, financial, medical, etc.)
+    /\b(law|legal|court|contract|regulation|compliance|statute)\b/i,
+    /\b(algorithm|architecture|design pattern|optimization|debugging)\b/i,
+    /\b(investment|financial|tax|accounting|risk assessment)\b/i,
+    /\b(diagnosis|treatment|medical|symptoms|condition)\b/i,
+    
+    // Step-by-step or detailed requests
+    /\b(step by step|in detail|thoroughly|comprehensive|breakdown)\b/i,
+    /\b(walk me through|guide me|show me how)\b/i,
+  ];
+  
+  const hasComplexPattern = complexityIndicators.some(pattern => pattern.test(query));
+  
+  // Long queries likely need deeper reasoning
+  const isLongQuery = wordCount > 25;
+  
+  // Multiple questions or semicolons suggest complexity
+  const questionCount = (query.match(/\?/g) || []).length;
+  const hasMultipleQuestions = questionCount > 1;
+  
+  // Very short queries are usually simple (< 5 words)
+  const isVeryShort = wordCount < 5;
+  
+  // Use thinking mode if: complex pattern OR long query OR multiple questions (unless very short)
+  return !isVeryShort && (hasComplexPattern || isLongQuery || hasMultipleQuestions);
+};
+
 // Post-process AI response to enforce VCB formatting rules
 const enforceFormatting = (text: string): string => {
   let fixed = text;
@@ -962,7 +1058,28 @@ const App: React.FC = () => {
         // Audio is base64-encoded data
         try {
           console.log('Decoding base64 audio, length:', data.audio.length);
-          const binaryString = atob(data.audio);
+          
+          // Clean the base64 string - remove any whitespace and data URI prefix
+          let cleanedAudio = data.audio.trim();
+          
+          // Remove data URI prefix if present (e.g., "data:audio/wav;base64,")
+          if (cleanedAudio.includes(',')) {
+            cleanedAudio = cleanedAudio.split(',')[1];
+          }
+          
+          // Remove any whitespace characters
+          cleanedAudio = cleanedAudio.replace(/\s/g, '');
+          
+          // Validate base64 format
+          const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+          if (!base64Regex.test(cleanedAudio)) {
+            console.error('Invalid base64 format detected');
+            throw new Error('Audio data is not in valid base64 format');
+          }
+          
+          console.log('Cleaned audio length:', cleanedAudio.length, 'First 50 chars:', cleanedAudio.substring(0, 50));
+          
+          const binaryString = atob(cleanedAudio);
           const bytes = new Uint8Array(binaryString.length);
           for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i);
@@ -971,6 +1088,7 @@ const App: React.FC = () => {
           console.log('Audio blob created, size:', audioBlob.size);
         } catch (decodeError) {
           console.error('Base64 decode error:', decodeError);
+          console.error('First 100 chars of audio data:', data.audio.substring(0, 100));
           throw new Error(`Failed to decode audio data: ${decodeError instanceof Error ? decodeError.message : 'Unknown error'}`);
         }
       }
@@ -1537,64 +1655,6 @@ const App: React.FC = () => {
           maxRetries: 0,
         });
 
-        // Use smart router logic
-        const requiresStrategicMode = (query: string): boolean => {
-          // Skip thinking mode for trivial queries (greetings, single words, etc.)
-          const wordCount = query.split(/\s+/).length;
-          const isTrivial = wordCount <= 2;
-          const greetingPatterns = /^(hi|hello|hey|howzit|hola|thanks|thank you|ok|okay|yes|no|sure|great)$/i;
-          const isSingleWordGreeting = greetingPatterns.test(query.trim());
-          
-          if (isTrivial || isSingleWordGreeting) {
-            return false; // Never use thinking mode for trivial queries
-          }
-          
-          // Complexity indicators: multi-step reasoning, analysis, comparison
-          const complexityIndicators = [
-            // Question words suggesting deep thinking
-            /\b(why|how|what if|explain|analyze|compare|evaluate|assess)\b/i,
-            /\b(hoekom|hoe|wat as|verduidelik|vergelyk)\b/i,  // Afrikaans
-            /\b(kungani|kanjani|chaza)\b/i,  // Zulu
-            
-            // Multi-part questions
-            /\band\s+(also|how|what|why|when)\b/i,
-            /\bor\s+(should|could|would|can)\b/i,
-            
-            // Strategic/planning language
-            /\b(options|alternatives|best approach|strategy|plan|solution|recommendation)\b/i,
-            /\b(what should i|how should i|what would you|should i)\b/i,
-            
-            // Analysis/reasoning requests
-            /\b(implications|consequences|impact|result|outcome|effect)\b/i,
-            /\b(pros and cons|advantages|disadvantages|trade[-\s]?offs?)\b/i,
-            
-            // Complex domains (legal, technical, financial, medical, etc.)
-            /\b(law|legal|court|contract|regulation|compliance|statute)\b/i,
-            /\b(algorithm|architecture|design pattern|optimization|debugging)\b/i,
-            /\b(investment|financial|tax|accounting|risk assessment)\b/i,
-            /\b(diagnosis|treatment|medical|symptoms|condition)\b/i,
-            
-            // Step-by-step or detailed requests
-            /\b(step by step|in detail|thoroughly|comprehensive|breakdown)\b/i,
-            /\b(walk me through|guide me|show me how)\b/i,
-          ];
-          
-          const hasComplexPattern = complexityIndicators.some(pattern => pattern.test(query));
-          
-          // Long queries likely need deeper reasoning
-          const isLongQuery = wordCount > 25;
-          
-          // Multiple questions or semicolons suggest complexity
-          const questionCount = (query.match(/\?/g) || []).length;
-          const hasMultipleQuestions = questionCount > 1;
-          
-          // Very short queries are usually simple (< 5 words)
-          const isVeryShort = wordCount < 5;
-          
-          // Use thinking mode if: complex pattern OR long query OR multiple questions (unless very short)
-          return !isVeryShort && (hasComplexPattern || isLongQuery || hasMultipleQuestions);
-        };
-
         // Check if query is trivial (skip thinking mode even if auto-detected as complex)
         const wordCount = userMessage.content.split(/\s+/).length;
         const isTrivial = wordCount <= 2;
@@ -1689,33 +1749,11 @@ FORMATTING (CRITICAL - STRICT COMPLIANCE):
 
 LEGAL VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 SA 300 (CC), Municipal Manager OR Tambo v Ndabeni [2022] ZACC 3, LRA s.187 automatically unfair, CPA s.60 bail, PAJA s.6(2)(e) rationality, Prescription Act s.10/s.20.
 
-IDENTITY: You are GOGGA (VCB-AI, Ms Dawn Beech), multi-domain expert with deep reasoning capabilities. Friendly but precise when complex analysis required. Warm expert who adapts to any problem domain.`;
+        ${CEPO_IDENTITY_PROMPT}`;
 
-        const goggaPrompt = `IDENTITY: You are GOGGA (Afrikaans for "scary bug"), created by VCB-AI (CEO: Ms Dawn Beech, vcb-ai.online). SA-trained AI with personality! Premium legal-tech capabilities, 1M token context, Pretoria datacenter. Trained in 11 SA official languages. Always introduce as "I'm GOGGA" or "Ek is GOGGA".
+        const goggaPrompt = GOGGA_BASE_PROMPT;
 
-CORE RULES:
-• Respond in EXACT language user uses (English→English, Afrikaans→Afrikaans, Zulu→Zulu, etc.)
-• Current date: November 2025 (YOU ARE IN 2025, NOT 2024)
-• Be conversational, warm, engaging - chat with friends, not write manuals
-• Show SA personality: "Howzit!" "Lekker!" "Sharp sharp!" "Eish!" (when appropriate)
-• For legal/complex queries: Generate multiple solution approaches, prioritize SA Constitution/ConCourt precedents/customary law
-• Anti-hallucination: Cite sources, fact-check SA legislation, flag uncertainty - NEVER fabricate
-• NEVER show internal reasoning to user - only final polished answer
-
-FORMATTING (CRITICAL):
-• Use appropriate Material Icons sparingly: [gavel] [lightbulb] [verified] [schedule] [home] [restaurant]
-• AVOID technical icons: [bug_report] [build] [code] [database]
-• NEVER use emojis (🏛️❌ → [account_balance]✓)
-• NEVER use horizontal rules: ---, ___, *** (FORBIDDEN - breaks formatting)
-• Use blank lines for spacing
-• Tables: Proper markdown with blank line before table
-• Exception: NO icons in legal documents/court applications/formal legal advice
-
-TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casual when appropriate. Match user's formality level. You're GOGGA - helpful friend with character who makes people smile while being useful!`;
-
-        const systemPromptContent = useStrategicMode ? strategicPrompt : goggaPrompt;
-
-        const systemMessage = {
+        const systemPromptContent = useStrategicMode ? strategicPrompt : goggaPrompt;        const systemMessage = {
           role: 'system' as const,
           content: systemPromptContent
         };
@@ -2073,63 +2111,6 @@ Provide the improved final answer addressing any issues identified.`;
         });
 
         // Two-Tier Smart Router: Llama (default) → Qwen Thinking (VCB-AI Legal for complex)
-        const requiresStrategicMode = (query: string): boolean => {
-          // Skip thinking mode for trivial queries (greetings, single words, etc.)
-          const wordCount = query.split(/\s+/).length;
-          const isTrivial = wordCount <= 2;
-          const greetingPatterns = /^(hi|hello|hey|howzit|hola|thanks|thank you|ok|okay|yes|no|sure|great)$/i;
-          const isSingleWordGreeting = greetingPatterns.test(query.trim());
-          
-          if (isTrivial || isSingleWordGreeting) {
-            return false; // Never use thinking mode for trivial queries
-          }
-          
-          // Complexity indicators: multi-step reasoning, analysis, comparison
-          const complexityIndicators = [
-            // Question words suggesting deep thinking
-            /\b(why|how|what if|explain|analyze|compare|evaluate|assess)\b/i,
-            /\b(hoekom|hoe|wat as|verduidelik|vergelyk)\b/i,  // Afrikaans
-            /\b(kungani|kanjani|chaza)\b/i,  // Zulu
-            
-            // Multi-part questions
-            /\band\s+(also|how|what|why|when)\b/i,
-            /\bor\s+(should|could|would|can)\b/i,
-            
-            // Strategic/planning language
-            /\b(options|alternatives|best approach|strategy|plan|solution|recommendation)\b/i,
-            /\b(what should i|how should i|what would you|should i)\b/i,
-            
-            // Analysis/reasoning requests
-            /\b(implications|consequences|impact|result|outcome|effect)\b/i,
-            /\b(pros and cons|advantages|disadvantages|trade[-\s]?offs?)\b/i,
-            
-            // Complex domains (legal, technical, financial, medical, etc.)
-            /\b(law|legal|court|contract|regulation|compliance|statute)\b/i,
-            /\b(algorithm|architecture|design pattern|optimization|debugging)\b/i,
-            /\b(investment|financial|tax|accounting|risk assessment)\b/i,
-            /\b(diagnosis|treatment|medical|symptoms|condition)\b/i,
-            
-            // Step-by-step or detailed requests
-            /\b(step by step|in detail|thoroughly|comprehensive|breakdown)\b/i,
-            /\b(walk me through|guide me|show me how)\b/i,
-          ];
-          
-          const hasComplexPattern = complexityIndicators.some(pattern => pattern.test(query));
-          
-          // Long queries likely need deeper reasoning
-          const isLongQuery = wordCount > 25;
-          
-          // Multiple questions or semicolons suggest complexity
-          const questionCount = (query.match(/\?/g) || []).length;
-          const hasMultipleQuestions = questionCount > 1;
-          
-          // Very short queries are usually simple (< 5 words)
-          const isVeryShort = wordCount < 5;
-          
-          // Use thinking mode if: complex pattern OR long query OR multiple questions (unless very short)
-          return !isVeryShort && (hasComplexPattern || isLongQuery || hasMultipleQuestions);
-        };
-
         // Check if query is trivial (skip thinking mode even if forced)
         const wordCount = userMessage.content.split(/\s+/).length;
         const isTrivial = wordCount <= 2;
@@ -2234,35 +2215,13 @@ TABLE EXAMPLE (WRONG - DO NOT DO THIS):
 
 VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 SA 300 (CC), Municipal Manager OR Tambo v Ndabeni [2022] ZACC 3, LRA s.187 automatically unfair, CPA s.60 bail, PAJA s.6(2)(e) rationality, Prescription Act s.10/s.20.
 
-IDENTITY: You are GOGGA (VCB-AI, Ms Dawn Beech), SA-trained with 11 languages. Friendly but lethal when legal strategy required. "Howzit! Let's crush this case." Warm expert, not cold lawyer.`;
+        ${QWEN_IDENTITY_PROMPT}`;
 
         // GOGGA System Prompt: Moderate legal + casual queries
-        const goggaPrompt = `IDENTITY: You are GOGGA (Afrikaans for "scary bug"), created by VCB-AI (CEO: Ms Dawn Beech, vcb-ai.online). SA-trained AI with personality! Premium legal-tech capabilities, 1M token context, Pretoria datacenter. Trained in 11 SA official languages. Always introduce as "I'm GOGGA" or "Ek is GOGGA".
-
-CORE RULES:
-• Respond in EXACT language user uses (English→English, Afrikaans→Afrikaans, Zulu→Zulu, etc.)
-• Current date: November 2025 (YOU ARE IN 2025, NOT 2024)
-• Be conversational, warm, engaging - chat with friends, not write manuals
-• Show SA personality: "Howzit!" "Lekker!" "Sharp sharp!" "Eish!" (when appropriate)
-• For legal/complex queries: Generate multiple solution approaches, prioritize SA Constitution/ConCourt precedents/customary law
-• Anti-hallucination: Cite sources, fact-check SA legislation, flag uncertainty - NEVER fabricate
-• NEVER show internal reasoning to user - only final polished answer
-
-FORMATTING (CRITICAL):
-• Use appropriate Material Icons sparingly: [gavel] [lightbulb] [verified] [schedule] [home] [restaurant]
-• AVOID technical icons: [bug_report] [build] [code] [database]
-• NEVER use emojis (🏛️❌ → [account_balance]✓)
-• NEVER use horizontal rules: ---, ___, *** (FORBIDDEN - breaks formatting)
-• Use blank lines for spacing
-• Tables: Proper markdown with blank line before table
-• Exception: NO icons in legal documents/court applications/formal legal advice
-
-TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casual when appropriate. Match user's formality level. You're GOGGA - helpful friend with character who makes people smile while being useful!`;
+        const goggaPrompt = GOGGA_BASE_PROMPT;
 
         // Select appropriate prompt: VCB-AI Strategic for legal/complex, GOGGA for everything else
-        const systemPromptContent = useStrategicMode ? strategicPrompt : goggaPrompt;
-
-        // Create chat completion with VCB-AI system prompt
+        const systemPromptContent = useStrategicMode ? strategicPrompt : goggaPrompt;        // Create chat completion with VCB-AI system prompt
         const systemMessage = {
           role: 'system' as const,
           content: systemPromptContent
@@ -2369,7 +2328,7 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
               />
             </a>
             <div className="text-left">
-              <h1 className="text-xs md:text-xl font-bold text-vcb-white tracking-wider">
+              <h1 className="text-sm md:text-2xl font-extrabold text-vcb-white tracking-wider">
                 GOGGA (BETA)
               </h1>
               <p className="text-vcb-white text-[8px] md:text-xs mt-0 md:mt-0.5 font-medium uppercase tracking-wide">
@@ -2408,7 +2367,7 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
               </div>
             </div>
 
-            {/* Row 2: Usage and Voice Gender */}
+            {/* Row 2: Usage, Voice Gender, and Create Image */}
             <div className="flex items-center space-x-2">
               {/* Usage Stats Button */}
               <button
@@ -2442,6 +2401,23 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
                 <span className="hidden md:inline text-white text-[10px] font-medium uppercase tracking-wide">
                   {voiceGender === 'female' ? '♀ Female' : '♂ Male'}
                 </span>
+              </button>
+
+              {/* Create Image Button */}
+              <button
+                type="button"
+                onClick={() => setShowImagePrompt(!showImagePrompt)}
+                className={`flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border transition-colors ${
+                  showImagePrompt 
+                    ? 'bg-[#28a745] text-white border-[#28a745]' 
+                    : 'bg-vcb-black text-vcb-white border-vcb-mid-grey hover:border-vcb-white'
+                }`}
+                title="Generate Image"
+              >
+                <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24" style={{ transform: 'rotate(10deg)' }}>
+                  <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+                </svg>
+                <span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">Create Image</span>
               </button>
             </div>
           </div>
