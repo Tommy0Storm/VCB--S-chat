@@ -946,9 +946,10 @@ const App: React.FC = () => {
       }
     }
 
-    // Prevent multiple simultaneous requests
-    if (isSpeakingRef.current) {
-      console.log('TTS already in progress, please wait...');
+    // Prevent multiple simultaneous requests - AGGRESSIVE BLOCKING
+    if (isSpeakingRef.current || speakingIndex !== null) {
+      console.log('TTS already in progress, blocking request. Current speaking index:', speakingIndex);
+      // Don't stop current audio - just reject the new request completely
       return;
     }
 
@@ -956,6 +957,12 @@ const App: React.FC = () => {
     if (!deepinfraApiKey) {
       console.error('DeepInfra API key not configured');
       return;
+    }
+
+    // Truncate text for faster processing - LIMIT TO 300 CHARS
+    const truncatedText = text.substring(0, 300);
+    if (text.length > 300) {
+      console.log(`Text truncated from ${text.length} to 300 chars for faster TTS`);
     }
 
     try {
@@ -972,13 +979,20 @@ const App: React.FC = () => {
         }
       }
 
-      // Call DeepInfra TTS API - try multiple endpoints
+      // Call DeepInfra TTS API with aggressive 10-second timeout
       let response;
       let usedEndpoint = '';
       
-      // Try Chatterbox first (more natural voice)
+      // Try Chatterbox with 10-second timeout for faster fallback
       try {
         usedEndpoint = 'ResembleAI/chatterbox';
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+          controller.abort();
+          console.log('TTS request timed out after 10 seconds');
+        }, 10000); // 10 second timeout (reduced from 15)
+        
+        const startTime = Date.now();
         response = await fetch(`https://api.deepinfra.com/v1/inference/${usedEndpoint}`, {
           method: 'POST',
           headers: {
@@ -986,36 +1000,40 @@ const App: React.FC = () => {
             'Authorization': `Bearer ${deepinfraApiKey}`,
           },
           body: JSON.stringify({
-            text: text,
-            // Don't include voice_id for now as it may cause issues
-            exaggeration: 0.5,
-            cfg: 0.7,
-            temperature: 0.8,
+            text: truncatedText,
+            // Optimized settings for SPEED over quality
+            exaggeration: 0.2, // Reduced for faster processing (was 0.8)
+            cfg: 0.4, // Reduced for faster processing (was 0.9)
+            temperature: 0.5, // Reduced for faster processing (was 1.0)
           }),
+          signal: controller.signal,
         });
+        clearTimeout(timeoutId);
+        const elapsed = Date.now() - startTime;
+        console.log(`TTS API responded in ${elapsed}ms`);
       } catch (err) {
-        console.error('Chatterbox TTS failed, trying alternative...', err);
+        console.error('Chatterbox TTS failed or timed out, using browser TTS fallback...', err);
+        response = null; // Ensure we fall through to browser TTS
       }
 
+      // Fast fallback to browser TTS if API failed or timed out
       if (!response || !response.ok) {
-        // Fallback to a simpler TTS model if Chatterbox fails
-        console.log('Trying alternative TTS endpoint...');
-        usedEndpoint = 'microsoft/speecht5_tts';
-        try {
-          response = await fetch(`https://api.deepinfra.com/v1/inference/${usedEndpoint}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${deepinfraApiKey}`,
-            },
-            body: JSON.stringify({
-              text: text,
-            }),
-          });
-        } catch (err) {
-          console.error('Alternative TTS also failed:', err);
-          throw new Error('All TTS endpoints failed');
-        }
+        console.log('Using instant browser TTS fallback');
+        
+        // INSTANT browser TTS fallback
+        const utterance = new SpeechSynthesisUtterance(truncatedText);
+        utterance.rate = 1.3; // Slightly faster
+        utterance.pitch = 1.0;
+        utterance.volume = 0.9;
+        
+        utterance.onend = () => {
+          setSpeakingIndex(null);
+          isSpeakingRef.current = false;
+          setCurrentAudio(null);
+        };
+        
+        window.speechSynthesis.speak(utterance);
+        return; // Exit early with browser TTS
       }
 
       if (!response.ok) {
@@ -1201,7 +1219,9 @@ const App: React.FC = () => {
   };
 
   // Auto-play TTS when new assistant message arrives in voice mode
-  useEffect(() => {
+  // DISABLED: Prevents overlapping TTS requests and reduces delay
+  // User can manually click speaker icon to hear responses
+  /* useEffect(() => {
     if (voiceModeEnabled && messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
       // Only speak if it's an assistant message and not already speaking
@@ -1213,7 +1233,7 @@ const App: React.FC = () => {
         }, 500);
       }
     }
-  }, [messages, voiceModeEnabled, handleSpeak]);
+  }, [messages, voiceModeEnabled, handleSpeak]); */
 
   // Auto-focus on chat input on mount and after messages
   useEffect(() => {
