@@ -6,7 +6,7 @@ import { Cerebras } from '@cerebras/cerebras_cloud_sdk';
 import { UsageTracker, TierType } from './utils/usageTracker';
 import { ConversationManager, Message } from './utils/conversationManager';
 import { detectSALanguage } from './utils/saLanguageDetector';
-import { PiperTTSClient, BrowserTTSFallback } from './utils/piperTTS';
+
 
 // ==================== CONSTANTS ====================
 
