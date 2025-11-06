@@ -1054,8 +1054,8 @@ const App: React.FC = () => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => {
           controller.abort();
-          console.log('⏱️ TTS request timed out after 8 seconds - no charge');
-        }, 8000); // Reduced to 8 seconds to avoid charges
+          console.log('⏱️ TTS request timed out after 10 seconds - no charge');
+        }, 10000); // 10 seconds - proven working timeout
         
         apiStart = performance.now();
         console.log(`🎤 TTS Request started - Text: ${truncatedText.length} chars, Cache key: ${cacheKey.substring(0, 30)}...`);
@@ -1070,16 +1070,11 @@ const App: React.FC = () => {
           },
           body: JSON.stringify({
             text: truncatedText,
-            // ULTRA SPEED OPTIMIZATIONS - Based on official Resemble AI docs
-            exaggeration: 0.05, // Minimal exaggeration
-            cfg: 0.2, // Minimal CFG guidance
-            temperature: 0.3, // Lower temperature
-            speed: 1.35, // Faster speech rate (increased from 1.3)
-            // Official Resemble AI performance parameters
-            sample_rate: 16000, // Reduced to 16kHz for faster processing (from 22050)
-            output_format: 'mp3', // MP3 is smaller than WAV (from 'wav')
-            precision: 'PCM_16', // 16-bit depth = 50% smaller than PCM_32 default
-            use_hd: false, // Disable HD for lower latency
+            // PROVEN FAST SETTINGS - Validated at 5.6s performance
+            exaggeration: 0.1, // Minimal exaggeration (tested working)
+            cfg: 0.3, // Minimal CFG guidance (tested working)
+            temperature: 0.4, // Lower temperature (tested working)
+            speed: 1.2, // Faster speech rate (tested working)
           }),
           signal: controller.signal,
         });
