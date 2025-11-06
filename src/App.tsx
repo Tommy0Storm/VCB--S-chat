@@ -781,6 +781,21 @@ const App: React.FC = () => {
     }
   }, [voiceModeEnabled, isListening]);
 
+  // Auto-play TTS when new assistant message arrives in voice mode
+  useEffect(() => {
+    if (voiceModeEnabled && messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      // Only speak if it's an assistant message and not already speaking
+      if (lastMessage.role === 'assistant' && !isSpeakingRef.current && lastMessage.type !== 'image') {
+        const messageIndex = messages.length - 1;
+        // Small delay to ensure state is updated
+        setTimeout(() => {
+          handleSpeak(lastMessage.content, messageIndex);
+        }, 500);
+      }
+    }
+  }, [messages, voiceModeEnabled, handleSpeak]);
+
   // Auto-focus on chat input on mount and after messages
   useEffect(() => {
     // Focus on initial load
@@ -848,7 +863,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSpeak = async (text: string, index: number) => {
+  const handleSpeak = useCallback(async (text: string, index: number) => {
     // Initialize on first use
     if (!speechInitialized) {
       initializeSpeechSynthesis();
@@ -985,7 +1000,7 @@ const App: React.FC = () => {
         }, 300);
       }
     }
-  };
+  }, [speechInitialized, currentAudio, speakingIndex, selectedVoiceId, voiceModeEnabled, isListening]);
 
   const handleCopy = async (text: string, index: number) => {
     try {
