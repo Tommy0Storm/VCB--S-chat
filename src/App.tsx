@@ -744,11 +744,21 @@ const App: React.FC = () => {
     // Show welcome toast
     setShowToast(true);
     const timer = setTimeout(() => {
-      setShowToast(false);
-    }, 4000); // Hide after 4 seconds
+      // Only auto-hide if voice mode is not enabled
+      if (!voiceModeEnabled) {
+        setShowToast(false);
+      }
+    }, 4000); // Hide after 4 seconds unless voice mode is active
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [voiceModeEnabled]);
+
+  // Keep toast visible while voice mode is active
+  useEffect(() => {
+    if (voiceModeEnabled) {
+      setShowToast(true);
+    }
+  }, [voiceModeEnabled, isListening]);
 
   // Auto-focus on chat input on mount and after messages
   useEffect(() => {
@@ -2976,13 +2986,27 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
           </div>
         </form>
 
-        {/* Welcome Toast Notification */}
+        {/* Interactive Voice Mode Toast Notification */}
         {showToast && (
-          <div className="fixed bottom-8 right-8 z-50 animate-bounce">
-            <div className="bg-gradient-to-r from-[#4169E1] to-vcb-accent px-6 py-4 rounded-lg shadow-2xl border-2 border-white flex items-center space-x-3">
-              <span className="material-icons text-white text-3xl animate-pulse">chat</span>
+          <div 
+            className="fixed bottom-8 right-8 z-50 cursor-pointer transform hover:scale-105 transition-transform"
+            onClick={async () => {
+              if (!voiceModeEnabled) {
+                // Start voice mode
+                await toggleVoiceMode();
+              } else {
+                // Hide toast when clicked during voice mode
+                setShowToast(false);
+              }
+            }}
+            title={voiceModeEnabled ? 'Click to hide' : 'Click to start voice chat'}
+          >
+            <div className={`bg-gradient-to-r from-[#4169E1] to-vcb-accent px-6 py-4 rounded-lg shadow-2xl border-2 border-white flex items-center space-x-3 ${!voiceModeEnabled ? 'animate-bounce' : ''}`}>
+              <span className="material-icons text-white text-3xl animate-pulse">
+                {voiceModeEnabled && isListening ? 'mic' : voiceModeEnabled ? 'mic_off' : 'chat'}
+              </span>
               <div className="text-white font-bold text-lg tracking-wide">
-                Chat to GOGGA!!!!
+                {voiceModeEnabled && isListening ? 'Listening...' : voiceModeEnabled ? 'Voice Mode Active' : 'Chat to GOGGA!!!!'}
               </div>
             </div>
           </div>
