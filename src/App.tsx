@@ -947,6 +947,7 @@ const App: React.FC = () => {
       }
 
       // Use Piper streaming backend
+      console.log('🔗 Fetching from Piper server...');
       const response = await fetch('http://localhost:5000/tts-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -956,19 +957,31 @@ const App: React.FC = () => {
         })
       });
 
+      console.log('📡 Piper response:', response.status, response.headers.get('content-type'));
+      
       if (!response.ok) {
         throw new Error(`Piper server error: ${response.status}`);
       }
 
       const audioBlob = await response.blob();
+      console.log('🎵 Audio blob:', audioBlob.size, 'bytes, type:', audioBlob.type);
+      
       const audioUrl = URL.createObjectURL(audioBlob);
+      console.log('🔊 Audio URL created:', audioUrl);
+      
       const audio = new Audio(audioUrl);
       audio.preload = 'auto';
       audio.volume = 0.9;
       
       setCurrentAudio(audio);
+      console.log('🎤 Audio element created, attempting playback...');
 
+      audio.onloadstart = () => console.log('📥 Audio loading started');
+      audio.oncanplay = () => console.log('✅ Audio can play');
+      audio.onplay = () => console.log('▶️ Audio started playing');
+      
       audio.onended = () => {
+        console.log('⏹️ Audio playback ended');
         setSpeakingIndex(null);
         isSpeakingRef.current = false;
         setCurrentAudio(null);
@@ -988,14 +1001,16 @@ const App: React.FC = () => {
       };
 
       audio.onerror = (e) => {
-        console.error('Audio playback error:', e);
+        console.error('❌ Audio playback error:', e, audio.error);
         setSpeakingIndex(null);
         isSpeakingRef.current = false;
         setCurrentAudio(null);
         URL.revokeObjectURL(audioUrl);
       };
 
+      console.log('🎧 Calling audio.play()...');
       await audio.play();
+      console.log('✅ Audio.play() completed successfully');
       
       const totalTime = performance.now() - perfStart;
       console.log(`⚡ Piper Streaming: ${totalTime.toFixed(1)}ms (${selectedVoice})`);
@@ -1005,37 +1020,16 @@ const App: React.FC = () => {
       setSpeakingIndex(null);
       isSpeakingRef.current = false;
       
-      // Fallback to browser TTS
-      try {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(truncatedText);
-        const voices = window.speechSynthesis.getVoices();
-        const selectedVoice = voices.find(voice => 
-          voiceGender === 'female' 
-            ? voice.name.toLowerCase().includes('female') || voice.name.toLowerCase().includes('zira')
-            : voice.name.toLowerCase().includes('male') || voice.name.toLowerCase().includes('david')
-        );
-        if (selectedVoice) utterance.voice = selectedVoice;
-        utterance.onend = () => {
-          setSpeakingIndex(null);
-          // Restart recognition
-          if (voiceModeEnabledRef.current && recognitionRef.current && !isListening) {
-            setTimeout(() => {
-              try {
-                recognitionRef.current.start();
-                setIsListening(true);
-              } catch (err) {
-                console.error('Failed to restart recognition:', err);
-              }
-            }, 300);
+      // Restart recognition on error
+      if (voiceModeEnabledRef.current && recognitionRef.current && !isListening) {
+        setTimeout(() => {
+          try {
+            recognitionRef.current.start();
+            setIsListening(true);
+          } catch (err) {
+            console.error('Failed to restart recognition:', err);
           }
-        };
-        window.speechSynthesis.speak(utterance);
-        console.log('🔊 Browser TTS fallback used');
-      } catch (fallbackError) {
-        console.error('Fallback TTS failed:', fallbackError);
-        setSpeakingIndex(null);
-        isSpeakingRef.current = false;
+        }, 300);
       }
     }
   }, [currentAudio, speakingIndex, voiceGender, voiceModeEnabled, isListening]);
