@@ -1685,21 +1685,13 @@ Provide the improved final answer addressing any issues identified.`;
         prompt: prompt,
         width: 1024,
         height: 1024,
-        safety_tolerance: 2,
       });
 
-      if (response.status === 'ok' && response.image_url) {
-        // DeepInfra returns a relative URL, need to prepend the base URL
-        const imageUrl = response.image_url.startsWith('http') 
-          ? response.image_url 
-          : `https://api.deepinfra.com${response.image_url}`;
-        return imageUrl;
-      } else if (response.status === 'request_moderated') {
-        throw new Error('Request was moderated due to content policy violations');
-      } else if (response.status === 'content_moderated') {
-        throw new Error('Generated content was moderated due to content policy violations');
+      // DeepInfra returns an array of image URLs
+      if (response.images && response.images.length > 0) {
+        return response.images[0];
       } else {
-        throw new Error(`Image generation failed with status: ${response.status}`);
+        throw new Error('No image URL returned from DeepInfra');
       }
     } catch (error) {
       console.error('FLUX image generation error:', error);
