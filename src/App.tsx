@@ -965,6 +965,13 @@ const App: React.FC = () => {
       console.log(`Text truncated from ${text.length} to 300 chars for faster TTS`);
     }
 
+    // Performance timing variables
+    let startTime = Date.now();
+    let elapsed = 0;
+    let parseTime = 0;
+    let decodeStart = 0;
+    let playbackSetupStart = 0;
+
     try {
       setSpeakingIndex(index);
       isSpeakingRef.current = true;
@@ -989,10 +996,12 @@ const App: React.FC = () => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => {
           controller.abort();
-          console.log('TTS request timed out after 10 seconds');
+          console.log('⏱️ TTS request timed out after 10 seconds');
         }, 10000); // 10 second timeout (reduced from 15)
         
-        const startTime = Date.now();
+        startTime = Date.now();
+        console.log(`🎤 TTS Request started - Text length: ${truncatedText.length} chars`);
+        
         response = await fetch(`https://api.deepinfra.com/v1/inference/${usedEndpoint}`, {
           method: 'POST',
           headers: {
@@ -1001,28 +1010,31 @@ const App: React.FC = () => {
           },
           body: JSON.stringify({
             text: truncatedText,
-            // Optimized settings for SPEED over quality
-            exaggeration: 0.2, // Reduced for faster processing (was 0.8)
-            cfg: 0.4, // Reduced for faster processing (was 0.9)
-            temperature: 0.5, // Reduced for faster processing (was 1.0)
+            // ULTRA-OPTIMIZED settings for MAXIMUM SPEED
+            exaggeration: 0.1, // Further reduced for faster processing (was 0.2)
+            cfg: 0.3, // Further reduced for faster processing (was 0.4)
+            temperature: 0.4, // Further reduced for faster processing (was 0.5)
+            speed: 1.2, // Add speed parameter if supported by API
           }),
           signal: controller.signal,
         });
         clearTimeout(timeoutId);
-        const elapsed = Date.now() - startTime;
-        console.log(`TTS API responded in ${elapsed}ms`);
+        
+        elapsed = Date.now() - startTime;
+        console.log(`✅ TTS API responded in ${elapsed}ms (${(elapsed/1000).toFixed(2)}s)`);
       } catch (err) {
-        console.error('Chatterbox TTS failed or timed out, using browser TTS fallback...', err);
+        elapsed = Date.now() - startTime;
+        console.error(`❌ Chatterbox TTS failed after ${elapsed}ms, using browser TTS fallback...`, err);
         response = null; // Ensure we fall through to browser TTS
       }
 
       // Fast fallback to browser TTS if API failed or timed out
       if (!response || !response.ok) {
-        console.log('Using instant browser TTS fallback');
+        console.log('🔄 Using instant browser TTS fallback');
         
         // INSTANT browser TTS fallback
         const utterance = new SpeechSynthesisUtterance(truncatedText);
-        utterance.rate = 1.3; // Slightly faster
+        utterance.rate = 1.4; // Even faster (was 1.3)
         utterance.pitch = 1.0;
         utterance.volume = 0.9;
         
@@ -1030,9 +1042,11 @@ const App: React.FC = () => {
           setSpeakingIndex(null);
           isSpeakingRef.current = false;
           setCurrentAudio(null);
+          console.log('🔊 Browser TTS playback completed');
         };
         
         window.speechSynthesis.speak(utterance);
+        console.log('🔊 Browser TTS playback started (instant)');
         return; // Exit early with browser TTS
       }
 
@@ -1042,10 +1056,14 @@ const App: React.FC = () => {
         throw new Error(`TTS API failed: ${response.status} ${response.statusText}`);
       }
 
+      const parseStart = Date.now();
       const data = await response.json();
+      parseTime = Date.now() - parseStart;
+      console.log(`📦 JSON parsed in ${parseTime}ms`);
       console.log(`TTS API response from ${usedEndpoint}:`, {
         hasAudio: !!data.audio,
         audioType: typeof data.audio,
+        audioLength: data.audio?.length,
         status: data.inference_status
       });
       
@@ -1065,19 +1083,23 @@ const App: React.FC = () => {
       }
 
       let audioBlob: Blob;
+      decodeStart = Date.now();
       
       // Check if audio is a URL or base64 data
       if (data.audio.startsWith('http://') || data.audio.startsWith('https://')) {
         // Audio is a URL - fetch it
-        console.log('Audio is URL, fetching...');
+        console.log('🌐 Audio is URL, fetching...');
+        const fetchStart = Date.now();
         const audioResponse = await fetch(data.audio);
         audioBlob = await audioResponse.blob();
+        console.log(`🌐 URL fetch completed in ${Date.now() - fetchStart}ms, size: ${audioBlob.size} bytes`);
       } else {
         // Audio is base64-encoded data
         try {
-          console.log('Decoding base64 audio, length:', data.audio.length);
+          console.log(`🔄 Decoding base64 audio, length: ${data.audio.length} chars`);
           
           // Clean the base64 string - remove any whitespace and data URI prefix
+          const cleanStart = Date.now();
           let cleanedAudio = data.audio.trim();
           
           // Remove data URI prefix if present (e.g., "data:audio/wav;base64,")
@@ -1087,6 +1109,7 @@ const App: React.FC = () => {
           
           // Remove any whitespace characters
           cleanedAudio = cleanedAudio.replace(/\s/g, '');
+          console.log(`🧹 Base64 cleaned in ${Date.now() - cleanStart}ms, length: ${cleanedAudio.length}`);
           
           // Validate base64 format
           const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
@@ -1095,24 +1118,33 @@ const App: React.FC = () => {
             throw new Error('Audio data is not in valid base64 format');
           }
           
-          console.log('Cleaned audio length:', cleanedAudio.length, 'First 50 chars:', cleanedAudio.substring(0, 50));
-          
+          // Decode base64 to binary
+          const atobStart = Date.now();
           const binaryString = atob(cleanedAudio);
+          console.log(`🔓 atob() decoded in ${Date.now() - atobStart}ms, binary length: ${binaryString.length}`);
+          
+          // Convert to byte array
+          const bytesStart = Date.now();
           const bytes = new Uint8Array(binaryString.length);
           for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i);
           }
+          console.log(`📊 Byte array created in ${Date.now() - bytesStart}ms`);
+          
           audioBlob = new Blob([bytes], { type: 'audio/wav' });
-          console.log('Audio blob created, size:', audioBlob.size);
+          const totalDecodeTime = Date.now() - decodeStart;
+          console.log(`✅ Audio blob created in ${totalDecodeTime}ms, size: ${audioBlob.size} bytes (${(audioBlob.size/1024).toFixed(2)} KB)`);
         } catch (decodeError) {
-          console.error('Base64 decode error:', decodeError);
+          console.error('❌ Base64 decode error:', decodeError);
           console.error('First 100 chars of audio data:', data.audio.substring(0, 100));
           throw new Error(`Failed to decode audio data: ${decodeError instanceof Error ? decodeError.message : 'Unknown error'}`);
         }
       }
       
+      playbackSetupStart = Date.now();
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
+      console.log(`🔊 Audio element created in ${Date.now() - playbackSetupStart}ms`);
         
         setCurrentAudio(audio);
 
@@ -1156,14 +1188,20 @@ const App: React.FC = () => {
         };
 
         audio.play().catch(err => {
-          console.error('Failed to play audio:', err);
+          console.error('❌ Failed to play audio:', err);
           setSpeakingIndex(null);
           isSpeakingRef.current = false;
           setCurrentAudio(null);
           URL.revokeObjectURL(audioUrl);
         });
+        
+        // Log total TTS pipeline timing
+        const totalTime = Date.now() - startTime;
+        console.log(`⏱️ TOTAL TTS PIPELINE: ${totalTime}ms (${(totalTime/1000).toFixed(2)}s) - Ready to play`);
+        console.log(`📊 Breakdown: API=${elapsed}ms, Parse=${parseTime}ms, Decode=${Date.now() - decodeStart - (Date.now() - playbackSetupStart)}ms, Setup=${Date.now() - playbackSetupStart}ms`);
     } catch (error) {
-      console.error('DeepInfra TTS error:', error);
+      const totalTime = Date.now() - startTime;
+      console.error(`❌ DeepInfra TTS error after ${totalTime}ms:`, error);
       setSpeakingIndex(null);
       isSpeakingRef.current = false;
       
