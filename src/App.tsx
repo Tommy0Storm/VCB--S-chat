@@ -551,6 +551,7 @@ const App: React.FC = () => {
   const recognitionRef = useRef<any>(null);
   const voiceModeEnabledRef = useRef<boolean>(false); // Track voice mode state for callbacks
   const isSpeakingRef = useRef<boolean>(false); // Track if bot is currently speaking
+  const isProcessingMessageRef = useRef<boolean>(false); // Track if we're processing a message
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessagesLengthRef = useRef(0);
   const usageTrackerRef = useRef<UsageTracker>(new UsageTracker());
@@ -1038,10 +1039,12 @@ const App: React.FC = () => {
       // console.log('Speech recognition ended');
       setIsListening(false);
 
-      // Auto-restart ONLY if voice mode is enabled AND bot is NOT speaking
+      // Don't auto-restart if we're processing a message (waiting for AI response)
+      // User must manually press mic button again for next message
       setTimeout(() => {
         try {
-          if (recognitionRef.current && voiceModeEnabledRef.current && !isSpeakingRef.current) {
+          if (recognitionRef.current && voiceModeEnabledRef.current && 
+              !isSpeakingRef.current && !isProcessingMessageRef.current) {
             recognition.start();
             // console.log('Restarting recognition...');
           }
@@ -1105,6 +1108,7 @@ const App: React.FC = () => {
       setVoiceModeEnabled(false);
       voiceModeEnabledRef.current = false; // Update ref for callbacks
       isSpeakingRef.current = false; // Reset speaking state
+      isProcessingMessageRef.current = false; // Reset processing state
       // Stop listening
       setIsListening(false);
       if (recognitionRef.current) {
@@ -1674,6 +1678,7 @@ Provide the improved final answer addressing any issues identified.`;
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
+    isProcessingMessageRef.current = true; // Mark that we're processing a message
 
     // Check if this is an image generation request
     if (isImageGenerationRequest(userMessage.content)) {
@@ -1992,6 +1997,7 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
     }
 
     setIsLoading(false);
+    isProcessingMessageRef.current = false; // Done processing, can restart recognition if needed
     inputRef.current?.focus();
   };
 
