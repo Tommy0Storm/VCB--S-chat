@@ -423,13 +423,13 @@ const MessageComponent = React.memo(({
                   </button>
                   <button
                     onClick={() => onSpeak(message.content, index)}
-                    className="hidden flex items-center space-x-1 text-vcb-mid-grey hover:text-vcb-black transition-colors"
-                    title={speakingIndex === index ? 'Stop speaking' : 'Read aloud (en-ZA)'}
+                    className="flex items-center space-x-1 text-vcb-mid-grey hover:text-[#4169E1] transition-colors"
+                    title={speakingIndex === index ? 'Stop speaking' : 'Play audio (DeepInfra TTS)'}
                   >
                     {speakingIndex === index ? (
-                      <span className="material-icons text-base md:text-xl">pause</span>
+                      <span className="material-icons text-base md:text-xl animate-pulse">pause_circle</span>
                     ) : (
-                      <span className="material-icons text-base md:text-xl">volume_up</span>
+                      <span className="material-icons text-base md:text-xl">play_circle</span>
                     )}
                   </button>
                 </div>
@@ -448,13 +448,9 @@ const MessageComponent = React.memo(({
                     loading="lazy"
                   />
                   {/* GOGGA Watermark - Lower Right */}
-                  <div className="absolute bottom-4 right-4 bg-vcb-black bg-opacity-80 px-3 py-1.5 rounded flex items-center space-x-1.5">
-                    <img
-                      src="/vcb-logo.png"
-                      alt="GOGGA"
-                      className="h-5 w-auto"
-                    />
-                    <span className="text-white text-xs font-bold tracking-wide">GOGGA</span>
+                  <div className="absolute bottom-4 right-4 bg-vcb-black bg-opacity-90 px-4 py-2 rounded-lg flex items-center space-x-2 shadow-lg">
+                    <span className="material-icons text-white text-2xl">image</span>
+                    <span className="text-white text-sm font-bold tracking-wider">GOGGA</span>
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
@@ -464,15 +460,14 @@ const MessageComponent = React.memo(({
                     </div>
                   )}
                   {/* Download Button */}
-                  <a
-                    href={message.imageUrl}
-                    download={`gogga-${message.imagePrompt?.slice(0, 30) || 'image'}-${Date.now()}.png`}
+                  <button
+                    onClick={() => handleDownloadImage(message.imageUrl!, message.imagePrompt || 'image')}
                     className="flex items-center space-x-1 px-3 py-1.5 bg-[#4169E1] text-white rounded hover:bg-[#315AC1] transition-colors text-xs font-medium ml-3 flex-shrink-0"
                     title="Download Image"
                   >
                     <span className="material-icons text-sm">download</span>
                     <span>Download</span>
-                  </a>
+                  </button>
                 </div>
               </div>
             ) : (
@@ -1011,6 +1006,31 @@ const App: React.FC = () => {
       }, 2000); // Show "Copied!" for 2 seconds
     } catch (err) {
       // console.error('Failed to copy text:', err);
+    }
+  };
+
+  // Download image handler to avoid navigation
+  const handleDownloadImage = async (imageUrl: string, prompt: string) => {
+    try {
+      // Fetch the image as a blob to avoid CORS issues
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      // Create temporary link and trigger download
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `gogga-${prompt.slice(0, 30)}-${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download failed:', error);
+      // Fallback: open in new tab
+      window.open(imageUrl, '_blank');
     }
   };
 
@@ -3029,7 +3049,7 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
         {/* Interactive Voice Mode Toast Notification */}
         {showToast && (
           <div 
-            className="fixed bottom-8 right-8 z-50 cursor-pointer transform hover:scale-105 transition-transform"
+            className="fixed bottom-24 right-8 z-40 cursor-pointer transform hover:scale-105 transition-transform"
             onClick={async () => {
               if (!voiceModeEnabled) {
                 // Start voice mode
