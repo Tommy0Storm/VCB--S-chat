@@ -1070,15 +1070,16 @@ const App: React.FC = () => {
           },
           body: JSON.stringify({
             text: truncatedText,
-            // MAXIMUM SPEED OPTIMIZATIONS - Further reduced for sub-5s generation
-            exaggeration: 0.05, // Minimal exaggeration (was 0.1)
-            cfg: 0.2, // Minimal CFG guidance (was 0.3)
-            temperature: 0.3, // Lower temperature (was 0.4)
-            speed: 1.3, // Faster speech rate (was 1.2)
-            // Additional compression settings
-            sample_rate: 22050, // Lower sample rate for smaller files
-            format: 'wav',
-            quality: 'medium',
+            // ULTRA SPEED OPTIMIZATIONS - Based on official Resemble AI docs
+            exaggeration: 0.05, // Minimal exaggeration
+            cfg: 0.2, // Minimal CFG guidance
+            temperature: 0.3, // Lower temperature
+            speed: 1.35, // Faster speech rate (increased from 1.3)
+            // Official Resemble AI performance parameters
+            sample_rate: 16000, // Reduced to 16kHz for faster processing (from 22050)
+            output_format: 'mp3', // MP3 is smaller than WAV (from 'wav')
+            precision: 'PCM_16', // 16-bit depth = 50% smaller than PCM_32 default
+            use_hd: false, // Disable HD for lower latency
           }),
           signal: controller.signal,
         });
