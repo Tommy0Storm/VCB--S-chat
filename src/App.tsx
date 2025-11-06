@@ -550,6 +550,7 @@ const App: React.FC = () => {
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [imagePrompt, setImagePrompt] = useState('');
   const [showImagePrompt, setShowImagePrompt] = useState(false);
+  const [showToast, setShowToast] = useState(false);
   const [sessionTime, setSessionTime] = useState(0); // Session time in seconds
   const sessionStartRef = useRef<number>(Date.now());
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -739,6 +740,14 @@ const App: React.FC = () => {
     if (savedGender) {
       setVoiceGender(savedGender);
     }
+
+    // Show welcome toast
+    setShowToast(true);
+    const timer = setTimeout(() => {
+      setShowToast(false);
+    }, 4000); // Hide after 4 seconds
+
+    return () => clearTimeout(timer);
   }, []);
 
   // Auto-focus on chat input on mount and after messages
@@ -1766,9 +1775,11 @@ Provide the improved final answer addressing any issues identified.`;
 
       const data = await response.json();
       
-      // DeepInfra returns images array or a single url field
+      // DeepInfra returns different formats: images[], url, image_url, or output[]
       if (data.images && data.images.length > 0) {
         return data.images[0];
+      } else if (data.image_url) {
+        return data.image_url;
       } else if (data.url) {
         return data.url;
       } else if (data.output && Array.isArray(data.output) && data.output.length > 0) {
@@ -2196,8 +2207,17 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
               <p className="text-vcb-white text-[8px] md:text-xs mt-0 md:mt-0.5 font-medium uppercase tracking-wide">
                 Powered by VCB-AI
               </p>
-              <p className="text-vcb-white text-[7px] md:text-xs mt-0.5 font-medium uppercase tracking-wide">
-                Now with Cognitive Execution Pipeline Optimization
+              <p className="text-vcb-white text-[7px] md:text-xs mt-0.5 font-medium uppercase tracking-wide italic flex items-center gap-1">
+                <span className="material-icons text-[10px] md:text-sm">auto_awesome</span>
+                Now with Cognitive Execution Pipeline Optimization <span className="text-[#4169E1] font-bold">[CePO]</span>
+              </p>
+            </div>
+
+            {/* FLUX Image Model Info - Large Icon */}
+            <div className="flex flex-col items-center justify-center px-3 md:px-4 border-l border-vcb-mid-grey">
+              <span className="material-icons text-vcb-accent" style={{ fontSize: '48px' }}>image</span>
+              <p className="text-vcb-white text-[6px] md:text-[8px] text-center font-medium uppercase tracking-wide mt-1 max-w-[80px] leading-tight">
+                FLUX latest flagship image model for images
               </p>
             </div>
           </div>
@@ -2825,8 +2845,8 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
                 type="button"
                 onClick={() => setShowImagePrompt(!showImagePrompt)}
                 disabled={isLoading || isGeneratingImage}
-                className="w-9 h-10 transition-colors duration-200 border bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center flex-shrink-0"
-                title="Generate Image"
+                className="w-9 h-10 transition-colors duration-200 border bg-[#4169E1] text-white border-[#4169E1] hover:bg-[#315AC1] hover:border-[#315AC1] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center flex-shrink-0"
+                title="Generate Image with FLUX"
               >
                 <span className="material-icons text-sm">image</span>
               </button>
@@ -2902,8 +2922,8 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
                 type="button"
                 onClick={() => setShowImagePrompt(!showImagePrompt)}
                 disabled={isLoading || isGeneratingImage}
-                className="px-4 h-16 transition-colors duration-200 border bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-                title="Generate Image with FLUX-1.1-pro (DeepInfra)"
+                className="px-4 h-16 transition-colors duration-200 border bg-[#4169E1] text-white border-[#4169E1] hover:bg-[#315AC1] hover:border-[#315AC1] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                title="Generate Image with FLUX"
               >
                 <span className="material-icons text-2xl">image</span>
               </button>
@@ -2955,6 +2975,18 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
             </div>
           </div>
         </form>
+
+        {/* Welcome Toast Notification */}
+        {showToast && (
+          <div className="fixed bottom-8 right-8 z-50 animate-bounce">
+            <div className="bg-gradient-to-r from-[#4169E1] to-vcb-accent px-6 py-4 rounded-lg shadow-2xl border-2 border-white flex items-center space-x-3">
+              <span className="material-icons text-white text-3xl animate-pulse">chat</span>
+              <div className="text-white font-bold text-lg tracking-wide">
+                Chat to GOGGA!!!!
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
