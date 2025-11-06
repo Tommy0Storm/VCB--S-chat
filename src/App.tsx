@@ -3,7 +3,6 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { Cerebras } from '@cerebras/cerebras_cloud_sdk';
-import { TextToImage } from 'deepinfra';
 import { UsageTracker, TierType } from './utils/usageTracker';
 import { ConversationManager, Message } from './utils/conversationManager';
 
@@ -536,7 +535,10 @@ const App: React.FC = () => {
   const [voiceModeEnabled, setVoiceModeEnabled] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [speechInitialized, setSpeechInitialized] = useState(false);
-  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [availableVoices, setAvailableVoices] = useState<any[]>([]);
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string>('');
+  const [voiceGender, setVoiceGender] = useState<'male' | 'female'>('female'); // Default to female
+  const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
   const [showUsage, setShowUsage] = useState(false);
   const [userTier, setUserTier] = useState<TierType>('free');
   const [showChatHistory, setShowChatHistory] = useState(false);
@@ -731,6 +733,12 @@ const App: React.FC = () => {
   useEffect(() => {
     const usage = usageTrackerRef.current.getUsage();
     setUserTier(usage.tier);
+    
+    // Load voice gender preference from localStorage
+    const savedGender = localStorage.getItem('voiceGender') as 'male' | 'female' | null;
+    if (savedGender) {
+      setVoiceGender(savedGender);
+    }
   }, []);
 
   // Auto-focus on chat input on mount and after messages
@@ -756,145 +764,187 @@ const App: React.FC = () => {
     }
   }, [showChatHistory, showUsage]);
 
-  const initializeSpeechSynthesis = () => {
-    // Initialize speech synthesis with a dummy utterance (required for mobile)
-    if (!speechInitialized) {
-      const dummyUtterance = new SpeechSynthesisUtterance('');
-      window.speechSynthesis.speak(dummyUtterance);
-      setSpeechInitialized(true);
-      // console.log('Speech synthesis initialized for mobile');
+  // Load DeepInfra voices
+  const loadDeepInfraVoices = async () => {
+    const deepinfraApiKey = import.meta.env.VITE_DEEPINFRA_API_KEY;
+    if (!deepinfraApiKey) {
+      console.warn('DeepInfra API key not configured');
+      return;
+    }
 
-      // Load voices after initialization
-      setTimeout(() => {
-        const voices = window.speechSynthesis.getVoices();
+    try {
+      const response = await fetch('https://api.deepinfra.com/v1/voices', {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${deepinfraApiKey}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Filter voices: get 1 male and 1 female
+        // You'll need to create/upload these voices in DeepInfra dashboard first
+        // For now, we'll take the first two voices and assign genders
+        const voices = data.voices || [];
+        setAvailableVoices(voices);
+        
+        // Set default voice based on selected gender
         if (voices.length > 0) {
-          setAvailableVoices(voices);
-          // console.log('Voices loaded after initialization:', voices.length);
+          // Assuming first voice is female, second is male (update based on your actual voices)
+          const defaultVoice = voiceGender === 'female' ? voices[0] : voices[1] || voices[0];
+          setSelectedVoiceId(defaultVoice.voice_id);
         }
-      }, 100);
+      }
+    } catch (error) {
+      console.error('Failed to load DeepInfra voices:', error);
     }
   };
 
-  const handleSpeak = (text: string, index: number) => {
-    // Initialize speech synthesis on first use (mobile requirement)
-    if (isMobile && !speechInitialized) {
+  const initializeSpeechSynthesis = () => {
+    if (!speechInitialized) {
+      loadDeepInfraVoices();
+      setSpeechInitialized(true);
+    }
+  };
+
+  const handleSpeak = async (text: string, index: number) => {
+    // Initialize on first use
+    if (!speechInitialized) {
       initializeSpeechSynthesis();
     }
 
-    // Stop any ongoing speech
-    if (window.speechSynthesis.speaking) {
-      window.speechSynthesis.cancel();
+    // Stop any ongoing audio
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
       if (speakingIndex === index) {
         setSpeakingIndex(null);
-        isSpeakingRef.current = false; // Reset speaking state when manually stopped
-        // Restart recognition if voice mode is enabled and was stopped
+        setCurrentAudio(null);
+        isSpeakingRef.current = false;
+        // Restart recognition if voice mode is enabled
         if (voiceModeEnabled && recognitionRef.current && !isListening) {
           try {
             recognitionRef.current.start();
             setIsListening(true);
           } catch (err) {
-            // console.error('Failed to restart recognition after stopping TTS:', err);
+            console.error('Failed to restart recognition:', err);
           }
         }
         return;
       }
     }
 
-    // Recognition will be stopped in utterance.onstart event handler
-    // This ensures clean stop/start timing
-
-    // Create speech synthesis utterance with en-ZA voice
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = isMobile ? 1.2 : 1.2; // 1.2x speed for mobile and desktop
-    utterance.pitch = 1.0;
-
-    // Try to find best available voice - MUST be en-ZA (South African English)
-    const voices = availableVoices.length > 0 ? availableVoices : window.speechSynthesis.getVoices();
-    // console.log('Selecting voice from', voices.length, 'available voices');
-
-    // Search for en-ZA voice (check multiple formats: en-ZA, en_ZA, en-za)
-    const zaVoice = voices.find(voice =>
-      voice.lang === 'en-ZA' ||
-      voice.lang === 'en_ZA' ||
-      voice.lang.toLowerCase() === 'en-za' ||
-      voice.name.toLowerCase().includes('south africa')
-    );
-
-    if (zaVoice) {
-      utterance.voice = zaVoice;
-      utterance.lang = 'en-ZA';
-      // console.log('✓ Using en-ZA voice:', zaVoice.name);
-    } else {
-      // No en-ZA available - use en-GB as closest alternative, but log warning
-      const gbVoice = voices.find(voice => voice.lang === 'en-GB');
-      const usVoice = voices.find(voice => voice.lang === 'en-US');
-      const anyEnglish = voices.find(voice => voice.lang.startsWith('en'));
-
-      const fallbackVoice = gbVoice || usVoice || anyEnglish;
-
-      if (fallbackVoice) {
-        utterance.voice = fallbackVoice;
-        utterance.lang = fallbackVoice.lang;
-        // console.warn('⚠ en-ZA voice not available! Using fallback:', fallbackVoice.name, fallbackVoice.lang);
-      } else {
-        utterance.lang = 'en-ZA'; // Force en-ZA lang even without specific voice
-        // console.warn('⚠ No English voices found! Using system default with en-ZA language tag');
-      }
+    const deepinfraApiKey = import.meta.env.VITE_DEEPINFRA_API_KEY;
+    if (!deepinfraApiKey) {
+      console.error('DeepInfra API key not configured');
+      return;
     }
 
-    utterance.onstart = () => {
-      // console.log('TTS started');
+    try {
       setSpeakingIndex(index);
-      isSpeakingRef.current = true; // Mark that bot is speaking
-      // STOP transcription when bot starts speaking (prevent echo/feedback)
+      isSpeakingRef.current = true;
+
+      // Stop transcription when bot starts speaking
       if (voiceModeEnabledRef.current && recognitionRef.current && isListening) {
         try {
           recognitionRef.current.stop();
           setIsListening(false);
-          // console.log('Stopped recognition - bot is speaking');
         } catch (err) {
-          // console.error('Failed to stop recognition:', err);
+          console.error('Failed to stop recognition:', err);
         }
       }
-    };
 
-    utterance.onend = () => {
-      // console.log('TTS ended');
-      setSpeakingIndex(null);
-      isSpeakingRef.current = false; // Mark that bot finished speaking
-      // RESTART transcription after bot finishes speaking
-      if (voiceModeEnabledRef.current && recognitionRef.current && !isListening) {
-        setTimeout(() => {
-          try {
-            recognitionRef.current.start();
-            setIsListening(true);
-            // console.log('Restarted recognition - bot finished speaking');
-          } catch (err) {
-            // console.error('Failed to restart recognition:', err);
-          }
-        }, 300); // Small delay to ensure TTS has fully stopped
+      // Call DeepInfra Chatterbox TTS API
+      const response = await fetch('https://api.deepinfra.com/v1/inference/ResembleAI/chatterbox', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${deepinfraApiKey}`,
+        },
+        body: JSON.stringify({
+          text: text,
+          voice_id: selectedVoiceId || undefined, // Use selected voice or default
+          exaggeration: 0.8, // Increased for more expressive and lively speech
+          cfg: 0.9, // Increased for higher quality and stronger emotion
+          temperature: 1.0, // Increased for maximum dynamic range and emotional variation
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`TTS API failed: ${response.statusText}`);
       }
-    };
 
-    utterance.onerror = () => {
-      // console.error('TTS error:', event);
+      const data = await response.json();
+      
+      if (data.audio) {
+        // Convert base64 audio to playable audio
+        const audioBlob = await fetch(`data:audio/wav;base64,${data.audio}`).then(r => r.blob());
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        
+        setCurrentAudio(audio);
+
+        audio.onended = () => {
+          setSpeakingIndex(null);
+          isSpeakingRef.current = false;
+          setCurrentAudio(null);
+          URL.revokeObjectURL(audioUrl);
+
+          // Restart transcription after bot finishes speaking
+          if (voiceModeEnabledRef.current && recognitionRef.current && !isListening) {
+            setTimeout(() => {
+              try {
+                recognitionRef.current.start();
+                setIsListening(true);
+              } catch (err) {
+                console.error('Failed to restart recognition:', err);
+              }
+            }, 300);
+          }
+        };
+
+        audio.onerror = () => {
+          console.error('Audio playback error');
+          setSpeakingIndex(null);
+          isSpeakingRef.current = false;
+          setCurrentAudio(null);
+          URL.revokeObjectURL(audioUrl);
+
+          // Restart transcription on error
+          if (voiceModeEnabledRef.current && recognitionRef.current && !isListening) {
+            setTimeout(() => {
+              try {
+                recognitionRef.current.start();
+                setIsListening(true);
+              } catch (err) {
+                console.error('Failed to restart recognition after error:', err);
+              }
+            }, 300);
+          }
+        };
+
+        audio.play();
+      } else {
+        throw new Error('No audio data returned from TTS API');
+      }
+    } catch (error) {
+      console.error('DeepInfra TTS error:', error);
       setSpeakingIndex(null);
-      isSpeakingRef.current = false; // Mark that bot finished speaking (even on error)
-      // RESTART transcription on error too
+      isSpeakingRef.current = false;
+      
+      // Restart transcription on error
       if (voiceModeEnabledRef.current && recognitionRef.current && !isListening) {
         setTimeout(() => {
           try {
             recognitionRef.current.start();
             setIsListening(true);
           } catch (err) {
-            // console.error('Failed to restart recognition after TTS error:', err);
+            console.error('Failed to restart recognition after TTS error:', err);
           }
         }, 300);
       }
-    };
-
-    // console.log('Starting TTS playback');
-    window.speechSynthesis.speak(utterance);
+    }
   };
 
   const handleCopy = async (text: string, index: number) => {
@@ -1128,6 +1178,21 @@ const App: React.FC = () => {
       window.speechSynthesis.cancel();
       setSpeakingIndex(null);
     }
+  };
+
+  // Toggle voice gender
+  const toggleVoiceGender = () => {
+    const newGender = voiceGender === 'female' ? 'male' : 'female';
+    setVoiceGender(newGender);
+    
+    // Update selected voice based on gender
+    if (availableVoices.length >= 2) {
+      const newVoice = newGender === 'female' ? availableVoices[0] : availableVoices[1] || availableVoices[0];
+      setSelectedVoiceId(newVoice.voice_id);
+    }
+    
+    // Save preference to localStorage
+    localStorage.setItem('voiceGender', newGender);
   };
 
   // Conversation Management Functions
@@ -1680,17 +1745,36 @@ Provide the improved final answer addressing any issues identified.`;
     }
 
     try {
-      const model = new TextToImage('black-forest-labs/FLUX-1.1-pro', deepinfraApiKey);
-      const response = await model.generate({
-        prompt: prompt,
-        width: 1024,
-        height: 1024,
+      // Direct API call instead of SDK to avoid header issues
+      const response = await fetch('https://api.deepinfra.com/v1/inference/black-forest-labs/FLUX-1.1-pro', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${deepinfraApiKey}`,
+        },
+        body: JSON.stringify({
+          prompt: prompt,
+          width: 1024,
+          height: 1024,
+        }),
       });
 
-      // DeepInfra returns an array of image URLs
-      if (response.images && response.images.length > 0) {
-        return response.images[0];
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: response.statusText }));
+        throw new Error(`DeepInfra API error: ${errorData.error || response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      // DeepInfra returns images array or a single url field
+      if (data.images && data.images.length > 0) {
+        return data.images[0];
+      } else if (data.url) {
+        return data.url;
+      } else if (data.output && Array.isArray(data.output) && data.output.length > 0) {
+        return data.output[0];
       } else {
+        console.error('Unexpected response format:', data);
         throw new Error('No image URL returned from DeepInfra');
       }
     } catch (error) {
@@ -2152,6 +2236,27 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
                 <path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/>
               </svg>
               <span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">Usage</span>
+            </button>
+
+            {/* Voice Gender Toggle Button */}
+            <button
+              type="button"
+              onClick={toggleVoiceGender}
+              className="flex items-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-accent bg-vcb-black text-vcb-accent hover:bg-vcb-accent hover:text-vcb-black transition-colors"
+              title={`Switch to ${voiceGender === 'female' ? 'Male' : 'Female'} Voice`}
+            >
+              <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
+                {voiceGender === 'female' ? (
+                  // Female icon
+                  <path d="M17.5 9.5C17.5 6.46 15.04 4 12 4S6.5 6.46 6.5 9.5c0 2.7 1.94 4.93 4.5 5.4V17H9v2h2v2h2v-2h2v-2h-2v-2.1c2.56-.47 4.5-2.7 4.5-5.4zm-9 0C8.5 7.57 10.07 6 12 6s3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5z"/>
+                ) : (
+                  // Male icon
+                  <path d="M9 9c0-1.65 1.35-3 3-3s3 1.35 3 3c0 1.66-1.35 3-3 3s-3-1.34-3-3m3 8c-4.34 0-6.29 2.28-6.29 2.28L7.5 21s1.93-2.3 4.5-2.3 4.5 2.3 4.5 2.3l1.79-1.72S16.34 17 12 17zm7-11.2V2h-2v3.8h-3.8v2H17v3.8h2V7.8h3.8v-2H19z"/>
+                )}
+              </svg>
+              <span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">
+                {voiceGender === 'female' ? '♀ Female' : '♂ Male'}
+              </span>
             </button>
 
             {/* Voice Mode Toggle Button - HIDDEN */}
