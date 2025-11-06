@@ -2278,18 +2278,6 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
                 Now with Cognitive Execution Pipeline Optimization <span className="text-[#4169E1] font-bold">[CePO]</span>
               </p>
             </div>
-
-            {/* FLUX Image Model Info - Large Icon - Clickable */}
-            <div 
-              onClick={() => setShowImagePrompt(!showImagePrompt)}
-              className="flex flex-col items-center justify-center px-3 md:px-4 border-l border-vcb-mid-grey cursor-pointer hover:bg-vcb-dark-grey transition-colors transform rotate-[-25deg]"
-              title="Click to generate images with FLUX"
-            >
-              <span className="material-icons text-white" style={{ fontSize: '48px' }}>image</span>
-              <p className="text-white text-[8px] md:text-[10px] text-center font-bold uppercase tracking-wide mt-1 max-w-[80px] leading-tight">
-                FLUX latest flagship image model for images
-              </p>
-            </div>
           </div>
           <div className="flex items-center space-x-2">
             {/* Chat History Button */}
@@ -2808,7 +2796,7 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
               <div className="flex items-center justify-between mb-3 md:mb-4">
                 <div className="flex items-center space-x-2">
                   <span className="material-icons text-vcb-accent text-xl md:text-2xl">image</span>
-                  <h3 className="text-sm md:text-lg font-bold text-vcb-white uppercase tracking-wider">AI Image Generator</h3>
+                  <h3 className="text-sm md:text-lg font-bold text-vcb-white uppercase tracking-wider">VCB-AI Image Generator</h3>
                 </div>
                 <button
                   onClick={() => setShowImagePrompt(false)}
@@ -2818,7 +2806,7 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
                   <span className="material-icons text-xl">close</span>
                 </button>
               </div>
-              <p className="text-vcb-mid-grey text-xs md:text-sm mb-3">Powered by FLUX-1.1-pro via DeepInfra</p>
+              <p className="text-white text-xs md:text-sm mb-3 font-medium">Powered by FLUX-1.1-pro via DeepInfra</p>
               <div className="relative">
                 <input
                   type="text"
