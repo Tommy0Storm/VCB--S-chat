@@ -440,19 +440,40 @@ const MessageComponent = React.memo(({
                 <div className="text-sm md:text-base text-vcb-black break-words leading-relaxed">
                   {message.content}
                 </div>
-                <div className="border border-vcb-light-grey p-2 bg-vcb-white">
+                <div className="relative border border-vcb-light-grey p-2 bg-vcb-white">
                   <img
                     src={message.imageUrl}
                     alt={message.imagePrompt || 'Generated image'}
                     className="w-full h-auto rounded"
                     loading="lazy"
                   />
-                </div>
-                {message.imagePrompt && (
-                  <div className="text-xs text-vcb-mid-grey italic">
-                    Prompt: {message.imagePrompt}
+                  {/* GOGGA Watermark - Lower Right */}
+                  <div className="absolute bottom-4 right-4 bg-vcb-black bg-opacity-80 px-3 py-1.5 rounded flex items-center space-x-1.5">
+                    <img
+                      src="/vcb-logo.png"
+                      alt="GOGGA"
+                      className="h-5 w-auto"
+                    />
+                    <span className="text-white text-xs font-bold tracking-wide">GOGGA</span>
                   </div>
-                )}
+                </div>
+                <div className="flex items-center justify-between">
+                  {message.imagePrompt && (
+                    <div className="text-xs text-vcb-mid-grey italic flex-1">
+                      Prompt: {message.imagePrompt}
+                    </div>
+                  )}
+                  {/* Download Button */}
+                  <a
+                    href={message.imageUrl}
+                    download={`gogga-${message.imagePrompt?.slice(0, 30) || 'image'}-${Date.now()}.png`}
+                    className="flex items-center space-x-1 px-3 py-1.5 bg-[#4169E1] text-white rounded hover:bg-[#315AC1] transition-colors text-xs font-medium ml-3 flex-shrink-0"
+                    title="Download Image"
+                  >
+                    <span className="material-icons text-sm">download</span>
+                    <span>Download</span>
+                  </a>
+                </div>
               </div>
             ) : (
               <div className="space-y-3">
@@ -2223,10 +2244,14 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
               </p>
             </div>
 
-            {/* FLUX Image Model Info - Large Icon */}
-            <div className="flex flex-col items-center justify-center px-3 md:px-4 border-l border-vcb-mid-grey">
-              <span className="material-icons text-vcb-accent" style={{ fontSize: '48px' }}>image</span>
-              <p className="text-vcb-white text-[6px] md:text-[8px] text-center font-medium uppercase tracking-wide mt-1 max-w-[80px] leading-tight">
+            {/* FLUX Image Model Info - Large Icon - Clickable */}
+            <div 
+              onClick={() => setShowImagePrompt(!showImagePrompt)}
+              className="flex flex-col items-center justify-center px-3 md:px-4 border-l border-vcb-mid-grey cursor-pointer hover:bg-vcb-dark-grey transition-colors transform rotate-[-25deg]"
+              title="Click to generate images with FLUX"
+            >
+              <span className="material-icons text-white" style={{ fontSize: '48px' }}>image</span>
+              <p className="text-white text-[8px] md:text-[10px] text-center font-bold uppercase tracking-wide mt-1 max-w-[80px] leading-tight">
                 FLUX latest flagship image model for images
               </p>
             </div>
