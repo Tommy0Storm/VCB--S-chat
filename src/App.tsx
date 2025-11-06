@@ -1054,8 +1054,8 @@ const App: React.FC = () => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => {
           controller.abort();
-          console.log('⏱️ TTS request timed out after 10 seconds');
-        }, 10000); // 10 second timeout (reduced from 15)
+          console.log('⏱️ TTS request timed out after 8 seconds - no charge');
+        }, 8000); // Reduced to 8 seconds to avoid charges
         
         apiStart = performance.now();
         console.log(`🎤 TTS Request started - Text: ${truncatedText.length} chars, Cache key: ${cacheKey.substring(0, 30)}...`);
@@ -1090,19 +1090,22 @@ const App: React.FC = () => {
       } catch (err) {
         apiEnd = performance.now();
         const apiTime = apiEnd - apiStart;
-        console.error(`❌ Chatterbox TTS failed after ${apiTime.toFixed(1)}ms, using browser TTS fallback...`, err);
+        console.error(`❌ Chatterbox TTS failed after ${apiTime.toFixed(1)}ms - no API charge, using browser TTS...`, err);
         response = null;
       } finally {
         activeRequests.current.delete(cacheKey);
       }
 
-      // Fast fallback to browser TTS if API failed or timed out
+      // Fast fallback to browser TTS if API failed or timed out (NO CHARGE)
       if (!response || !response.ok) {
-        console.log('🔄 Using instant browser TTS fallback');
+        console.log('🔄 Using instant browser TTS fallback (no API charge)');
+        
+        // Clean up request tracking since we're not using API
+        activeRequests.current.delete(cacheKey);
         
         // INSTANT browser TTS fallback
         const utterance = new SpeechSynthesisUtterance(truncatedText);
-        utterance.rate = 1.4; // Even faster (was 1.3)
+        utterance.rate = 1.4;
         utterance.pitch = 1.0;
         utterance.volume = 0.9;
         
@@ -1110,12 +1113,30 @@ const App: React.FC = () => {
           setSpeakingIndex(null);
           isSpeakingRef.current = false;
           setCurrentAudio(null);
-          console.log('🔊 Browser TTS playback completed');
+          console.log('🔊 Browser TTS completed (no charge)');
+          
+          // Restart recognition if voice mode enabled
+          if (voiceModeEnabledRef.current && recognitionRef.current && !isListening) {
+            setTimeout(() => {
+              try {
+                recognitionRef.current.start();
+                setIsListening(true);
+              } catch (err) {
+                console.error('Failed to restart recognition:', err);
+              }
+            }, 300);
+          }
+        };
+        
+        utterance.onerror = () => {
+          setSpeakingIndex(null);
+          isSpeakingRef.current = false;
+          setCurrentAudio(null);
         };
         
         window.speechSynthesis.speak(utterance);
-        console.log('🔊 Browser TTS playback started (instant)');
-        return; // Exit early with browser TTS
+        console.log('🔊 Browser TTS started (instant, no API charge)');
+        return; // Exit early - no API charge
       }
 
       if (!response.ok) {
