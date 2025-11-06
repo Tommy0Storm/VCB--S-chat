@@ -333,6 +333,7 @@ interface MessageComponentProps {
   onCopy: (text: string, index: number) => void;
   onSpeak: (text: string, index: number) => void;
   onRetry: (messageIndex: number) => void;
+  onDownloadImage: (imageUrl: string, prompt: string) => void;
   copiedIndex: number | null;
   speakingIndex: number | null;
   markdownComponents: any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -344,6 +345,7 @@ const MessageComponent = React.memo(({
   onCopy,
   onSpeak,
   onRetry,
+  onDownloadImage,
   copiedIndex,
   speakingIndex,
   markdownComponents,
@@ -461,7 +463,7 @@ const MessageComponent = React.memo(({
                   )}
                   {/* Download Button */}
                   <button
-                    onClick={() => handleDownloadImage(message.imageUrl!, message.imagePrompt || 'image')}
+                    onClick={() => onDownloadImage(message.imageUrl!, message.imagePrompt || 'image')}
                     className="flex items-center space-x-1 px-3 py-1.5 bg-[#4169E1] text-white rounded hover:bg-[#315AC1] transition-colors text-xs font-medium ml-3 flex-shrink-0"
                     title="Download Image"
                   >
@@ -776,44 +778,6 @@ const App: React.FC = () => {
     }
   }, [voiceModeEnabled, isListening]);
 
-  // Auto-play TTS when new assistant message arrives in voice mode
-  useEffect(() => {
-    if (voiceModeEnabled && messages.length > 0) {
-      const lastMessage = messages[messages.length - 1];
-      // Only speak if it's an assistant message and not already speaking
-      if (lastMessage.role === 'assistant' && !isSpeakingRef.current && lastMessage.type !== 'image') {
-        const messageIndex = messages.length - 1;
-        // Small delay to ensure state is updated
-        setTimeout(() => {
-          handleSpeak(lastMessage.content, messageIndex);
-        }, 500);
-      }
-    }
-  }, [messages, voiceModeEnabled, handleSpeak]);
-
-  // Auto-focus on chat input on mount and after messages
-  useEffect(() => {
-    // Focus on initial load
-    inputRef.current?.focus();
-  }, []);
-
-  // Re-focus after messages are sent (after loading completes)
-  useEffect(() => {
-    if (!isLoading && !voiceModeEnabled) {
-      inputRef.current?.focus();
-    }
-  }, [isLoading, voiceModeEnabled]);
-
-  // Re-focus when modals close
-  useEffect(() => {
-    if (!showChatHistory && !showUsage) {
-      // Small delay to ensure modal close animation completes
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 100);
-    }
-  }, [showChatHistory, showUsage]);
-
   // Load DeepInfra voices
   const loadDeepInfraVoices = async () => {
     const deepinfraApiKey = import.meta.env.VITE_DEEPINFRA_API_KEY;
@@ -1033,6 +997,44 @@ const App: React.FC = () => {
       window.open(imageUrl, '_blank');
     }
   };
+
+  // Auto-play TTS when new assistant message arrives in voice mode
+  useEffect(() => {
+    if (voiceModeEnabled && messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      // Only speak if it's an assistant message and not already speaking
+      if (lastMessage.role === 'assistant' && !isSpeakingRef.current && lastMessage.type !== 'image') {
+        const messageIndex = messages.length - 1;
+        // Small delay to ensure state is updated
+        setTimeout(() => {
+          handleSpeak(lastMessage.content, messageIndex);
+        }, 500);
+      }
+    }
+  }, [messages, voiceModeEnabled, handleSpeak]);
+
+  // Auto-focus on chat input on mount and after messages
+  useEffect(() => {
+    // Focus on initial load
+    inputRef.current?.focus();
+  }, []);
+
+  // Re-focus after messages are sent (after loading completes)
+  useEffect(() => {
+    if (!isLoading && !voiceModeEnabled) {
+      inputRef.current?.focus();
+    }
+  }, [isLoading, voiceModeEnabled]);
+
+  // Re-focus when modals close
+  useEffect(() => {
+    if (!showChatHistory && !showUsage) {
+      // Small delay to ensure modal close animation completes
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+    }
+  }, [showChatHistory, showUsage]);
 
   // Load voices when component mounts
   useEffect(() => {
@@ -2751,6 +2753,7 @@ TONE: Friendly, warm, helpful, genuinely South African. Expert when needed, casu
                 onCopy={handleCopy}
                 onSpeak={handleSpeak}
                 onRetry={handleRetry}
+                onDownloadImage={handleDownloadImage}
                 copiedIndex={copiedIndex}
                 speakingIndex={speakingIndex}
                 markdownComponents={markdownComponents}
