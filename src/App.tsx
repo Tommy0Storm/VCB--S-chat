@@ -900,10 +900,17 @@ const App: React.FC = () => {
       }
 
       const data = await response.json();
+      console.log('TTS API response:', { hasAudio: !!data.audio, status: data.inference_status });
       
       if (data.audio) {
-        // Convert base64 audio to playable audio
-        const audioBlob = await fetch(`data:audio/wav;base64,${data.audio}`).then(r => r.blob());
+        // The audio field contains base64-encoded binary audio data
+        // Convert base64 to blob
+        const binaryString = atob(data.audio);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const audioBlob = new Blob([bytes], { type: 'audio/wav' });
         const audioUrl = URL.createObjectURL(audioBlob);
         const audio = new Audio(audioUrl);
         
@@ -928,8 +935,8 @@ const App: React.FC = () => {
           }
         };
 
-        audio.onerror = () => {
-          console.error('Audio playback error');
+        audio.onerror = (e) => {
+          console.error('Audio playback error:', e);
           setSpeakingIndex(null);
           isSpeakingRef.current = false;
           setCurrentAudio(null);
@@ -948,8 +955,15 @@ const App: React.FC = () => {
           }
         };
 
-        audio.play();
+        audio.play().catch(err => {
+          console.error('Failed to play audio:', err);
+          setSpeakingIndex(null);
+          isSpeakingRef.current = false;
+          setCurrentAudio(null);
+          URL.revokeObjectURL(audioUrl);
+        });
       } else {
+        console.error('No audio data in response:', data);
         throw new Error('No audio data returned from TTS API');
       }
     } catch (error) {
