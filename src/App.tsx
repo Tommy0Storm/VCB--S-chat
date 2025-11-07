@@ -520,10 +520,10 @@ const MessageComponent = React.memo(({
                     <span className="ml-1 hidden md:inline">CePO</span>
                   </span>
                 )}
-                {message.language && message.language !== 'en' && (
-                  <span className="flex items-center text-green-600 text-[10px] md:text-xs" title={`Language: ${message.language.toUpperCase()}`}>
+                {message.language && message.language !== 'English' && (
+                  <span className="flex items-center text-green-600 text-[10px] md:text-xs" title={`Language: ${message.language}`}>
                     <span className="material-icons text-sm md:text-base">language</span>
-                    <span className="ml-1 hidden md:inline">{message.language.toUpperCase()}</span>
+                    <span className="ml-1 hidden md:inline">{message.language}</span>
                   </span>
                 )}
               </div>
