@@ -37,7 +37,7 @@ PERSONALITY: Professional yet playful! Add subtle personality:
 - Be warm, not cold/sterile
 
 FORMATTING: Ultra-strict compliance:
-- NO EMOJIS EVER (❌🚫⛔ all forbidden)
+- NO EMOJIS EVER (all forbidden)
 - Use Material Icons ONLY: [icon_name] format (e.g., [check_circle], [lightbulb])
 - Numbered lists preferred (NO bullets • or -)
 - Markdown for headings: ## Heading
@@ -913,7 +913,7 @@ const App: React.FC = () => {
 
     // Prevent multiple simultaneous requests
     if (isSpeakingRef.current || speakingIndex !== null) {
-      console.log('🔄 TTS already in progress, blocking request');
+      console.log('[TTS] Request blocked: playback already running');
       return;
     }
 
@@ -930,7 +930,7 @@ const App: React.FC = () => {
     };
     const selectedVoice = voiceMap[languageDetection.code as keyof typeof voiceMap] || 'twi';
     
-    console.log(`🎤 Piper Streaming TTS: ${truncatedText.length} chars, Voice: ${selectedVoice}`);
+    console.log(`[TTS] Piper streaming request: ${truncatedText.length} chars, Voice: ${selectedVoice}`);
 
     try {
       setSpeakingIndex(index);
@@ -947,17 +947,17 @@ const App: React.FC = () => {
       }
 
       // Use Piper streaming backend
-      console.log('🔗 Fetching from Piper server...');
+      console.log('[TTS] Fetching from Piper server...');
       
       // Detect language from the text
       const detectedLang = detectSALanguage(truncatedText);
-      console.log('🌍 Detected language:', detectedLang);
+      console.log('[LangDetect] Detected language:', detectedLang);
       
       // Use proxy in development, direct URL in production
       const piperUrl = import.meta.env.DEV 
         ? '/api/tts' 
         : 'http://localhost:5000/tts-stream';
-      
+
       const response = await fetch(piperUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -968,31 +968,31 @@ const App: React.FC = () => {
         })
       });
 
-      console.log('📡 Piper response:', response.status, response.headers.get('content-type'));
+      console.log('[TTS] Piper response:', response.status, response.headers.get('content-type'));
       
       if (!response.ok) {
         throw new Error(`Piper server error: ${response.status}`);
       }
 
       const audioBlob = await response.blob();
-      console.log('🎵 Audio blob:', audioBlob.size, 'bytes, type:', audioBlob.type);
+      console.log('[Audio] Received blob:', audioBlob.size, 'bytes, type:', audioBlob.type);
       
       const audioUrl = URL.createObjectURL(audioBlob);
-      console.log('🔊 Audio URL created:', audioUrl);
+      console.log('[Audio] URL created:', audioUrl);
       
       const audio = new Audio(audioUrl);
       audio.preload = 'auto';
       audio.volume = 0.9;
       
       setCurrentAudio(audio);
-      console.log('🎤 Audio element created, attempting playback...');
+      console.log('[Audio] Element created, starting playback...');
 
-      audio.onloadstart = () => console.log('📥 Audio loading started');
-      audio.oncanplay = () => console.log('✅ Audio can play');
-      audio.onplay = () => console.log('▶️ Audio started playing');
+      audio.onloadstart = () => console.log('[Audio] Loading started');
+      audio.oncanplay = () => console.log('[Audio] Ready to play');
+      audio.onplay = () => console.log('[Audio] Playback started');
       
       audio.onended = () => {
-        console.log('⏹️ Audio playback ended');
+        console.log('[Audio] Playback ended');
         setSpeakingIndex(null);
         isSpeakingRef.current = false;
         setCurrentAudio(null);
@@ -1012,22 +1012,22 @@ const App: React.FC = () => {
       };
 
       audio.onerror = (e) => {
-        console.error('❌ Audio playback error:', e, audio.error);
+        console.error('[Audio] Playback error:', e, audio.error);
         setSpeakingIndex(null);
         isSpeakingRef.current = false;
         setCurrentAudio(null);
         URL.revokeObjectURL(audioUrl);
       };
 
-      console.log('🎧 Calling audio.play()...');
+      console.log('[Audio] Invoking play()');
       await audio.play();
-      console.log('✅ Audio.play() completed successfully');
+      console.log('[Audio] play() resolved successfully');
       
       const totalTime = performance.now() - perfStart;
-      console.log(`⚡ Piper Streaming: ${totalTime.toFixed(1)}ms (${selectedVoice})`);
+      console.log(`[TTS] Piper streaming completed in ${totalTime.toFixed(1)}ms (${selectedVoice})`);
       
     } catch (error) {
-      console.error('❌ Piper TTS error:', error);
+      console.error('[TTS] Piper error:', error);
       setSpeakingIndex(null);
       isSpeakingRef.current = false;
       
@@ -1203,7 +1203,7 @@ const App: React.FC = () => {
         if (detected.confidence > 80 && detected.code !== 'en') {
           const newLang = supportedSpeechLangs[detected.code as keyof typeof supportedSpeechLangs];
           if (newLang && recognition.lang !== newLang) {
-            console.log(`🎤 Switching speech recognition to ${detected.language} (${newLang})`);
+            console.log(`[Voice] Switching speech recognition to ${detected.language} (${newLang})`);
             recognition.lang = newLang;
           }
         }
@@ -1342,8 +1342,8 @@ const App: React.FC = () => {
     
     // Save preference to localStorage
     localStorage.setItem('voiceGender', newGender);
-    
-    console.log(`🎤 Voice gender switched to: ${newGender}`);
+
+    console.log(`[Voice] Gender switched to: ${newGender}`);
   };
 
   // Conversation Management Functions
@@ -1875,7 +1875,7 @@ Provide the improved final answer addressing any issues identified.`;
     // Add progress message
     const progressMessage: Message = {
       role: 'assistant',
-      content: `🎨 Generating image with FLUX-1.1-pro...\n\nPrompt: "${imagePrompt.trim()}"\n\nThis may take 10-30 seconds. Please wait...`,
+      content: `[palette] Generating image with FLUX-1.1-pro...\n\nPrompt: "${imagePrompt.trim()}"\n\nThis may take 10-30 seconds. Please wait...`,
       timestamp: Date.now(),
     };
     setMessages((prev) => [...prev, progressMessage]);
@@ -1905,7 +1905,7 @@ Provide the improved final answer addressing any issues identified.`;
 
       const errorMsg: Message = {
         role: 'assistant',
-        content: `❌ Failed to generate image: ${error.message || 'Unknown error'}`,
+        content: `[error] Failed to generate image: ${error.message || 'Unknown error'}`,
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -1920,7 +1920,7 @@ Provide the improved final answer addressing any issues identified.`;
 
     // Detect SA language
     const languageDetection = detectSALanguage(input.trim());
-    console.log('🌍 Language detected:', languageDetection);
+    console.log('[LangDetect] Language detected:', languageDetection);
 
     const userMessage: Message = {
       role: 'user',
@@ -2038,7 +2038,7 @@ CORE HIERARCHY (Auto-Check Every Query):
 FRAUD DOCUMENT AUDIT LAYER (Critical Override):
 • EVERY document flagged for fraud indicators BEFORE legal analysis proceeds
 • Fraud markers: Forgery, backdating, alterations, signature inconsistencies, metadata tampering, chain-of-custody breaks
-• If fraud suspected: HALT advice → FLAG "⚠ FRAUD ALERT: [document] requires forensic verification"
+• If fraud suspected: HALT advice → FLAG "[warning] FRAUD ALERT: [document] requires forensic verification"
 • Do not proceed with legal argument on fraudulent doc until verified authentic
 • Report fraud disclosure obligations (s.34 POCA Act 121/1998, professional duties)
 
@@ -2057,11 +2057,11 @@ LETHAL TACTICAL OVERLAY:
 
 OUTPUT FORMAT (REQUIRED STRUCTURE):
 [QUERY ANALYSIS] Domain: [Labour/Criminal/General] | Fuzzy Score: X/1.0 | Winning Probability: Y%
-[FRAUD AUDIT] Red flags: [None / List] | Authenticity: [Verified / ⚠ Requires Forensic / 🚨 ALERT]
+[FRAUD AUDIT] Red flags: [None / List] | Authenticity: [Verified / [warning] Requires Forensic / [error] ALERT]
 [AUTHORITY STACK] Constitutional: [s.X] | Statute: [Act section] | Precedent: [Case (Year/Court)]
 [LETHAL STRATEGY] Primary tactic + Counter-argument + Rebuttal | Alternative tactics if primary risky
 [REMEDY & SETTLEMENT] Outcome range | Settlement leverage point
-[RISK FLAGGING] 🚩 Critical risks → Mitigation → RECOMMEND: [Next action]
+[RISK FLAGGING] [flag] Critical risks → Mitigation → RECOMMEND: [Next action]
 
 WHEN PRESENTING MULTIPLE ISSUES/FINDINGS: ALWAYS USE MARKDOWN TABLE (NOT NUMBERED LISTS)
 Example structure for irregularities/risks/findings:
@@ -2283,7 +2283,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                   )}
                 </svg>
                 <span className="hidden md:inline text-white text-[10px] font-medium uppercase tracking-wide">
-                  {voiceGender === 'female' ? '♀ Female' : '♂ Male'}
+                  {voiceGender === 'female' ? 'Female Voice' : 'Male Voice'}
                 </span>
               </button>
 
