@@ -520,7 +520,7 @@ const MessageComponent = React.memo(({
                     <span className="ml-1 hidden md:inline">CePO</span>
                   </span>
                 )}
-                {message.language && message.language !== 'English' && (
+                {message.language && (
                   <span className="flex items-center text-green-600 text-[10px] md:text-xs" title={`Language: ${message.language}`}>
                     <span className="material-icons text-sm md:text-base">language</span>
                     <span className="ml-1 hidden md:inline">{message.language}</span>
@@ -1899,13 +1899,13 @@ Provide the improved final answer addressing any issues identified.`;
       };
 
       setMessages((prev) => [...prev, imageMessage]);
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Remove progress message
       setMessages((prev) => prev.filter(msg => msg !== progressMessage));
 
       const errorMsg: Message = {
         role: 'assistant',
-        content: `Image generation failed: ${error.message || 'Unknown error'}`,
+        content: `Image generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -1955,7 +1955,7 @@ Provide the improved final answer addressing any issues identified.`;
 
         setMessages((prev) => [...prev, imageMessage]);
         // console.log('Image generated successfully:', imageUrl);
-      } catch (error: any) {
+      } catch (error: unknown) {
         // console.error('Image generation failed:', error);
         const errorMsg: Message = {
           role: 'assistant',
@@ -2015,7 +2015,7 @@ Provide the improved final answer addressing any issues identified.`;
             setMessages((prev) => [...prev, assistantMessage]);
             usageTrackerRef.current.trackMessage(userMessage.content, cepoResult);
             break; // Exit retry loop
-          } catch (cepoError) {
+          } catch (cepoError: unknown) {
             console.error('CePO failed, falling back to standard mode:', cepoError);
             // Continue with standard processing
           }
@@ -2042,6 +2042,13 @@ FRAUD DOCUMENT AUDIT LAYER (Critical Override):
 • If fraud suspected: HALT advice → flag clearly as "Fraud alert: [document] requires forensic verification"
 • Do not proceed with legal argument on fraudulent doc until verified authentic
 • Report fraud disclosure obligations (s.34 POCA Act 121/1998, professional duties)
+
+CONDITIONAL DRAFTING PROTOCOL (Trigger: user requests drafting/adaptation):
+• Thesis First: Open with the final, non-negotiable position.
+• Rebut Ad Seriatim: Use clear headings to dismantle every opposing argument sequentially.
+• Invalidate with Law: Prove rival claims are void, contradictory, or extinguished (prescription, void ab initio, plus valet quod agitur).
+• Define Sole Remedy: After eliminating alternatives, set out the only lawful remedy (e.g., actio communi dividundo).
+• Propose & Warn: Finish with a concrete execution plan, deadline, and explicit non-compliance consequence (e.g., High Court application with punitive costs).
 
 REASONING PROTOCOL:
 • FUZZY SCORE (0-1): Rate all ambiguous facts/rules. Output score with reasoning.
@@ -2153,8 +2160,8 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
 
         // Success - exit retry loop
         break;
-      } catch (error: any) {
-        const errorMessage = error?.message || String(error);
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         const is429 = errorMessage.includes('429') || errorMessage.toLowerCase().includes('rate limit') || errorMessage.toLowerCase().includes('too many requests');
 
         if (is429 && retryCount < maxRetries) {
