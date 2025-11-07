@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, startTransition } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo, startTransition } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -7,7 +7,8 @@ import { UsageTracker, TierType } from './utils/usageTracker';
 import { ConversationManager, Message } from './utils/conversationManager';
 import { detectSALanguage } from './utils/saLanguageDetector';
 import { extractTextFromFile } from './utils/documentProcessor';
-import { loadStoredDocuments, persistStoredDocuments, type StoredDocument } from './utils/documentStore';
+import { loadStoredDocuments, persistStoredDocuments } from './utils/documentStore';
+import type { StoredDocument } from './types/documents';
 
 
 // ==================== CONSTANTS ====================
@@ -171,12 +172,13 @@ const ALLOWED_UPLOAD_EXTENSIONS = ['txt', 'md', 'pdf', 'doc', 'docx'];
 const enforceFormatting = (text: string): string => {
   let fixed = text;
 
-  // STEP 1: Strip ALL emojis (zero tolerance) - comprehensive Unicode ranges
   // Covers: emoticons, symbols, pictographs, flags, dingbats, misc symbols, etc.
+  // eslint-disable-next-line no-misleading-character-class
   fixed = fixed.replace(/[\u{1F1E0}-\u{1F1FF}\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}\u{1F100}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2300}-\u{23FF}\u{2B00}-\u{2BFF}\u{3000}-\u{303F}\u{FE00}-\u{FE0F}\u{200D}\u{20D0}-\u{20FF}]/gu, '');
 
   // STEP 1.5: Additional pass for common emoji patterns that might have been missed
   // Target specific problematic emojis seen in production
+  // eslint-disable-next-line no-misleading-character-class
   fixed = fixed.replace(/[⚙️💡🕰️⚠️🏛️⚖️🌍🌈🏆🧠🎭🤝🕊️✅🌱]/gu, '');
 
   // STEP 2: Remove invalid icon names (non-existent Material Icons)
@@ -212,7 +214,7 @@ const enforceFormatting = (text: string): string => {
   let listCounter = 1;
 
   for (let i = 0; i < lines.length; i++) {
-    let line = lines[i];
+    const line = lines[i];
     const trimmed = line.trim();
 
     // Skip empty lines
@@ -223,9 +225,9 @@ const enforceFormatting = (text: string): string => {
     }
 
     // 1. Convert bullets to numbered lists
-    const bulletMatch = trimmed.match(/^[\-\*•]\s+(.+)$/);
+  const bulletMatch = trimmed.match(/^[-*•]\s+(.+)$/);
     if (bulletMatch) {
-      const indent = line.match(/^(\s*)/)?.[1] || '';
+  const indent = line.match(/^(\s*)/)?.[1] ?? '';
       result.push(`${indent}${listCounter}. ${bulletMatch[1]}`);
       listCounter++;
       continue;
@@ -474,20 +476,27 @@ const fixMarkdownTables = (text: string): string => {
   return result.join('\n');
 };
 
-// Extract thinking block from Qwen thinking model responses
 const extractThinkingBlock = (content: string): { thinking: string | null; answer: string } => {
-  const thinkingMatch = content.match(/<think>([\s\S]*?)<\/think>/);
-  
-  if (thinkingMatch) {
-    const thinking = thinkingMatch[1].trim();
-    const answer = content.replace(/<think>[\s\S]*?<\/think>/, '').trim();
-    return { thinking, answer };
+  if (!content) {
+    return { thinking: null, answer: '' };
   }
-  
-  return { thinking: null, answer: content };
+
+  const fullThinkingMatch = content.match(/<thinking>([\s\S]*?)<\/thinking>/i);
+  const altThinkingMatch = fullThinkingMatch ?? content.match(/<think>([\s\S]*?)<\/think>/i);
+
+  if (!altThinkingMatch) {
+    return { thinking: null, answer: content };
+  }
+
+  const thinking = altThinkingMatch[1].trim();
+  const answer = content.replace(altThinkingMatch[0], '').trim();
+
+  return {
+    thinking: thinking.length > 0 ? thinking : null,
+    answer: answer.length > 0 ? answer : content.trim(),
+  };
 };
 
-// Memoized Message Component - prevents unnecessary re-renders
 interface MessageComponentProps {
   message: Message;
   index: number;
@@ -498,6 +507,7 @@ interface MessageComponentProps {
   copiedIndex: number | null;
   speakingIndex: number | null;
   markdownComponents: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  documentsById?: Record<string, StoredDocument | undefined>;
 }
 
 const MessageComponent = React.memo(({
@@ -510,6 +520,7 @@ const MessageComponent = React.memo(({
   copiedIndex,
   speakingIndex,
   markdownComponents,
+  documentsById,
 }: MessageComponentProps) => {
   const [showThinking, setShowThinking] = React.useState(false);
   
@@ -669,6 +680,23 @@ const MessageComponent = React.memo(({
                     {displayContent}
                   </ReactMarkdown>
                 </div>
+
+                {message.attachedDocumentIds && message.attachedDocumentIds.length > 0 && (
+                  <div className="border border-vcb-light-grey bg-gray-50 rounded px-2 py-1.5">
+                    <p className="text-[8px] font-semibold uppercase tracking-wide text-vcb-black">Attached Documents</p>
+                    <ul className="mt-1 space-y-1">
+                      {message.attachedDocumentIds.map((docId, attachmentIndex) => {
+                        const doc = documentsById?.[docId];
+                        return (
+                          <li key={`${docId}-${attachmentIndex}`} className="flex items-center gap-1 text-[8px] text-vcb-black">
+                            <span className="font-bold">{attachmentIndex + 1}.</span>
+                            <span className="truncate">{doc ? doc.name : 'Document removed'}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
                 
                 {/* Action Buttons at Bottom (for assistant messages only) */}
                 {message.role === 'assistant' && (
@@ -750,10 +778,15 @@ const App: React.FC = () => {
   const conversationManagerRef = useRef<ConversationManager>(new ConversationManager());
   // Removed Piper client refs - now using streaming backend
 
-  const [uploadedDocuments, setUploadedDocuments] = useState<StoredDocument[]>([]);
+  const [conversationDocuments, setConversationDocuments] = useState<StoredDocument[]>([]);
+  const [pendingAttachmentIds, setPendingAttachmentIds] = useState<string[]>([]);
   const [isProcessingUpload, setIsProcessingUpload] = useState(false);
   const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [showDocumentManager, setShowDocumentManager] = useState(false);
+  const [documentTargetConversationId, setDocumentTargetConversationId] = useState<string | null>(null);
+  const [documentSearch, setDocumentSearch] = useState('');
+  const [documentLibraryVersion, setDocumentLibraryVersion] = useState(0);
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   // Detect if user wants image generation (temporarily disabled)
@@ -803,6 +836,51 @@ const App: React.FC = () => {
     // Fallback: use the entire text as prompt
     return text.trim();
   };
+
+  const ensureConversationId = useCallback((): string => {
+    if (currentConversationId) {
+      return currentConversationId;
+    }
+
+    const messagesWithTimestamps: Message[] = messages.map((msg, index) => ({
+      ...msg,
+      timestamp: msg.timestamp || Date.now() + index,
+    }));
+
+    const newConv = conversationManagerRef.current.createConversation({
+      messages: messagesWithTimestamps,
+      documents: [],
+    });
+
+    setCurrentConversationId(newConv.id);
+    setConversationDocuments(Array.isArray(newConv.documents) ? [...newConv.documents] : []);
+    return newConv.id;
+  }, [currentConversationId, messages]);
+
+  const saveCurrentConversation = useCallback(() => {
+    if (messages.length === 0 && conversationDocuments.length === 0) {
+      return;
+    }
+
+    const messagesWithTimestamps: Message[] = messages.map((msg, index) => ({
+      ...msg,
+      timestamp: msg.timestamp || Date.now() + index,
+    }));
+
+    if (currentConversationId) {
+      conversationManagerRef.current.updateConversation(
+        currentConversationId,
+        messagesWithTimestamps,
+        conversationDocuments,
+      );
+    } else {
+      const newConv = conversationManagerRef.current.createConversation({
+        messages: messagesWithTimestamps,
+        documents: conversationDocuments,
+      });
+      setCurrentConversationId(newConv.id);
+    }
+  }, [conversationDocuments, currentConversationId, messages]);
 
   const scrollToBottom = useCallback(() => {
     // Use requestAnimationFrame to prevent forced reflow during critical rendering
@@ -920,17 +998,6 @@ const App: React.FC = () => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  useEffect(() => {
-    try {
-      const stored = loadStoredDocuments();
-      if (stored.length > 0) {
-        setUploadedDocuments(stored);
-      }
-    } catch (error) {
-      console.error('[DocumentStore] Failed to hydrate documents:', error);
-    }
-  }, []);
-
   // Load tier from usage tracker on mount
   useEffect(() => {
     const usage = usageTrackerRef.current.getUsage();
@@ -974,6 +1041,57 @@ const App: React.FC = () => {
     return () => window.clearTimeout(timer);
   }, [uploadFeedback, uploadError]);
 
+  useEffect(() => {
+    const legacyDocuments = loadStoredDocuments();
+    if (!legacyDocuments || legacyDocuments.length === 0) {
+      return;
+    }
+
+    let targetId = currentConversationId;
+    if (!targetId) {
+      targetId = ensureConversationId();
+    }
+
+    if (!targetId) {
+      return;
+    }
+
+    const existingIds = new Set(
+      conversationManagerRef.current
+        .getDocumentsForConversation(targetId)
+        .map((doc) => doc.id),
+    );
+
+    legacyDocuments.forEach((doc) => {
+      if (existingIds.has(doc.id)) {
+        return;
+      }
+
+      conversationManagerRef.current.addDocumentToConversation(targetId!, {
+        ...doc,
+        conversationId: targetId!,
+      });
+    });
+
+    const updated = conversationManagerRef.current.getDocumentsForConversation(targetId);
+    if (targetId === currentConversationId) {
+      setConversationDocuments(updated);
+    }
+
+    persistStoredDocuments([]);
+    setDocumentLibraryVersion((prev) => prev + 1);
+  }, [currentConversationId, ensureConversationId]);
+
+  useEffect(() => {
+    if (!showDocumentManager) {
+      return;
+    }
+
+    if (!currentConversationId && conversationDocuments.length > 0) {
+      ensureConversationId();
+    }
+  }, [showDocumentManager, currentConversationId, conversationDocuments.length, ensureConversationId]);
+
   const handleDocumentUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const { files } = event.target;
     if (!files || files.length === 0) {
@@ -1000,6 +1118,15 @@ const App: React.FC = () => {
         throw new Error('No readable text found in the document.');
       }
 
+      let targetId = documentTargetConversationId ?? currentConversationId;
+      if (!targetId) {
+        targetId = ensureConversationId();
+      }
+
+      if (!targetId) {
+        throw new Error('Unable to determine target conversation for this document.');
+      }
+
       const record: StoredDocument = {
         id: `doc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         name: file.name,
@@ -1007,45 +1134,69 @@ const App: React.FC = () => {
         size: file.size,
         text,
         uploadedAt: Date.now(),
+        conversationId: targetId,
       };
 
-      setUploadedDocuments((prev) => {
-        const next = [...prev, record];
-        persistStoredDocuments(next);
-        return next;
-      });
+      const updatedDocs = conversationManagerRef.current.addDocumentToConversation(targetId, record);
+      if (!updatedDocs) {
+        throw new Error('Failed to persist the document.');
+      }
 
-      setUploadFeedback(`Stored "${file.name}". Use Insert to add it to your message.`);
+      if (targetId === currentConversationId) {
+        setConversationDocuments(updatedDocs);
+      }
+
+      setDocumentLibraryVersion((prev) => prev + 1);
+      setUploadFeedback(`Stored "${file.name}" for this chat.`);
+      setUploadError(null);
     } catch (error) {
       console.error('[DocumentUpload] Failed to process document:', error);
       setUploadError(error instanceof Error ? error.message : 'Failed to process the document.');
       setUploadFeedback(null);
     } finally {
       setIsProcessingUpload(false);
+      setDocumentTargetConversationId(null);
     }
   };
 
   const handleInsertDocument = (id: string) => {
-    const doc = uploadedDocuments.find((entry) => entry.id === id);
+    const doc = conversationDocuments.find((entry) => entry.id === id);
     if (!doc) {
       return;
     }
 
     setInput((prev) => (prev ? `${prev}\n\n${doc.text}` : doc.text));
-    setUploadFeedback(`Inserted "${doc.name}" into the chat input.`);
+    setPendingAttachmentIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setUploadFeedback(`Attached "${doc.name}" to your next message.`);
     setUploadError(null);
   };
 
-  const handleRemoveDocument = (id: string) => {
-    const doc = uploadedDocuments.find((entry) => entry.id === id);
-    setUploadedDocuments((prev) => {
-      const next = prev.filter((entry) => entry.id !== id);
-      persistStoredDocuments(next);
-      return next;
-    });
+  const handleRemoveDocument = (id: string, conversationId?: string) => {
+    const targetId = conversationId ?? currentConversationId;
+    if (!targetId) {
+      return;
+    }
+
+    const docsBefore = conversationManagerRef.current.getDocumentsForConversation(targetId);
+    const doc = docsBefore.find((entry) => entry.id === id);
+    const updatedDocs = conversationManagerRef.current.removeDocumentFromConversation(targetId, id);
+
+    if (!updatedDocs) {
+      setUploadError('Failed to remove the document.');
+      return;
+    }
+
+    if (targetId === currentConversationId) {
+      setConversationDocuments(updatedDocs);
+      setPendingAttachmentIds((prev) => prev.filter((docId) => docId !== id));
+    }
+
+    setDocumentLibraryVersion((prev) => prev + 1);
 
     if (doc) {
-      setUploadFeedback(`Removed "${doc.name}" from stored documents.`);
+      setUploadFeedback(`Removed "${doc.name}" from this chat.`);
+    } else {
+      setUploadFeedback('Removed document from this chat.');
     }
     setUploadError(null);
   };
@@ -1502,36 +1653,18 @@ const App: React.FC = () => {
     console.log(`[Voice] Gender switched to: ${newGender}`);
   };
 
-  // Conversation Management Functions
-  const saveCurrentConversation = () => {
-    if (messages.length === 0) return;
-
-    const messagesWithTimestamps: Message[] = messages.map((msg, index) => ({
-      ...msg,
-      timestamp: msg.timestamp || Date.now() + index,
-    }));
-
-    if (currentConversationId) {
-      // Update existing conversation
-      conversationManagerRef.current.updateConversation(currentConversationId, messagesWithTimestamps);
-      // console.log('Updated conversation:', currentConversationId);
-    } else {
-      // Create new conversation
-      const newConv = conversationManagerRef.current.createConversation(messagesWithTimestamps);
-      setCurrentConversationId(newConv.id);
-      // console.log('Created new conversation:', newConv.id);
-    }
-  };
-
   const loadConversation = (id: string) => {
     const conv = conversationManagerRef.current.getConversation(id);
     if (conv) {
       // Use startTransition to make conversation loading non-blocking
       startTransition(() => {
         setMessages(conv.messages);
+        setConversationDocuments(Array.isArray(conv.documents) ? [...conv.documents] : []);
+        setPendingAttachmentIds([]);
         setCurrentConversationId(id);
         setShowChatHistory(false);
       });
+      setDocumentTargetConversationId(null);
       // console.log('Loaded conversation:', id, conv.title);
     }
   };
@@ -1545,8 +1678,11 @@ const App: React.FC = () => {
     // Clear current chat
     setMessages([]);
     setCurrentConversationId(null);
+    setConversationDocuments([]);
+    setPendingAttachmentIds([]);
     setInput('');
     setShowChatHistory(false);
+    setDocumentTargetConversationId(null);
     // console.log('Started new chat');
   };
 
@@ -1557,6 +1693,9 @@ const App: React.FC = () => {
       if (id === currentConversationId) {
         setMessages([]);
         setCurrentConversationId(null);
+        setConversationDocuments([]);
+        setPendingAttachmentIds([]);
+        setDocumentTargetConversationId(null);
       }
       // console.log('Deleted conversation:', id);
     }
@@ -1583,14 +1722,16 @@ const App: React.FC = () => {
 
   // Auto-save conversation when messages change (debounced for performance)
   useEffect(() => {
-    if (messages.length > 0) {
-      const timeoutId = setTimeout(() => {
-        saveCurrentConversation();
-      }, 5000); // Auto-save after 5 seconds of inactivity (increased from 2s for better performance)
-
-      return () => clearTimeout(timeoutId);
+    if (messages.length === 0 && conversationDocuments.length === 0) {
+      return;
     }
-  }, [messages]);
+
+    const timeoutId = setTimeout(() => {
+      saveCurrentConversation();
+    }, 5000); // Auto-save after 5 seconds of inactivity (increased from 2s for better performance)
+
+    return () => clearTimeout(timeoutId);
+  }, [conversationDocuments, messages, saveCurrentConversation]);
 
   // Generate image using Cerebras Vision API
   const generateImage = async (prompt: string): Promise<string> => {
@@ -2078,6 +2219,11 @@ Provide the improved final answer addressing any issues identified.`;
     const languageDetection = detectSALanguage(input.trim());
     console.log('[LangDetect] Language detected:', languageDetection);
 
+    const uniqueAttachmentIds = Array.from(new Set(pendingAttachmentIds));
+    const attachedDocumentIds = uniqueAttachmentIds.filter((docId) =>
+      conversationDocuments.some((doc) => doc.id === docId)
+    );
+
     const userMessage: Message = {
       role: 'user',
       content: input.trim(),
@@ -2085,8 +2231,10 @@ Provide the improved final answer addressing any issues identified.`;
       isVoiceTranscription: hasVoiceTranscriptionRef.current, // Mark if sent via voice transcription
       language: languageDetection.language,
       languageCode: languageDetection.code,
+      attachedDocumentIds: attachedDocumentIds.length > 0 ? attachedDocumentIds : undefined,
     };
     setMessages((prev) => [...prev, userMessage]);
+    setPendingAttachmentIds([]);
     setInput('');
     setIsLoading(true);
     isProcessingMessageRef.current = true; // Mark that we're processing a message
@@ -2366,6 +2514,46 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
     }
   };
 
+  const documentsById = useMemo(() => {
+    const lookup: Record<string, StoredDocument | undefined> = {};
+    conversationDocuments.forEach((doc) => {
+      lookup[doc.id] = doc;
+    });
+    return lookup;
+  }, [conversationDocuments]);
+
+  const documentModalConversations = useMemo(() => {
+    const stored = conversationManagerRef.current.getAllConversations();
+    return stored.map((conv) => ({
+      ...conv,
+      documents: conv.id === currentConversationId ? conversationDocuments : (conv.documents ?? []),
+    }));
+  }, [conversationDocuments, currentConversationId, documentLibraryVersion]);
+
+  const filteredDocumentConversations = useMemo(() => {
+    const query = documentSearch.trim().toLowerCase();
+    if (!query) {
+      return documentModalConversations;
+    }
+
+    return documentModalConversations.filter((conv) => {
+      const titleMatch = conv.title.toLowerCase().includes(query);
+      const documentMatch = conv.documents.some((doc) => doc.name.toLowerCase().includes(query));
+      return titleMatch || documentMatch;
+    });
+  }, [documentModalConversations, documentSearch]);
+
+  const totalDocuments = useMemo(
+    () => documentModalConversations.reduce((sum, conv) => sum + conv.documents.length, 0),
+    [documentModalConversations],
+  );
+
+  const closeDocumentManager = useCallback(() => {
+    setShowDocumentManager(false);
+    setDocumentSearch('');
+    setDocumentTargetConversationId(null);
+  }, []);
+
   return (
   <div className="flex flex-col min-h-screen md:h-screen bg-white font-quicksand font-normal">
       {/* Header - VCB Cleaner Theme per §5.1-5.3, Mobile Optimized */}
@@ -2413,6 +2601,26 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                   <path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/>
                 </svg>
                 <span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">History</span>
+              </button>
+
+              {/* Document Library Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setDocumentSearch('');
+                  setShowDocumentManager(true);
+                }}
+                className="flex items-center justify-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-white text-vcb-black hover:border-vcb-black transition-colors flex-1 min-w-[7rem] md:flex-none md:w-32"
+                title="Document Library"
+              >
+                <svg className="w-4 h-4 md:w-5 md:h-5" viewBox="0 0 48 48" aria-hidden="true">
+                  <path fill="#4285F4" d="M10 6h20l10 10v24a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4z"/>
+                  <path fill="#FFFFFF" d="M30 6v12h12"/>
+                  <rect x="16" y="22" width="18" height="4" fill="#EA4335" rx="1"/>
+                  <rect x="16" y="30" width="18" height="4" fill="#FBBC05" rx="1"/>
+                  <rect x="16" y="38" width="12" height="4" fill="#34A853" rx="1"/>
+                </svg>
+                <span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">Docs</span>
               </button>
 
               {/* Session Timer */}
@@ -2667,6 +2875,188 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
         </div>
       )}
 
+      {showDocumentManager && (
+        <div
+          className="fixed inset-0 bg-vcb-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+          onClick={closeDocumentManager}
+        >
+          <div
+            className="bg-white border border-vcb-light-grey max-w-5xl w-full max-h-[92vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-vcb-black border-b border-vcb-mid-grey px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <svg className="w-8 h-8" viewBox="0 0 48 48" aria-hidden="true">
+                  <path fill="#4285F4" d="M10 6h20l10 10v24a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4z"/>
+                  <path fill="#FFFFFF" d="M30 6v12h12"/>
+                  <rect x="16" y="22" width="18" height="4" fill="#EA4335" rx="1"/>
+                  <rect x="16" y="30" width="18" height="4" fill="#FBBC05" rx="1"/>
+                  <rect x="16" y="38" width="12" height="4" fill="#34A853" rx="1"/>
+                </svg>
+                <div>
+                  <h2 className="text-lg font-bold text-vcb-white uppercase tracking-wider">Document Library</h2>
+                  <p className="text-[10px] text-vcb-mid-grey uppercase tracking-wide">
+                    {totalDocuments} {totalDocuments === 1 ? 'document' : 'documents'} across {documentModalConversations.length}{' '}
+                    {documentModalConversations.length === 1 ? 'chat' : 'chats'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={closeDocumentManager}
+                className="text-vcb-white hover:text-vcb-light-grey transition-colors"
+                title="Close"
+              >
+                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                </svg>
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-5">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-center w-full md:max-w-sm gap-2">
+                  <input
+                    type="text"
+                    value={documentSearch}
+                    onChange={(e) => setDocumentSearch(e.target.value)}
+                    placeholder="Search chats or documents..."
+                    className="flex-1 bg-white text-vcb-black border border-vcb-mid-grey px-3 py-2 text-sm focus:outline-none focus:border-vcb-black"
+                  />
+                  {documentSearch && (
+                    <button
+                      onClick={() => setDocumentSearch('')}
+                      className="px-3 py-2 text-xs font-medium uppercase tracking-wide border border-vcb-mid-grey text-vcb-mid-grey hover:border-vcb-black hover:text-vcb-black transition-colors"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <div className="text-[10px] md:text-xs text-vcb-mid-grey uppercase tracking-wide">
+                  Attached to current chat: {conversationDocuments.length}
+                </div>
+              </div>
+
+              {documentModalConversations.length === 0 ? (
+                <div className="text-center py-16 text-vcb-mid-grey border border-dashed border-vcb-light-grey">
+                  <svg className="w-10 h-10 mx-auto mb-3" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M20 2H8c-1.1 0-2 .9-2 2v12H4c-1.1 0-2 .9-2 2v2h2v2h2v-2h12v2h2v-2h2v-2L20 2zm-2 12H8V4h10v10z"/>
+                  </svg>
+                  <p className="text-sm uppercase font-medium">No documents stored yet</p>
+                  <p className="text-xs mt-1">Upload a document from the chat toolbar to see it here.</p>
+                </div>
+              ) : filteredDocumentConversations.length === 0 ? (
+                <div className="text-center py-12 text-vcb-mid-grey border border-dashed border-vcb-light-grey">
+                  <p className="text-sm uppercase font-medium">No matches</p>
+                  <p className="text-xs mt-1">Try a different search for chat titles or document names.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filteredDocumentConversations.map((conv, convIndex) => {
+                    const isCurrent = conv.id === currentConversationId;
+                    const docCount = conv.documents.length;
+                    return (
+                      <div
+                        key={conv.id}
+                        className="border border-vcb-light-grey bg-white px-4 py-4 md:px-6 md:py-5"
+                      >
+                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[9px] md:text-[10px] font-semibold uppercase tracking-wide text-vcb-mid-grey">
+                                Chat {convIndex + 1}
+                              </span>
+                              <h3 className="text-sm md:text-base font-semibold text-vcb-black line-clamp-1">
+                                {conv.title}
+                              </h3>
+                            </div>
+                            <p className="text-[9px] md:text-[10px] text-vcb-mid-grey mt-1">
+                              {docCount} {docCount === 1 ? 'document' : 'documents'} · Updated {new Date(conv.updatedAt).toLocaleString()}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                setDocumentTargetConversationId(conv.id);
+                                fileInputRef.current?.click();
+                              }}
+                              className="px-3 py-2 text-[10px] md:text-xs font-medium uppercase tracking-wide border border-vcb-mid-grey text-vcb-black hover:bg-vcb-black hover:text-vcb-white transition-colors"
+                            >
+                              Upload
+                            </button>
+                            {!isCurrent && (
+                              <button
+                                onClick={() => {
+                                  loadConversation(conv.id);
+                                  closeDocumentManager();
+                                }}
+                                className="px-3 py-2 text-[10px] md:text-xs font-medium uppercase tracking-wide border border-vcb-mid-grey text-vcb-mid-grey hover:border-vcb-black hover:text-vcb-black transition-colors"
+                              >
+                                Open Chat
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <ul className="mt-3 space-y-2">
+                          {docCount === 0 ? (
+                            <li className="text-[9px] md:text-[10px] text-vcb-mid-grey italic">
+                              No documents uploaded yet.
+                            </li>
+                          ) : (
+                            conv.documents.map((doc, docIndex) => {
+                              const isAttached = isCurrent && pendingAttachmentIds.includes(doc.id);
+                              return (
+                                <li
+                                  key={doc.id}
+                                  className="bg-white border border-vcb-light-grey rounded px-3 py-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
+                                >
+                                  <div className="min-w-0">
+                                    <p className="text-[10px] md:text-xs font-semibold text-vcb-black truncate" title={doc.name}>
+                                      {docIndex + 1}. {doc.name}
+                                    </p>
+                                    <p className="text-[9px] md:text-[10px] text-vcb-mid-grey">
+                                      Added {new Date(doc.uploadedAt).toLocaleString()}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-2 md:gap-3">
+                                    {isAttached && (
+                                      <span className="px-2 py-1 text-[8px] font-semibold uppercase tracking-wide text-green-600 border border-green-300 rounded-full">
+                                        Attached
+                                      </span>
+                                    )}
+                                    {isCurrent && (
+                                      <button
+                                        onClick={() => {
+                                          handleInsertDocument(doc.id);
+                                          closeDocumentManager();
+                                        }}
+                                        className="px-2 py-1 text-[9px] md:text-[10px] font-medium text-vcb-black border border-vcb-mid-grey rounded hover:bg-vcb-mid-grey hover:text-white transition-colors"
+                                      >
+                                        Insert
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => handleRemoveDocument(doc.id, conv.id)}
+                                      className="px-2 py-1 text-[9px] md:text-[10px] text-red-600 border border-red-200 rounded hover:bg-red-50 transition-colors"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </li>
+                              );
+                            })
+                          )}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Usage & Pricing Modal */}
       {showUsage && (
         <div className="fixed inset-0 bg-vcb-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={() => setShowUsage(false)}>
@@ -2855,6 +3245,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                 copiedIndex={copiedIndex}
                 speakingIndex={speakingIndex}
                 markdownComponents={markdownComponents}
+                documentsById={documentsById}
               />
             ))
           )}
@@ -2995,56 +3386,62 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                   <span>{uploadError ?? uploadFeedback}</span>
                 </div>
               )}
-              {uploadedDocuments.length > 0 && (
+              {conversationDocuments.length > 0 && (
                 <div className="mt-2 border border-vcb-light-grey bg-gray-50 rounded-md p-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] md:text-xs font-semibold text-vcb-black uppercase tracking-wide">
-                      Stored Documents
+                      Chat Documents
                     </span>
                     <span className="text-[10px] md:text-xs text-vcb-mid-grey">
-                      {uploadedDocuments.length}
+                      {conversationDocuments.length}
                     </span>
                   </div>
-                  <ul className="mt-2 space-y-1">
-                    {uploadedDocuments.slice(-3).reverse().map((doc) => (
-                      <li
-                        key={doc.id}
-                        className="flex items-center justify-between bg-white border border-vcb-light-grey rounded px-2 py-1"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[10px] md:text-xs font-medium text-vcb-black truncate" title={doc.name}>
-                            {doc.name}
-                          </p>
-                          <p className="text-[9px] md:text-[10px] text-vcb-mid-grey truncate">
-                            {new Date(doc.uploadedAt).toLocaleString()}
-                          </p>
-                        </div>
-                        <div className="flex items-center space-x-1 ml-2">
-                          <button
-                            type="button"
-                            onClick={() => handleInsertDocument(doc.id)}
-                            className="px-2 py-1 text-[9px] md:text-[10px] font-medium text-vcb-black border border-vcb-mid-grey rounded hover:bg-vcb-mid-grey hover:text-white transition-colors"
-                            title="Insert text into chat"
-                          >
-                            Insert
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveDocument(doc.id)}
-                            className="px-2 py-1 text-[9px] md:text-[10px] text-red-600 border border-red-200 rounded hover:bg-red-50 transition-colors"
-                            title="Remove stored document"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      </li>
-                    ))}
+                  <ul className="mt-2 space-y-1 max-h-48 overflow-y-auto pr-1">
+                    {conversationDocuments.map((doc, index) => {
+                      const isAttached = pendingAttachmentIds.includes(doc.id);
+                      return (
+                        <li
+                          key={doc.id}
+                          className="flex items-center justify-between bg-white border border-vcb-light-grey rounded px-2 py-1"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p
+                              className="text-[10px] md:text-xs font-semibold text-vcb-black truncate"
+                              title={doc.name}
+                            >
+                              {index + 1}. {doc.name}
+                            </p>
+                            <p className="text-[9px] md:text-[10px] text-vcb-mid-grey truncate">
+                              {new Date(doc.uploadedAt).toLocaleString()}
+                            </p>
+                          </div>
+                          <div className="flex items-center space-x-1 ml-2">
+                            {isAttached && (
+                              <span className="px-1 text-[8px] font-semibold uppercase tracking-wide text-green-600">
+                                Attached
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleInsertDocument(doc.id)}
+                              className="px-2 py-1 text-[9px] md:text-[10px] font-medium text-vcb-black border border-vcb-mid-grey rounded hover:bg-vcb-mid-grey hover:text-white transition-colors"
+                              title="Insert document text and attach to message"
+                            >
+                              Insert
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveDocument(doc.id)}
+                              className="px-2 py-1 text-[9px] md:text-[10px] text-red-600 border border-red-200 rounded hover:bg-red-50 transition-colors"
+                              title="Remove from this chat"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
-                  {uploadedDocuments.length > 3 && (
-                    <p className="mt-1 text-[9px] md:text-[10px] text-vcb-mid-grey">
-                      Showing latest 3 documents.
-                    </p>
-                  )}
                 </div>
               )}
             </div>
@@ -3091,7 +3488,10 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
               </button>
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => {
+                  setDocumentTargetConversationId(currentConversationId);
+                  fileInputRef.current?.click();
+                }}
                 disabled={isLoading || isProcessingUpload}
                 className={`h-11 transition-colors duration-200 border flex items-center justify-center rounded-md ${
                   isProcessingUpload
@@ -3187,7 +3587,10 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
               </button>
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => {
+                  setDocumentTargetConversationId(currentConversationId);
+                  fileInputRef.current?.click();
+                }}
                 disabled={isLoading || isProcessingUpload}
                 className={`px-4 h-16 transition-colors duration-200 border flex items-center justify-center ${
                   isProcessingUpload

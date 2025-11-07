@@ -1,6 +1,8 @@
 // VCB Sovereign AI Conversation Manager
 // Manages chat history, persistence, search, and organization
 
+import type { StoredDocument } from '../types/documents';
+
 export interface Message {
   role: 'user' | 'assistant';
   content: string;
@@ -12,16 +14,24 @@ export interface Message {
   isVoiceTranscription?: boolean; // Track if sent via voice transcription
   language?: string; // Human-readable SA language name (e.g., "Zulu")
   languageCode?: string; // SA language code (af, zu, xh, etc.)
+  attachedDocumentIds?: string[]; // References to attached document records
 }
 
 export interface Conversation {
   id: string;
   title: string;
   messages: Message[];
+  documents: StoredDocument[];
   createdAt: number;
   updatedAt: number;
   isPinned: boolean;
   tags: string[];
+}
+
+interface CreateConversationOptions {
+  messages?: Message[];
+  documents?: StoredDocument[];
+  customTitle?: string;
 }
 
 const STORAGE_KEY = 'vcb-conversations';
@@ -43,13 +53,32 @@ export class ConversationManager {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       try {
-        const data = JSON.parse(stored);
-        return new Map(Object.entries(data));
+        const data = JSON.parse(stored) as Record<string, Conversation>;
+        const entries = Object.entries(data).map(([id, conv]) => [id, this.normalizeConversation(conv, id)] as const);
+        return new Map(entries);
       } catch (error) {
         console.error('Failed to parse conversations:', error);
       }
     }
     return new Map();
+  }
+
+  private normalizeConversation(raw: Partial<Conversation> | undefined, id: string): Conversation {
+    const messages = Array.isArray(raw?.messages) ? raw!.messages : [];
+    const documents = Array.isArray((raw as Conversation | undefined)?.documents)
+      ? (raw as Conversation).documents
+      : [];
+
+    return {
+      id,
+      title: typeof raw?.title === 'string' ? raw.title : 'New Conversation',
+      messages,
+      documents,
+      createdAt: typeof raw?.createdAt === 'number' ? raw.createdAt : Date.now(),
+      updatedAt: typeof raw?.updatedAt === 'number' ? raw.updatedAt : Date.now(),
+      isPinned: typeof raw?.isPinned === 'boolean' ? raw.isPinned : false,
+      tags: Array.isArray(raw?.tags) ? raw!.tags : [],
+    };
   }
 
   // Save conversations to localStorage
@@ -89,7 +118,8 @@ export class ConversationManager {
   }
 
   // Create new conversation
-  createConversation(messages: Message[] = [], customTitle?: string): Conversation {
+  createConversation(options: CreateConversationOptions = {}): Conversation {
+    const { messages = [], documents = [], customTitle } = options;
     const id = this.generateId();
     const title = customTitle || this.generateTitle(messages);
     const now = Date.now();
@@ -98,6 +128,7 @@ export class ConversationManager {
       id,
       title,
       messages,
+      documents,
       createdAt: now,
       updatedAt: now,
       isPinned: false,
@@ -111,7 +142,7 @@ export class ConversationManager {
   }
 
   // Update existing conversation
-  updateConversation(id: string, messages: Message[]): Conversation | null {
+  updateConversation(id: string, messages: Message[], documents?: StoredDocument[]): Conversation | null {
     const conv = this.conversations.get(id);
     if (!conv) {
       console.error('Conversation not found:', id);
@@ -119,6 +150,9 @@ export class ConversationManager {
     }
 
     conv.messages = messages;
+    if (documents) {
+      conv.documents = documents;
+    }
     conv.updatedAt = Date.now();
 
     // Update title if it's still auto-generated
@@ -180,12 +214,24 @@ export class ConversationManager {
 
   // Get conversation by ID
   getConversation(id: string): Conversation | null {
-    return this.conversations.get(id) || null;
+    const conv = this.conversations.get(id);
+    if (!conv) return null;
+
+    if (!Array.isArray(conv.documents)) {
+      conv.documents = [];
+    }
+
+    return conv;
   }
 
   // Get all conversations sorted by date (pinned first)
   getAllConversations(): Conversation[] {
-    const convs = Array.from(this.conversations.values());
+    const convs = Array.from(this.conversations.values()).map((conv) => {
+      if (!Array.isArray(conv.documents)) {
+        conv.documents = [];
+      }
+      return conv;
+    });
     return convs.sort((a, b) => {
       // Pinned first
       if (a.isPinned && !b.isPinned) return -1;
@@ -193,6 +239,54 @@ export class ConversationManager {
       // Then by update date (newest first)
       return b.updatedAt - a.updatedAt;
     });
+  }
+
+  getDocumentsForConversation(id: string): StoredDocument[] {
+    const conv = this.conversations.get(id);
+    if (!conv) {
+      return [];
+    }
+    if (!Array.isArray(conv.documents)) {
+      conv.documents = [];
+    }
+    return [...conv.documents];
+  }
+
+  addDocumentToConversation(id: string, document: StoredDocument): StoredDocument[] | null {
+    const conv = this.conversations.get(id);
+    if (!conv) {
+      console.error('Conversation not found:', id);
+      return null;
+    }
+
+    const normalizedDoc: StoredDocument = {
+      ...document,
+      conversationId: id,
+    };
+
+    const nextDocuments = [...(conv.documents || []), normalizedDoc];
+    conv.documents = nextDocuments;
+    conv.updatedAt = Date.now();
+    this.saveToStorage();
+    return [...nextDocuments];
+  }
+
+  removeDocumentFromConversation(id: string, documentId: string): StoredDocument[] | null {
+    const conv = this.conversations.get(id);
+    if (!conv) {
+      console.error('Conversation not found:', id);
+      return null;
+    }
+
+    const nextDocuments = (conv.documents || []).filter((doc) => doc.id !== documentId);
+    if (nextDocuments.length === conv.documents.length) {
+      return [...nextDocuments];
+    }
+
+    conv.documents = nextDocuments;
+    conv.updatedAt = Date.now();
+    this.saveToStorage();
+    return [...nextDocuments];
   }
 
   // Search conversations by title or content
@@ -267,7 +361,24 @@ export class ConversationManager {
       const role = msg.role === 'user' ? 'YOU' : 'VCB-AI';
       const time = new Date(msg.timestamp).toLocaleTimeString();
       text += `[${time}] ${role}:\n${msg.content}\n\n`;
+
+      if (msg.attachedDocumentIds && msg.attachedDocumentIds.length > 0) {
+        msg.attachedDocumentIds.forEach((docId, index) => {
+          const attachment = conv.documents.find((doc) => doc.id === docId);
+          const label = `Document ${index + 1}`;
+          text += `${label}: ${attachment ? attachment.name : 'Removed'}\n`;
+        });
+        text += '\n';
+      }
     });
+
+    if (conv.documents.length > 0) {
+      text += 'Documents:\n';
+      conv.documents.forEach((doc, index) => {
+        text += `${index + 1}. ${doc.name} (${new Date(doc.uploadedAt).toLocaleString()})\n`;
+      });
+      text += '\n';
+    }
 
     return text;
   }

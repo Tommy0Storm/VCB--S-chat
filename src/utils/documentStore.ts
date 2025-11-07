@@ -1,13 +1,6 @@
-const DOCUMENT_STORAGE_KEY = 'vcb-uploaded-documents';
+import type { StoredDocument } from '../types/documents';
 
-export interface StoredDocument {
-  id: string;
-  name: string;
-  type: string;
-  size: number;
-  text: string;
-  uploadedAt: number;
-}
+const DOCUMENT_STORAGE_KEY = 'vcb-uploaded-documents';
 
 const safeParse = (raw: string | null): StoredDocument[] => {
   if (!raw) {
