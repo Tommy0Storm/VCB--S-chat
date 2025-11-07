@@ -1613,7 +1613,7 @@ OUTPUT FORMAT (ADAPT TO DOMAIN):
 FORMATTING (CRITICAL - STRICT COMPLIANCE):
 • NO emojis anywhere (use Material Icons instead)
 • NO horizontal rules: ---, ___, *** (ABSOLUTELY FORBIDDEN - breaks formatting)
-• Material Icons: Use sparingly ONLY in headings/bullet points: [gavel] [verified] [warning] [lightbulb]
+• Material Icons: Use sparingly ONLY in headings/bullet points: [gavel] [verified] [warning] [lightbulb]; never in High Court document outputs
 • NEVER put icons inside table cells (breaks markdown rendering)
 • Tables: Proper markdown with blank line before table, NO icons in cells, clean pipe separation
 • Use blank lines for spacing between sections (NOT horizontal rules)
@@ -1875,7 +1875,7 @@ Provide the improved final answer addressing any issues identified.`;
     // Add progress message
     const progressMessage: Message = {
       role: 'assistant',
-      content: `[palette] Generating image with FLUX-1.1-pro...\n\nPrompt: "${imagePrompt.trim()}"\n\nThis may take 10-30 seconds. Please wait...`,
+      content: `Generating image with FLUX-1.1-pro...\n\nPrompt: "${imagePrompt.trim()}"\n\nThis may take 10-30 seconds. Please wait...`,
       timestamp: Date.now(),
     };
     setMessages((prev) => [...prev, progressMessage]);
@@ -1905,7 +1905,7 @@ Provide the improved final answer addressing any issues identified.`;
 
       const errorMsg: Message = {
         role: 'assistant',
-        content: `[error] Failed to generate image: ${error.message || 'Unknown error'}`,
+        content: `Image generation failed: ${error.message || 'Unknown error'}`,
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -2038,7 +2038,7 @@ CORE HIERARCHY (Auto-Check Every Query):
 FRAUD DOCUMENT AUDIT LAYER (Critical Override):
 • EVERY document flagged for fraud indicators BEFORE legal analysis proceeds
 • Fraud markers: Forgery, backdating, alterations, signature inconsistencies, metadata tampering, chain-of-custody breaks
-• If fraud suspected: HALT advice → FLAG "[warning] FRAUD ALERT: [document] requires forensic verification"
+• If fraud suspected: HALT advice → flag clearly as "Fraud alert: [document] requires forensic verification"
 • Do not proceed with legal argument on fraudulent doc until verified authentic
 • Report fraud disclosure obligations (s.34 POCA Act 121/1998, professional duties)
 
@@ -2057,11 +2057,11 @@ LETHAL TACTICAL OVERLAY:
 
 OUTPUT FORMAT (REQUIRED STRUCTURE):
 [QUERY ANALYSIS] Domain: [Labour/Criminal/General] | Fuzzy Score: X/1.0 | Winning Probability: Y%
-[FRAUD AUDIT] Red flags: [None / List] | Authenticity: [Verified / [warning] Requires Forensic / [error] ALERT]
+[FRAUD AUDIT] Red flags: [None / List] | Authenticity: [Verified / Requires Forensic Review / ALERT]
 [AUTHORITY STACK] Constitutional: [s.X] | Statute: [Act section] | Precedent: [Case (Year/Court)]
 [LETHAL STRATEGY] Primary tactic + Counter-argument + Rebuttal | Alternative tactics if primary risky
 [REMEDY & SETTLEMENT] Outcome range | Settlement leverage point
-[RISK FLAGGING] [flag] Critical risks → Mitigation → RECOMMEND: [Next action]
+[RISK FLAGGING] Critical risks → Mitigation → RECOMMEND: [Next action]
 
 WHEN PRESENTING MULTIPLE ISSUES/FINDINGS: ALWAYS USE MARKDOWN TABLE (NOT NUMBERED LISTS)
 Example structure for irregularities/risks/findings:
@@ -2074,7 +2074,7 @@ Example structure for irregularities/risks/findings:
 FORMATTING (CRITICAL - STRICT COMPLIANCE REQUIRED):
 • NO emojis anywhere (use Material Icons instead)
 • NO horizontal rules: ---, ___, *** (ABSOLUTELY FORBIDDEN - breaks formatting)
-• Material Icons: Use sparingly ONLY in headings/bullet points: [gavel] [verified] [warning]
+• Material Icons: Use sparingly ONLY in headings/bullet points: [gavel] [verified] [warning]; never in High Court document outputs
 • NEVER EVER put icons inside table cells (breaks markdown rendering)
 • Tables: Proper markdown with blank line before table, NO icons in cells, clean pipe separation
 • Use blank lines for spacing between sections (NOT horizontal rules)
@@ -2192,11 +2192,11 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
   };
 
   return (
-    <div className="flex flex-col h-screen bg-white font-quicksand font-normal">
+  <div className="flex flex-col min-h-screen md:h-screen bg-white font-quicksand font-normal">
       {/* Header - VCB Cleaner Theme per §5.1-5.3, Mobile Optimized */}
-      <header className="bg-vcb-black border-b border-vcb-mid-grey px-3 py-1 md:px-8 md:py-4">
-        <div className="flex items-center justify-between max-w-7xl mx-auto">
-          <div className="flex items-center space-x-1.5 md:space-x-6">
+      <header className="bg-vcb-black border-b border-vcb-mid-grey px-3 py-2 md:px-8 md:py-4">
+        <div className="max-w-7xl mx-auto flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-2 md:gap-6">
             {/* VCB Logo per §5.3 - must be on dark background */}
             <a
               href="https://vcb-ai.online"
@@ -2224,14 +2224,14 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
               </p>
             </div>
           </div>
-          <div className="flex flex-col space-y-2">
+          <div className="flex flex-col gap-2 md:items-end w-full md:w-auto">
             {/* Row 1: History and Timer */}
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap gap-2 justify-start md:justify-end">
               {/* Chat History Button */}
               <button
                 type="button"
                 onClick={() => setShowChatHistory(!showChatHistory)}
-                className="flex items-center justify-center space-x-1 w-24 md:w-32 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white hover:border-vcb-white transition-colors"
+                className="flex items-center justify-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white hover:border-vcb-white transition-colors flex-1 min-w-[7rem] md:flex-none md:w-32"
                 title="Chat History"
               >
                 <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -2241,7 +2241,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
               </button>
 
               {/* Session Timer */}
-              <div className="flex items-center justify-center space-x-1 w-24 md:w-32 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white">
+              <div className="flex items-center justify-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white flex-1 min-w-[7rem] md:flex-none md:w-32">
                 <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61l1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42C16.07 4.74 14.12 4 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
                 </svg>
@@ -2252,12 +2252,12 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
             </div>
 
             {/* Row 2: Usage, Voice Gender, and Create Image */}
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap gap-2 justify-start md:justify-end">
               {/* Usage Stats Button */}
               <button
                 type="button"
                 onClick={() => setShowUsage(!showUsage)}
-                className="flex items-center justify-center space-x-1 w-24 md:w-32 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white hover:border-vcb-white transition-colors"
+                className="flex items-center justify-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white hover:border-vcb-white transition-colors flex-1 min-w-[7rem] md:flex-none md:w-32"
                 title="View Usage & Pricing"
               >
                 <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -2270,7 +2270,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
               <button
                 type="button"
                 onClick={toggleVoiceGender}
-                className="flex items-center justify-center space-x-1 w-24 md:w-32 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-accent bg-vcb-black text-vcb-accent hover:bg-vcb-accent hover:text-vcb-black transition-colors"
+                className="flex items-center justify-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-accent bg-vcb-black text-vcb-accent hover:bg-vcb-accent hover:text-vcb-black transition-colors flex-1 min-w-[7rem] md:flex-none md:w-32"
                 title={`Switch to ${voiceGender === 'female' ? 'Male' : 'Female'} Voice`}
               >
                 <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -2706,8 +2706,11 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
       </div>
 
       {/* Input Container - high contrast per §5.1, Mobile Optimized */}
-      <div className="border-t border-vcb-light-grey bg-white px-1.5 py-1.5 md:px-8 md:py-6">
-        <form onSubmit={handleSubmit} className="max-w-5xl mx-auto">
+      <div
+        className="border-t border-vcb-light-grey bg-white px-3 pt-1.5 pb-3 md:px-8 md:pt-6 md:pb-6"
+        style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
+      >
+        <form onSubmit={handleSubmit} className="max-w-5xl mx-auto space-y-2 md:space-y-3">
           {voiceModeEnabled && isListening && (
             <div className="mb-1 md:mb-3 flex items-center justify-center space-x-2 text-vcb-mid-grey">
               <svg className="w-3 h-3 md:w-4 md:h-4 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
@@ -2779,70 +2782,72 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
               <span className="text-[10px] md:text-sm font-medium">{cepoProgress}</span>
             </div>
           )}
-          <div className="flex items-center space-x-1 md:space-x-4">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:space-x-4">
             <img
               src="Sovereign-Chat-icon-Spin.svg"
               alt="Sovereign"
-              className="h-10 w-10 md:h-16 md:w-16 flex-shrink-0"
+              className="hidden md:block h-16 w-16 flex-shrink-0"
             />
-            <textarea
-              id="chat-input"
-              name="message"
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={voiceModeEnabled ? "Speak your message..." : "Type your message..."}
-              className="flex-1 bg-white text-vcb-black border border-vcb-light-grey px-2 py-2 md:px-6 md:py-4 text-sm md:text-base focus:outline-none focus:border-vcb-mid-grey resize-none font-normal leading-relaxed h-10 md:h-16"
-              rows={1}
-              disabled={isLoading}
-            />
-            {/* Mobile: Horizontal compact buttons */}
-            <div className="flex md:hidden items-center space-x-0.5">
+            <div className="w-full">
+              <textarea
+                id="chat-input"
+                name="message"
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={voiceModeEnabled ? "Speak your message..." : "Type your message..."}
+                className="w-full bg-white text-vcb-black border border-vcb-light-grey px-3 py-3 md:px-6 md:py-4 text-sm md:text-base focus:outline-none focus:border-vcb-mid-grey resize-none font-normal leading-relaxed min-h-[3.25rem] rounded-lg shadow-sm"
+                rows={isMobile ? 3 : 1}
+                disabled={isLoading}
+              />
+            </div>
+            {/* Mobile: Enhanced quick actions grid */}
+            <div className="md:hidden grid grid-cols-5 gap-1 w-full">
               <button
                 type="button"
                 onClick={() => setForceThinkingMode(!forceThinkingMode)}
                 disabled={isLoading || useCePO}
-                className={`w-9 h-10 transition-colors duration-200 border flex items-center justify-center flex-shrink-0 ${
+                className={`h-11 transition-colors duration-200 border flex items-center justify-center rounded-md ${
                   forceThinkingMode
                     ? 'bg-[#DC143C] text-white border-[#DC143C]'
                     : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
                 title={forceThinkingMode ? 'Thinking Mode ON (Qwen)' : 'Thinking Mode OFF (Click to enable)'}
               >
-                <span className="material-icons text-sm">psychology</span>
+                <span className="material-icons text-base">psychology</span>
               </button>
               <button
                 type="button"
                 onClick={() => setUseCePO(!useCePO)}
                 disabled={isLoading || forceThinkingMode}
-                className={`w-9 h-10 transition-colors duration-200 border flex items-center justify-center flex-shrink-0 ${
+                className={`h-11 transition-colors duration-200 border flex items-center justify-center rounded-md ${
                   useCePO
                     ? 'bg-[#4169E1] text-white border-[#4169E1]'
                     : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
                 title={useCePO ? 'CePO Mode ON (Advanced Reasoning)' : 'CePO Mode OFF (Click to enable)'}
               >
-                <span className="material-icons text-sm">auto_awesome</span>
+                <span className="material-icons text-base">auto_awesome</span>
               </button>
               <button
                 type="button"
                 onClick={() => setShowImagePrompt(!showImagePrompt)}
                 disabled={isLoading || isGeneratingImage}
-                className={`w-9 h-10 transition-colors duration-200 border flex items-center justify-center flex-shrink-0 ${
+                className={`h-11 transition-colors duration-200 border flex items-center justify-center rounded-md ${
                   showImagePrompt
                     ? 'bg-[#28a745] text-white border-[#28a745]'
                     : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
                 title="Generate Image with FLUX"
               >
-                <span className="material-icons text-sm">image</span>
+                <span className="material-icons text-base">image</span>
               </button>
               <button
                 type="button"
                 onClick={toggleVoiceMode}
                 disabled={isLoading}
-                className={`w-9 h-10 transition-colors duration-200 border flex items-center justify-center flex-shrink-0 ${
+                className={`h-11 transition-colors duration-200 border flex items-center justify-center rounded-md ${
                   isListening 
                     ? 'bg-red-500 text-white border-red-600 animate-pulse' 
                     : voiceModeEnabled
@@ -2851,24 +2856,24 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
                 title={isListening ? 'Listening... (Click to stop)' : voiceModeEnabled ? 'Voice Mode ON (Click to disable)' : 'Voice Mode OFF (Click to enable)'}
               >
-                <span className="material-icons text-sm">
+                <span className="material-icons text-base">
                   {isListening ? 'mic' : 'mic_off'}
                 </span>
               </button>
               <button
                 type="submit"
                 disabled={isLoading || !input.trim()}
-                className="bg-vcb-black hover:bg-vcb-dark-grey disabled:bg-vcb-light-grey disabled:cursor-not-allowed text-vcb-white w-9 h-10 font-medium transition-colors duration-200 flex items-center justify-center border border-vcb-mid-grey flex-shrink-0"
+                className="h-11 bg-vcb-black hover:bg-vcb-dark-grey disabled:bg-vcb-light-grey disabled:cursor-not-allowed text-vcb-white font-medium transition-colors duration-200 flex items-center justify-center border border-vcb-mid-grey rounded-md"
               >
                 {isLoading ? (
                   <img
                     src="sovereign-thinking-spinner.svg"
                     alt="Sending..."
-                    className="h-3.5 w-3.5"
+                    className="h-4 w-4"
                   />
                 ) : (
                   <svg
-                    className="w-3.5 h-3.5"
+                    className="w-4 h-4"
                     fill="currentColor"
                     viewBox="0 0 24 24"
                   >
