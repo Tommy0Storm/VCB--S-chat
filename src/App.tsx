@@ -1927,7 +1927,8 @@ Provide the improved final answer addressing any issues identified.`;
       content: input.trim(),
       timestamp: Date.now(),
       isVoiceTranscription: hasVoiceTranscriptionRef.current, // Mark if sent via voice transcription
-      language: languageDetection.code,
+      language: languageDetection.language,
+      languageCode: languageDetection.code,
     };
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
