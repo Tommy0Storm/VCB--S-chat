@@ -2,11 +2,18 @@
 // Supports all 11 official SA languages
 
 export interface LanguageDetection {
-  language: string;
-  code: string;
+  language: string; // Human-readable language name (e.g., "Afrikaans")
+  code: string;     // ISO-like language code (e.g., "af")
   confidence: number;
   greeting?: string;
 }
+
+const toLanguageName = (languageKey: string): string => {
+  return languageKey
+    .split(/[_\s-]+/)
+    .map(segment => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ');
+};
 
 // Language patterns for detection
 const SA_LANGUAGE_PATTERNS = {
@@ -106,13 +113,11 @@ export function detectSALanguage(text: string): LanguageDetection {
 
   // Score each language based on pattern matches
   for (const [language, config] of Object.entries(SA_LANGUAGE_PATTERNS)) {
-    let score = 0;
     let totalMatches = 0;
 
     for (const pattern of config.patterns) {
       const matches = cleanText.match(pattern);
       if (matches) {
-        score += matches.length;
         totalMatches += matches.length;
       }
     }
@@ -132,21 +137,21 @@ export function detectSALanguage(text: string): LanguageDetection {
   // Sort by score and return best match
   results.sort((a, b) => b.score - a.score);
 
-  if (results.length > 0 && results[0].score > 0.1) {
+  if (results.length > 0) {
     const detected = results[0];
     const config = SA_LANGUAGE_PATTERNS[detected.language as keyof typeof SA_LANGUAGE_PATTERNS];
     
     return {
-      language: detected.language,
+      language: toLanguageName(detected.language),
       code: detected.code,
-      confidence: Math.min(detected.score * 100, 95), // Cap at 95%
+      confidence: Math.min(Math.max(detected.score * 100, 25), 95), // Keep confidence within [25,95]
       greeting: config.greetings[Math.floor(Math.random() * config.greetings.length)]
     };
   }
 
   // Default to English if no clear match
   return {
-    language: 'english',
+    language: 'English',
     code: 'en',
     confidence: 50,
     greeting: 'Hello!'
@@ -155,7 +160,7 @@ export function detectSALanguage(text: string): LanguageDetection {
 
 export function getSALanguageGreeting(languageCode: string): string {
   const language = Object.entries(SA_LANGUAGE_PATTERNS).find(
-    ([_, config]) => config.code === languageCode
+    ([, config]) => config.code === languageCode
   );
   
   if (language) {
