@@ -6,6 +6,8 @@ import { Cerebras } from '@cerebras/cerebras_cloud_sdk';
 import { UsageTracker, TierType } from './utils/usageTracker';
 import { ConversationManager, Message } from './utils/conversationManager';
 import { detectSALanguage } from './utils/saLanguageDetector';
+import { extractTextFromFile } from './utils/documentProcessor';
+import { loadStoredDocuments, persistStoredDocuments, type StoredDocument } from './utils/documentStore';
 
 
 // ==================== CONSTANTS ====================
@@ -118,6 +120,8 @@ const requiresStrategicMode = (query: string): boolean => {
 };
 
 // Post-process AI response to enforce VCB formatting rules
+const ALLOWED_UPLOAD_EXTENSIONS = ['txt', 'md', 'pdf', 'doc', 'docx'];
+
 const enforceFormatting = (text: string): string => {
   let fixed = text;
 
@@ -688,6 +692,7 @@ const App: React.FC = () => {
   const sessionStartRef = useRef<number>(Date.now());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const recognitionRef = useRef<any>(null);
   const voiceModeEnabledRef = useRef<boolean>(false); // Track voice mode state for callbacks
   const isSpeakingRef = useRef<boolean>(false); // Track if bot is currently speaking
@@ -698,6 +703,11 @@ const App: React.FC = () => {
   const usageTrackerRef = useRef<UsageTracker>(new UsageTracker());
   const conversationManagerRef = useRef<ConversationManager>(new ConversationManager());
   // Removed Piper client refs - now using streaming backend
+
+  const [uploadedDocuments, setUploadedDocuments] = useState<StoredDocument[]>([]);
+  const [isProcessingUpload, setIsProcessingUpload] = useState(false);
+  const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   // Detect if user wants image generation (temporarily disabled)
@@ -864,6 +874,17 @@ const App: React.FC = () => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
+  useEffect(() => {
+    try {
+      const stored = loadStoredDocuments();
+      if (stored.length > 0) {
+        setUploadedDocuments(stored);
+      }
+    } catch (error) {
+      console.error('[DocumentStore] Failed to hydrate documents:', error);
+    }
+  }, []);
+
   // Load tier from usage tracker on mount
   useEffect(() => {
     const usage = usageTrackerRef.current.getUsage();
@@ -893,6 +914,95 @@ const App: React.FC = () => {
       setShowToast(true);
     }
   }, [voiceModeEnabled, isListening]);
+
+  useEffect(() => {
+    if (!uploadFeedback && !uploadError) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setUploadFeedback(null);
+      setUploadError(null);
+    }, 5000);
+
+    return () => window.clearTimeout(timer);
+  }, [uploadFeedback, uploadError]);
+
+  const handleDocumentUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const { files } = event.target;
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    const file = files[0];
+    event.target.value = '';
+
+    const extension = (file.name.split('.').pop() || '').toLowerCase();
+    if (!ALLOWED_UPLOAD_EXTENSIONS.includes(extension)) {
+      setUploadError('Only .txt, .md, .pdf, .doc, and .docx files are supported.');
+      setUploadFeedback(null);
+      return;
+    }
+
+    setIsProcessingUpload(true);
+    setUploadError(null);
+    setUploadFeedback(`Processing "${file.name}"...`);
+
+    try {
+      const text = await extractTextFromFile(file);
+      if (!text) {
+        throw new Error('No readable text found in the document.');
+      }
+
+      const record: StoredDocument = {
+        id: `doc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        name: file.name,
+        type: file.type || extension,
+        size: file.size,
+        text,
+        uploadedAt: Date.now(),
+      };
+
+      setUploadedDocuments((prev) => {
+        const next = [...prev, record];
+        persistStoredDocuments(next);
+        return next;
+      });
+
+      setUploadFeedback(`Stored "${file.name}". Use Insert to add it to your message.`);
+    } catch (error) {
+      console.error('[DocumentUpload] Failed to process document:', error);
+      setUploadError(error instanceof Error ? error.message : 'Failed to process the document.');
+      setUploadFeedback(null);
+    } finally {
+      setIsProcessingUpload(false);
+    }
+  };
+
+  const handleInsertDocument = (id: string) => {
+    const doc = uploadedDocuments.find((entry) => entry.id === id);
+    if (!doc) {
+      return;
+    }
+
+    setInput((prev) => (prev ? `${prev}\n\n${doc.text}` : doc.text));
+    setUploadFeedback(`Inserted "${doc.name}" into the chat input.`);
+    setUploadError(null);
+  };
+
+  const handleRemoveDocument = (id: string) => {
+    const doc = uploadedDocuments.find((entry) => entry.id === id);
+    setUploadedDocuments((prev) => {
+      const next = prev.filter((entry) => entry.id !== id);
+      persistStoredDocuments(next);
+      return next;
+    });
+
+    if (doc) {
+      setUploadFeedback(`Removed "${doc.name}" from stored documents.`);
+    }
+    setUploadError(null);
+  };
 
 
 
@@ -2719,6 +2829,13 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
         style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
       >
         <form onSubmit={handleSubmit} className="max-w-5xl mx-auto space-y-2 md:space-y-3">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".txt,.md,.pdf,.doc,.docx"
+            className="hidden"
+            onChange={handleDocumentUpload}
+          />
           {voiceModeEnabled && isListening && (
             <div className="mb-1 md:mb-3 flex items-center justify-center space-x-2 text-vcb-mid-grey">
               <svg className="w-3 h-3 md:w-4 md:h-4 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
@@ -2809,9 +2926,73 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                 rows={isMobile ? 3 : 1}
                 disabled={isLoading}
               />
+              {(uploadFeedback || uploadError) && (
+                <div
+                  className={`mt-2 flex items-center space-x-1 text-[10px] md:text-xs ${
+                    uploadError ? 'text-red-600' : 'text-green-600'
+                  }`}
+                >
+                  <span className="material-icons text-sm md:text-base">
+                    {uploadError ? 'error_outline' : 'check_circle'}
+                  </span>
+                  <span>{uploadError ?? uploadFeedback}</span>
+                </div>
+              )}
+              {uploadedDocuments.length > 0 && (
+                <div className="mt-2 border border-vcb-light-grey bg-gray-50 rounded-md p-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] md:text-xs font-semibold text-vcb-black uppercase tracking-wide">
+                      Stored Documents
+                    </span>
+                    <span className="text-[10px] md:text-xs text-vcb-mid-grey">
+                      {uploadedDocuments.length}
+                    </span>
+                  </div>
+                  <ul className="mt-2 space-y-1">
+                    {uploadedDocuments.slice(-3).reverse().map((doc) => (
+                      <li
+                        key={doc.id}
+                        className="flex items-center justify-between bg-white border border-vcb-light-grey rounded px-2 py-1"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] md:text-xs font-medium text-vcb-black truncate" title={doc.name}>
+                            {doc.name}
+                          </p>
+                          <p className="text-[9px] md:text-[10px] text-vcb-mid-grey truncate">
+                            {new Date(doc.uploadedAt).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="flex items-center space-x-1 ml-2">
+                          <button
+                            type="button"
+                            onClick={() => handleInsertDocument(doc.id)}
+                            className="px-2 py-1 text-[9px] md:text-[10px] font-medium text-vcb-black border border-vcb-mid-grey rounded hover:bg-vcb-mid-grey hover:text-white transition-colors"
+                            title="Insert text into chat"
+                          >
+                            Insert
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveDocument(doc.id)}
+                            className="px-2 py-1 text-[9px] md:text-[10px] text-red-600 border border-red-200 rounded hover:bg-red-50 transition-colors"
+                            title="Remove stored document"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  {uploadedDocuments.length > 3 && (
+                    <p className="mt-1 text-[9px] md:text-[10px] text-vcb-mid-grey">
+                      Showing latest 3 documents.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
             {/* Mobile: Enhanced quick actions grid */}
-            <div className="md:hidden grid grid-cols-5 gap-1 w-full">
+            <div className="md:hidden grid grid-cols-6 gap-1 w-full">
               <button
                 type="button"
                 onClick={() => setForceThinkingMode(!forceThinkingMode)}
@@ -2850,6 +3031,21 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                 title="Generate Image with FLUX"
               >
                 <span className="material-icons text-base">image</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isLoading || isProcessingUpload}
+                className={`h-11 transition-colors duration-200 border flex items-center justify-center rounded-md ${
+                  isProcessingUpload
+                    ? 'bg-white text-vcb-mid-grey border-vcb-light-grey'
+                    : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                title="Attach document"
+              >
+                <span className={`material-icons text-base ${isProcessingUpload ? 'animate-spin' : ''}`}>
+                  {isProcessingUpload ? 'autorenew' : 'attach_file'}
+                </span>
               </button>
               <button
                 type="button"
@@ -2931,6 +3127,21 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                 title="Generate Image with FLUX"
               >
                 <span className="material-icons text-2xl">image</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isLoading || isProcessingUpload}
+                className={`px-4 h-16 transition-colors duration-200 border flex items-center justify-center ${
+                  isProcessingUpload
+                    ? 'bg-white text-vcb-mid-grey border-vcb-light-grey'
+                    : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                title="Attach document"
+              >
+                <span className={`material-icons text-2xl ${isProcessingUpload ? 'animate-spin' : ''}`}>
+                  {isProcessingUpload ? 'autorenew' : 'attach_file'}
+                </span>
               </button>
               <button
                 type="button"

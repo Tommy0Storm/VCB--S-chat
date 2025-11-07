@@ -17,6 +17,8 @@
   "dependencies": {
     "@cerebras/cerebras_cloud_sdk": "^1.0.0",
     "deepinfra": "^2.0.2",
+    "mammoth": "^1.11.0",
+    "pdfjs-dist": "^4.10.38",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-markdown": "^10.1.0",
