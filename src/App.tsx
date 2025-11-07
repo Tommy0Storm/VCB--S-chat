@@ -119,6 +119,52 @@ const requiresStrategicMode = (query: string): boolean => {
   return !isVeryShort && (hasComplexPattern || isLongQuery || hasMultipleQuestions);
 };
 
+const LEGAL_KEYWORDS = [
+  'law', 'legal', 'contract', 'agreement', 'labour', 'labor', 'ccma', 'court', 'judge', 'tribunal', 'magistrate',
+  'high court', 'constitutional', 'precedent', 'statute', 'act', 'section', 'clause', 'regulation', 'compliance',
+  'policy', 'disciplinary', 'dismissal', 'hearing', 'litigation', 'lawsuit', 'claim', 'defence', 'defense', 'remedy',
+  'settlement', 'damages', 'fiduciary', 'delict', 'tort', 'affidavit', 'pleading', 'jurisdiction', 'bail', 'criminal',
+  'civil', 'arbitration', 'mediation', 'union', 'collective agreement'
+];
+
+const ADVANCED_REASONING_KEYWORDS = [
+  'comprehensive', 'detailed', 'analysis', 'evaluate', 'assessment', 'compare', 'contrast', 'framework', 'strategy',
+  'roadmap', 'timeline', 'policy', 'precedent', 'case law', 'statutory', 'risk matrix', 'escalation plan',
+  'financial model', 'compliance plan', 'root cause', 'scenario analysis'
+];
+
+const MODERATE_REASONING_KEYWORDS = [
+  'explain', 'outline', 'summarise', 'summarize', 'impact', 'implications', 'benefits', 'risks', 'steps', 'how to',
+  'improve', 'optimize', 'mitigate', 'pros and cons', 'advantages', 'disadvantages'
+];
+
+const analyzeQueryIntent = (text: string, wordCount: number) => {
+  const normalised = text.toLowerCase();
+  const questionCount = (normalised.match(/\?/g) ?? []).length;
+  const sentenceCount = (normalised.match(/[.!?]/g) ?? []).length;
+  const hasAdvancedKeyword = ADVANCED_REASONING_KEYWORDS.some((keyword) => normalised.includes(keyword));
+  const hasModerateKeyword = MODERATE_REASONING_KEYWORDS.some((keyword) => normalised.includes(keyword));
+  const isLegal = LEGAL_KEYWORDS.some((keyword) => normalised.includes(keyword));
+
+  const isAdvanced = (
+    isLegal ||
+    requiresStrategicMode(text) ||
+    wordCount >= 24 ||
+    questionCount >= 2 ||
+    sentenceCount >= 3 ||
+    hasAdvancedKeyword
+  );
+
+  const isModerate = !isAdvanced && (
+    wordCount >= 12 ||
+    questionCount === 1 ||
+    sentenceCount === 2 ||
+    hasModerateKeyword
+  );
+
+  return { isLegal, isAdvanced, isModerate };
+};
+
 // Post-process AI response to enforce VCB formatting rules
 const ALLOWED_UPLOAD_EXTENSIONS = ['txt', 'md', 'pdf', 'doc', 'docx'];
 
@@ -2098,20 +2144,31 @@ Provide the improved final answer addressing any issues identified.`;
           maxRetries: 0,  // Disable automatic retries to prevent 429 cascades
         });
 
-        // Two-Tier Smart Router: Llama (default) → Qwen Thinking (VCB-AI Legal for complex)
-        // Check if query is trivial (skip thinking mode even if forced)
-        const wordCount = userMessage.content.split(/\s+/).length;
-        const isTrivial = wordCount <= 2;
+        // Intelligent Router: Default Llama → CePO (moderate) → Qwen Thinking (advanced/legal)
+  const cleanedContent = userMessage.content.trim();
+  const wordCount = cleanedContent.split(/\s+/).length;
         const greetingPatterns = /^(hi|hello|hey|howzit|hola|thanks|thank you|ok|okay|yes|no|sure|great)$/i;
-        const isTrivialQuery = isTrivial || greetingPatterns.test(userMessage.content.trim());
+        const isTrivialQuery = wordCount <= 2 || greetingPatterns.test(cleanedContent);
 
-        const useStrategicMode = !isTrivialQuery && (forceThinkingMode || requiresStrategicMode(userMessage.content));
+  const { isLegal, isAdvanced, isModerate } = analyzeQueryIntent(cleanedContent, wordCount);
+  const isLegalQuery = !isTrivialQuery && isLegal;
+  const isAdvancedComplex = !isTrivialQuery && (isAdvanced || isLegalQuery);
+  const isModerateComplex = !isTrivialQuery && !isAdvancedComplex && isModerate;
+  const autoRoutingEnabled = !useCePO && !forceThinkingMode;
+
+        const userForcesStrategic = !isTrivialQuery && forceThinkingMode;
+        const autoStrategic = autoRoutingEnabled && (isLegalQuery || isAdvancedComplex);
+        const useStrategicMode = userForcesStrategic || autoStrategic;
+
+        const shouldRunCePO = !isTrivialQuery && !useStrategicMode && (
+          useCePO || (autoRoutingEnabled && isModerateComplex)
+        );
+
         const selectedModel = useStrategicMode
           ? 'qwen-3-235b-a22b-thinking-2507'  // VCB-AI Strategic Legal Analysis (THINKING model)
-          : 'llama-3.3-70b';                    // Default GOGGA
+          : 'llama-3.3-70b';                    // Default GOGGA / CePO staging
 
-        // Check if CePO should be used (takes priority over other modes for complex reasoning)
-        if (useCePO && !useStrategicMode) {
+        if (shouldRunCePO) {
           try {
             const cepoResult = await runCePO(userMessage.content, client, messages);
             
