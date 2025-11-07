@@ -948,12 +948,23 @@ const App: React.FC = () => {
 
       // Use Piper streaming backend
       console.log('🔗 Fetching from Piper server...');
-      const response = await fetch('http://localhost:5000/tts-stream', {
+      
+      // Detect language from the text
+      const detectedLang = detectSALanguage(truncatedText);
+      console.log('🌍 Detected language:', detectedLang);
+      
+      // Use proxy in development, direct URL in production
+      const piperUrl = import.meta.env.DEV 
+        ? '/api/tts' 
+        : 'http://localhost:5000/tts-stream';
+      
+      const response = await fetch(piperUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: truncatedText,
-          voice: selectedVoice
+          voice: selectedVoice,
+          lang_code: detectedLang.code  // Send detected language code
         })
       });
 
@@ -1785,7 +1796,7 @@ Provide the improved final answer addressing any issues identified.`;
 
 **Analysis:** ${analysis.substring(0, 300)}...
 
-*CePO used 4 sequential stages with rate-limit protection on Cerebras infrastructure*`;
+*CePO used 4 sequential stages with rate-limit protection on vcb-ai infrastructure*`;
 
       setCepoProgress('');
       return cepoResponse;
@@ -2276,22 +2287,6 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                 </span>
               </button>
 
-              {/* Create Image Button - VCB-AI FLUX Model */}
-              <button
-                type="button"
-                onClick={() => setShowImagePrompt(!showImagePrompt)}
-                className={`flex items-center justify-center space-x-1 w-24 md:w-32 px-2 py-1.5 md:px-3 md:py-2 border transition-colors ${
-                  showImagePrompt 
-                    ? 'bg-[#28a745] text-white border-[#28a745]' 
-                    : 'bg-vcb-black text-vcb-white border-vcb-mid-grey hover:border-vcb-white'
-                }`}
-                title="Test VCB-AI latest image model"
-              >
-                <svg className="w-4 h-4 md:w-5 md:h-5" fill="white" viewBox="0 0 24 24" style={{ transform: 'rotate(10deg)' }}>
-                  <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
-                </svg>
-                <span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">Test Image</span>
-              </button>
             </div>
           </div>
         </div>
