@@ -151,7 +151,7 @@ Be concise but thorough. Cite sources as [1], [2], etc.`;
     confidence += Math.min(avgResultsPerEngine * 0.05, 0.2);
     
     // Boost for result quality (snippets present)
-    const qualityResults = bestResults.filter(r => r.snippet && r.snippet.length > 50).length;
+    const qualityResults = bestResults.filter((r: any) => r.snippet && r.snippet.length > 50).length;
     confidence += Math.min(qualityResults * 0.02, 0.1);
     
     return Math.min(confidence, 1.0);

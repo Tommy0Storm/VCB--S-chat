@@ -870,12 +870,12 @@ const App = () => {
 
   // Google Search state
   const [searchEnabled, setSearchEnabled] = useState(false);
-  const [searchResults, setSearchResults] = useState<GoogleSearchResult[]>([]);
+  const [searchResults] = useState<GoogleSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchProgress, setSearchProgress] = useState('');
   const [liveSearchResults, setLiveSearchResults] = useState<any[]>([]);
   const [streamingResults, setStreamingResults] = useState(false);
-  const [googleSearchQuery, setGoogleSearchQuery] = useState<string>('');
+  const [googleSearchQuery] = useState<string>('');
 
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
