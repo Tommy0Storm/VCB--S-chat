@@ -4,8 +4,17 @@ import DOMPurify from 'dompurify';
 export const sanitizeMarkdown = (content: string): string => {
   if (!content || typeof content !== 'string') return '';
   
+  // Decode HTML entities first
+  const decoded = content
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ');
+  
   // Remove potential XSS vectors while preserving markdown
-  const cleaned = DOMPurify.sanitize(content, {
+  const cleaned = DOMPurify.sanitize(decoded, {
     ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'code', 'pre', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'blockquote', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td'],
     ALLOWED_ATTR: ['href', 'title', 'class'],
     ALLOW_DATA_ATTR: false,

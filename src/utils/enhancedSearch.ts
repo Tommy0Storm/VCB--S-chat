@@ -19,10 +19,20 @@ interface SearchResponse {
 class EnhancedSearchEngine {
   private readonly popularQueries = [
     'south african law',
-    'labour law south africa',
+    'labour law south africa', 
     'constitutional court',
     'ccma procedures',
-    'employment law'
+    'employment law',
+    'used cars under r100000',
+    'south african legal advice',
+    'consumer protection act',
+    'rental laws south africa',
+    'divorce law south africa',
+    'criminal law procedures',
+    'small claims court',
+    'debt review process',
+    'unfair dismissal ccma',
+    'property law south africa'
   ];
 
   constructor() {
@@ -47,8 +57,9 @@ class EnhancedSearchEngine {
             const searchResult = await hybridSearch(q, {
               useGoogle: true,
               useFreeAPIs: true,
-              maxResults: limit,
-              fetchContent: false
+              maxResults: limit * 2, // Double results for better ranking
+              fetchContent: true,     // Enable content fetching
+              timeout: 8000          // Extended timeout
             });
             return this.convertToSearchResults(searchResult.results);
           },

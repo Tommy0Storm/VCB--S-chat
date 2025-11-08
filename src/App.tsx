@@ -11,6 +11,9 @@ import { loadStoredDocuments, persistStoredDocuments } from './utils/documentSto
 import { contextStore } from './utils/contextStore';
 import { searchWeb, detectSearchQuery } from './utils/webSearch';
 import { useProgressiveSearch } from './hooks/useProgressiveSearch';
+import { searchWithSerpApiAndAI } from './utils/serpApiSearch';
+import { getWeatherForecast, formatWeatherForAI, WeatherForecast } from './utils/weatherApi';
+import { WeatherWidget } from './components/WeatherWidget';
 import type { StoredDocument } from './types/documents';
 import goggaSvgUrl from './assets/gogga.svg?url';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -251,12 +254,15 @@ const enforceFormatting = (text: string): string => {
   // eslint-disable-next-line no-misleading-character-class
   fixed = fixed.replace(/[⚙️💡🕰️⚠️🏛️⚖️🌍🌈🏆🧠🎭🤝🕊️✅🌱]/gu, '');
 
-  // STEP 2: Remove invalid icon names (non-existent Material Icons)
-  const invalidIcons = ['crushed', 'smile', 'oomph']; // Add more as discovered
+  // STEP 2: Remove invalid icon names and broken search links
+  const invalidIcons = ['crushed', 'smile', 'oomph', 'search']; // Add more as discovered
   invalidIcons.forEach(invalid => {
     const regex = new RegExp(`\\[${invalid}\\]`, 'gi');
     fixed = fixed.replace(regex, '');
   });
+  
+  // Fix broken search links that appear as [search] in text
+  fixed = fixed.replace(/\[search\]/gi, 'search');
 
   // STEP 3: Fix icons without square brackets (common mistake)
   const iconNames = [
@@ -884,11 +890,101 @@ const App = () => {
   const [liveSearchResults, setLiveSearchResults] = useState<GoogleSearchResult[]>([]);
   const [streamingResults, setStreamingResults] = useState(false);
   const [googleSearchQuery] = useState<string>('');
+  const [localPlaces, setLocalPlaces] = useState<any[]>([]);
+  const [mapImage, setMapImage] = useState<string | undefined>();
+  const [userLocation, setUserLocation] = useState<{lat: number, lon: number, city?: string, street?: string, isManual?: boolean} | null>(null);
+  const [showLocationPrompt, setShowLocationPrompt] = useState(false);
+  const [showManualLocation, setShowManualLocation] = useState(false);
+  const [manualLocationInput, setManualLocationInput] = useState('');
+  const [weatherData, setWeatherData] = useState<WeatherForecast | null>(null);
   
   // Progressive search hook
   const progressiveSearch = useProgressiveSearch();
 
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+  // Always show location prompt on app load
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowLocationPrompt(true);
+    }, 1500); // Show prompt after 1.5 seconds
+    return () => clearTimeout(timer);
+  }, []); // Empty deps - only run once on mount
+
+  const requestLocation = useCallback(() => {
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          setUserLocation({ lat: latitude, lon: longitude, isManual: false });
+          setShowLocationPrompt(false);
+          console.log('[Location] User location obtained:', latitude, longitude);
+          
+          // Reverse geocode to get full address
+          fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`)
+            .then(res => res.json())
+            .then(data => {
+              const city = data.address?.city || data.address?.town || data.address?.suburb;
+              const street = data.address?.road || data.address?.street;
+              if (city || street) {
+                setUserLocation(prev => prev ? { ...prev, city, street } : null);
+                console.log('[Location] Address detected:', street, city);
+                
+                // Fetch weather for location
+                if (city) {
+                  getWeatherForecast(city)
+                    .then(weather => setWeatherData(weather))
+                    .catch(err => console.error('[Weather] Failed to fetch:', err));
+                }
+              }
+            })
+            .catch(err => console.error('[Location] Reverse geocode failed:', err));
+        },
+        (error) => {
+          console.warn('[Location] Permission denied:', error.message);
+          setShowLocationPrompt(false);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 } // No cache - fresh location
+      );
+    }
+  }, []);
+
+  const setManualLocation = useCallback(async (locationText: string) => {
+    if (!locationText.trim()) return;
+    
+    try {
+      // Geocode the manual location
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(locationText)}&format=json&limit=1`);
+      const data = await response.json();
+      
+      if (data && data.length > 0) {
+        const result = data[0];
+        setUserLocation({
+          lat: parseFloat(result.lat),
+          lon: parseFloat(result.lon),
+          city: result.address?.city || result.address?.town || result.display_name.split(',')[0],
+          street: result.address?.road || locationText,
+          isManual: true
+        });
+        setShowManualLocation(false);
+        setManualLocationInput('');
+        console.log('[Location] Manual location set:', result.display_name);
+        
+        // Fetch weather for manual location
+        const cityName = result.address?.city || result.address?.town || result.display_name.split(',')[0];
+        if (cityName) {
+          getWeatherForecast(cityName)
+            .then(weather => setWeatherData(weather))
+            .catch(err => console.error('[Weather] Failed to fetch:', err));
+        }
+      } else {
+        alert('Location not found. Please try a different address or city name.');
+      }
+    } catch (error) {
+      console.error('[Location] Manual geocoding failed:', error);
+      alert('Failed to find location. Please try again.');
+    }
+  }, []);
 
   // Detect if user wants image generation (temporarily disabled)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -2565,25 +2661,78 @@ Provide the improved final answer addressing any issues identified.`;
       attachmentCount: userMessage.attachedDocumentIds?.length || 0
     });
 
-    // Enhanced Progressive Search
+    // Enhanced Progressive Search with SerpAPI
     let searchContext = '';
     const searchValidation = validateSearchQuery(secureInput.value.trim());
     if (searchEnabled && searchValidation.isValid && detectSearchQuery(searchValidation.sanitized)) {
       try {
-        console.log('[Submit] Enhanced progressive search enabled...');
+        console.log('[Submit] SerpAPI search enabled...');
         setIsSearching(true);
-        setSearchProgress('GOGGA is searching...');
+        setSearchProgress('GOGGA is searching with SerpAPI...');
         setStreamingResults(true);
         setLiveSearchResults([]);
         
-        // Use progressive search with real-time updates
-        await progressiveSearch.search(searchValidation.sanitized, {
-          maxResults: 6,
-          useCache: true,
-          progressive: true
-        });
+        // Use SerpAPI for comprehensive multi-engine search
+        const cerebrasApiKey = import.meta.env.VITE_CEREBRAS_API_KEY;
+        if (!cerebrasApiKey) {
+          throw new Error('Cerebras API key not configured');
+        }
         
-        // Convert progressive results to live results for display
+        // Add location context to search query if available
+        let locationEnhancedQuery = searchValidation.sanitized;
+        if (userLocation) {
+          if (userLocation.city) {
+            locationEnhancedQuery = `${searchValidation.sanitized} near ${userLocation.city}`;
+            console.log('[Search] Enhanced with city:', locationEnhancedQuery);
+          }
+        }
+        
+        const serpResults = await searchWithSerpApiAndAI(
+          locationEnhancedQuery,
+          cerebrasApiKey,
+          (progress: string) => setSearchProgress(progress),
+          'google', // Default engine
+          userLocation ? `${userLocation.lat},${userLocation.lon}` : undefined
+        );
+        
+        // Store local places and map data
+        if (serpResults.localPlaces && serpResults.localPlaces.length > 0) {
+          setLocalPlaces(serpResults.localPlaces);
+          setMapImage(serpResults.mapImage);
+          console.log('[SerpAPI] Found', serpResults.localPlaces.length, 'local places');
+        }
+        
+        // Convert SerpAPI results to display format
+        if (serpResults.searchResults.length > 0) {
+          const convertedResults = serpResults.searchResults.map(result => ({
+            title: result.title,
+            snippet: result.snippet,
+            link: result.link,
+            displayLink: new URL(result.link).hostname,
+            source: serpResults.engine
+          }));
+          setLiveSearchResults(convertedResults);
+          
+          // Build comprehensive search context with AI analysis
+          searchContext = `\n\n--- GOGGA SERPAPI SEARCH INTELLIGENCE ---\n`;
+          searchContext += `Query: "${searchValidation.sanitized}"\n`;
+          if (userLocation?.city) {
+            searchContext += `User Location: ${userLocation.city} (${userLocation.lat.toFixed(4)}, ${userLocation.lon.toFixed(4)})\n`;
+          }
+          searchContext += `Engine: ${serpResults.engine}\n`;
+          searchContext += `Results Found: ${serpResults.searchResults.length}\n\n`;
+          searchContext += `AI ANALYSIS:\n${serpResults.aiAnalysis}\n\n`;
+          searchContext += `TOP SOURCES:\n`;
+          searchContext += serpResults.sources.slice(0, 5).map((s, i) => `${i+1}. ${s}`).join('\n') + '\n';
+          
+          if (serpResults.relatedQueries.length > 0) {
+            searchContext += `\nRELATED QUERIES: ${serpResults.relatedQueries.join(', ')}\n`;
+          }
+          
+          console.log('[Submit] Added SerpAPI search context with AI analysis, length:', searchContext.length);
+        }
+        
+        // Convert progressive results to live results for display - MAXIMUM CONTEXT
         if (progressiveSearch.results.length > 0) {
           const convertedResults = progressiveSearch.results.map(result => ({
             title: result.title,
@@ -2594,20 +2743,29 @@ Provide the improved final answer addressing any issues identified.`;
           }));
           setLiveSearchResults(convertedResults);
           
-          searchContext = `\n\n--- GOGGA PROGRESSIVE SEARCH ---\n`;
+          // COMPREHENSIVE search context with ranking scores and full results
+          searchContext = `\n\n--- GOGGA MAXIMUM SEARCH INTELLIGENCE ---\n`;
           searchContext += `Query: "${searchValidation.sanitized}"\n`;
-          searchContext += `Found: ${progressiveSearch.results.length} results\n`;
-          searchContext += `Cache: ${progressiveSearch.cacheStats.hitRate}\n\n`;
-          searchContext += progressiveSearch.results.slice(0, 3)
-            .map(r => `• ${r.title}: ${r.snippet}`).join('\n') + '\n';
-          console.log('[Submit] Added progressive search context, length:', searchContext.length);
+          searchContext += `Results Found: ${progressiveSearch.results.length}\n`;
+          searchContext += `Cache Performance: ${progressiveSearch.cacheStats.hitRate} hit rate\n`;
+          searchContext += `Search Method: Progressive batched with ranking algorithms\n\n`;
+          
+          // Include MORE results with relevance scores for better AI context
+          searchContext += `TOP RANKED RESULTS:\n`;
+          searchContext += progressiveSearch.results.slice(0, 6) // Increased from 3 to 6
+            .map((r, i) => `${i+1}. [Score: ${r.score || 'N/A'}] ${r.title}\n   ${r.snippet}\n   Source: ${r.source}\n`)
+            .join('\n') + '\n';
+          
+          console.log('[Submit] Added MAXIMUM progressive search context, length:', searchContext.length);
         }
         
         setStreamingResults(false);
         setTimeout(() => {
           setSearchProgress('');
           setLiveSearchResults([]);
-        }, 3000);
+          setLocalPlaces([]);
+          setMapImage(undefined);
+        }, 8000); // Extended display time for local results
         setIsSearching(false);
         
       } catch (error) {
@@ -2966,6 +3124,14 @@ CONTEXT AWARENESS:
         // Get crucial context and enhanced web search if needed
         const crucialContext = await contextStore.getCrucialContext();
         let webSearchResults = '';
+        let weatherContext = '';
+        
+        // Add weather context for relevant queries
+        const needsWeather = /\b(weather|rain|sunny|cold|hot|temperature|forecast|outdoor|dinner|restaurant|braai|sports|rugby|cricket|soccer|event)\b/i.test(cleanedContent);
+        if (needsWeather && weatherData) {
+          weatherContext = formatWeatherForAI(weatherData);
+          console.log('[Weather] Adding weather context to AI');
+        }
         
         if (detectSearchQuery(cleanedContent)) {
           try {
@@ -2980,7 +3146,14 @@ CONTEXT AWARENESS:
           }
         }
         
-        const contextualPrompt = `${systemPromptContent}${crucialContext ? `\n\nCRUCIAL USER CONTEXT:\n${crucialContext}` : ''}${webSearchResults}`;
+        const contextualPrompt = `${systemPromptContent}${crucialContext ? `\n\nCRUCIAL USER CONTEXT:\n${crucialContext}` : ''}${weatherContext}${webSearchResults}
+
+WEATHER USAGE INSTRUCTIONS:
+- ALWAYS check weather when recommending outdoor activities, restaurants, or events
+- Mention weather conditions when relevant (e.g., "Perfect weather for a braai today!")
+- Warn about rain/storms when suggesting outdoor plans
+- For sports events, mention weather conditions
+- Consider temperature when recommending clothing or activities`;
         
         const systemMessage = {
           role: 'system' as const,
@@ -3009,15 +3182,19 @@ CONTEXT AWARENESS:
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const rawContent = ((response.choices as any)[0]?.message?.content as string) || 'No response received';
         
-        // Sanitize API response
-        const sanitizedContent = sanitizeApiResponse(rawContent);
-        
         // Add model indicator for debugging/transparency (optional - can remove in production)
         const modelIndicator = (useStrategicMode || isAdvancedComplex)
           ? '\n\n*[VCB-AI Strategic Legal Analysis]*' // Show when using full legal framework
           : ''; // Clean UI for casual queries
         
-        const processedContent = fixMarkdownTables(enforceFormatting(normalizeIcons(sanitizeMarkdown(sanitizedContent + modelIndicator))));
+        // Process content: sanitize -> normalize icons -> fix tables -> enforce formatting
+        const processedContent = fixMarkdownTables(
+          enforceFormatting(
+            normalizeIcons(
+              sanitizeMarkdown(rawContent + modelIndicator)
+            )
+          )
+        );
 
         const assistantMessage: Message = {
           role: 'assistant',
@@ -3899,6 +4076,13 @@ CONTEXT AWARENESS:
 
       {/* Messages Container - 80%+ whitespace per §5.1, Mobile Optimized */}
       <div className="flex-1 overflow-y-auto px-2 py-1 md:px-8 md:py-2 min-h-0">
+        {/* Weather Widget - Desktop Only, Top Left */}
+        {!isMobile && userLocation?.city && (
+          <div className="fixed top-32 left-4 z-20 w-64">
+            <WeatherWidget location={userLocation.city} />
+          </div>
+        )}
+        
         <div className="max-w-5xl mx-auto space-y-2 md:space-y-4">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-vcb-mid-grey py-8 md:py-24">
@@ -3928,76 +4112,36 @@ CONTEXT AWARENESS:
             ))
           )}
 
-          {(isSearching || searchProgress || streamingResults || progressiveSearch.isSearching) && (
+          {/* Search Progress Indicator - Only show while actively searching */}
+          {(isSearching || progressiveSearch.isSearching) && (
             <div className="flex justify-start mt-4">
-              <div className="max-w-3xl border-2 border-vcb-black bg-gray-50 rounded-lg px-4 py-3">
-                <div className="flex items-center space-x-3 mb-3">
+              <div className="max-w-3xl border-2 border-vcb-accent bg-white rounded-lg px-4 py-3 shadow-lg">
+                <div className="flex items-center space-x-3">
                   <img
                     src="gogga.svg"
                     alt="GOGGA"
                     className="w-6 h-6 animate-bounce"
                   />
-                  <span className="text-sm font-medium text-vcb-black">
-                    {searchProgress || 'GOGGA is searching...'}
-                  </span>
-                  <span className="material-icons text-vcb-black animate-spin text-lg">search</span>
-                  {progressiveSearch.isSearching && (
-                    <div className="text-xs text-vcb-mid-grey">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm font-medium text-vcb-black">
+                        {searchProgress || 'GOGGA is searching...'}
+                      </span>
+                      <span className="material-icons text-vcb-accent animate-spin text-lg">search</span>
+                    </div>
+                    {userLocation?.city && (
+                      <div className="flex items-center space-x-1 mt-1">
+                        <span className="material-icons text-green-600 text-xs">location_on</span>
+                        <span className="text-xs text-green-600 font-medium">Using your location: {userLocation.city}</span>
+                      </div>
+                    )}
+                  </div>
+                  {progressiveSearch.isSearching && progressiveSearch.progress > 0 && (
+                    <div className="text-xs font-bold text-vcb-accent">
                       {progressiveSearch.progress}%
                     </div>
                   )}
                 </div>
-                
-                {/* Progressive Search Results */}
-                {(liveSearchResults.length > 0 || progressiveSearch.results.length > 0) && (
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    <div className="text-xs font-bold text-vcb-mid-grey uppercase tracking-wide mb-2 flex items-center justify-between">
-                      <span>Found {(liveSearchResults.length || progressiveSearch.results.length)} results</span>
-                      {progressiveSearch.cacheStats.hitRate !== '0%' && (
-                        <span className="text-[8px] bg-green-100 text-green-700 px-1 py-0.5 rounded">
-                          Cache: {progressiveSearch.cacheStats.hitRate}
-                        </span>
-                      )}
-                    </div>
-                    {(liveSearchResults.length > 0 ? liveSearchResults : 
-                      progressiveSearch.results.map(r => ({
-                        title: r.title,
-                        snippet: r.snippet,
-                        source: r.source,
-                        score: r.score,
-                        displayLink: ''
-                      }))
-                    ).map((result, index) => (
-                      <div key={index} className="bg-white border border-vcb-light-grey rounded p-2 opacity-0 animate-fade-in" style={{animationDelay: `${index * 100}ms`, animationFillMode: 'forwards'}}>
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="text-xs font-semibold text-blue-600 truncate flex-1">
-                            {result.title}
-                          </div>
-                          <div className="flex items-center space-x-1">
-                            {'score' in result && result.score && (
-                              <span className="text-[8px] bg-gray-100 text-gray-600 px-1 py-0.5 rounded">
-                                {Math.round(result.score)}
-                              </span>
-                            )}
-                            {result.source && (
-                              <span className={`text-[8px] px-1 py-0.5 rounded uppercase font-bold ${
-                                result.source === 'google' ? 'bg-blue-100 text-blue-700' :
-                                result.source === 'wikipedia' ? 'bg-gray-100 text-gray-700' :
-                                result.source === 'duckduckgo' ? 'bg-orange-100 text-orange-700' :
-                                'bg-green-100 text-green-700'
-                              }`}>
-                                {result.source === 'duckduckgo' ? 'DDG' : result.source}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-xs text-vcb-mid-grey truncate">
-                          {result.snippet}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
           )}
@@ -4016,6 +4160,115 @@ CONTEXT AWARENESS:
                     alt="Thinking..."
                     className="w-8 h-8 md:w-10 md:h-10"
                   />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Local Places Results - Coffee Shops, Restaurants, etc. */}
+          {localPlaces.length > 0 && !isLoading && !isSearching && (
+            <div className="flex justify-start mt-4 animate-fade-in">
+              <div className="max-w-4xl w-full border-2 border-vcb-accent bg-white rounded-lg overflow-hidden shadow-lg">
+                <div className="bg-vcb-black px-4 py-3 flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="material-icons text-vcb-accent text-xl">place</span>
+                    <h3 className="text-white font-bold uppercase text-sm">
+                      Local Places in Your Area
+                    </h3>
+                  </div>
+                  <span className="text-vcb-accent text-xs font-bold">{localPlaces.length} Found</span>
+                </div>
+                
+                {/* Map Image */}
+                {mapImage && (
+                  <div className="relative w-full h-56 bg-gray-100 border-b-2 border-vcb-light-grey">
+                    <img 
+                      src={mapImage} 
+                      alt="Location Map" 
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute top-2 right-2 bg-vcb-black bg-opacity-80 px-2 py-1 rounded">
+                      <span className="text-white text-xs font-bold flex items-center space-x-1">
+                        <span className="material-icons text-sm">map</span>
+                        <span>Google Maps</span>
+                      </span>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Places Grid */}
+                <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto">
+                  {localPlaces.map((place, index) => (
+                    <div key={index} className="bg-white border-2 border-vcb-light-grey rounded-lg p-4 hover:border-vcb-accent hover:shadow-md transition-all">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <span className="bg-vcb-accent text-vcb-black text-xs font-bold px-2 py-0.5 rounded">
+                              #{index + 1}
+                            </span>
+                            <span className="text-xs text-vcb-mid-grey uppercase">{place.type}</span>
+                          </div>
+                          <h4 className="text-base font-bold text-vcb-black" title={place.title}>
+                            {place.title}
+                          </h4>
+                        </div>
+                      </div>
+                      
+                      {/* Rating & Reviews */}
+                      {place.rating && (
+                        <div className="flex items-center space-x-3 mb-3 pb-3 border-b border-vcb-light-grey">
+                          <div className="flex items-center space-x-1 bg-yellow-50 px-2 py-1 rounded">
+                            <span className="material-icons text-yellow-500 text-base">star</span>
+                            <span className="text-sm font-bold text-vcb-black">{place.rating}</span>
+                          </div>
+                          {place.reviews && (
+                            <span className="text-xs text-vcb-mid-grey font-medium">({place.reviews.toLocaleString()} reviews)</span>
+                          )}
+                          {place.price && (
+                            <span className="text-sm font-bold text-green-600">{place.price}</span>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Address */}
+                      {place.address && (
+                        <div className="flex items-start space-x-2 mb-3">
+                          <span className="material-icons text-vcb-accent text-base mt-0.5 flex-shrink-0">location_on</span>
+                          <p className="text-xs text-vcb-black leading-relaxed">{place.address}</p>
+                        </div>
+                      )}
+                      
+                      {/* Description */}
+                      {place.description && (
+                        <div className="bg-gray-50 border-l-4 border-vcb-accent px-3 py-2 mb-3">
+                          <p className="text-xs text-vcb-black italic leading-relaxed">
+                            "{place.description}"
+                          </p>
+                        </div>
+                      )}
+                      
+                      {/* Thumbnail */}
+                      {place.thumbnail && (
+                        <div className="relative overflow-hidden rounded-lg mt-3">
+                          <img 
+                            src={place.thumbnail} 
+                            alt={place.title}
+                            className="w-full h-32 object-cover hover:scale-105 transition-transform duration-300"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="bg-vcb-black px-4 py-3 border-t-2 border-vcb-accent">
+                  <p className="text-xs text-vcb-white flex items-center justify-between">
+                    <span className="flex items-center space-x-1">
+                      <span className="material-icons text-sm text-vcb-accent">verified</span>
+                      <span>Powered by Google Maps & SerpAPI</span>
+                    </span>
+                    <span className="text-vcb-accent font-bold">Real-time data</span>
+                  </p>
                 </div>
               </div>
             </div>
@@ -4432,6 +4685,123 @@ CONTEXT AWARENESS:
         onClose={() => setShowSearchStats(false)} 
       />
 
+      {/* Location Permission Prompt */}
+      {showLocationPrompt && (
+        <div className="fixed inset-0 bg-vcb-black bg-opacity-75 z-50 flex items-center justify-center p-4" onClick={() => setShowLocationPrompt(false)}>
+          <div className="bg-white border-2 border-vcb-accent max-w-md w-full rounded-lg shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-vcb-black px-6 py-4 flex items-center space-x-3 border-b-2 border-vcb-accent">
+              <img src="gogga.svg" alt="GOGGA" className="w-8 h-8" />
+              <h2 className="text-white font-bold text-lg uppercase tracking-wide">GOGGA Needs Your Location</h2>
+            </div>
+            <div className="p-6">
+              <div className="flex items-start space-x-3 mb-4">
+                <span className="material-icons text-vcb-accent text-3xl">location_on</span>
+                <div>
+                  <p className="text-vcb-black font-medium mb-2">
+                    GOGGA wants to help you find the best local results!
+                  </p>
+                  <p className="text-sm text-vcb-mid-grey leading-relaxed">
+                    By sharing your location, GOGGA can:
+                  </p>
+                  <ul className="text-sm text-vcb-mid-grey mt-2 space-y-1 ml-4">
+                    <li>• Find nearby coffee shops, restaurants & services</li>
+                    <li>• Show accurate distances and directions</li>
+                    <li>• Provide location-specific recommendations</li>
+                    <li>• Display real-time local business information</li>
+                  </ul>
+                  <p className="text-xs text-vcb-mid-grey mt-3 italic">
+                    Your location is only used for search and never stored or shared.
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div className="flex space-x-3">
+                  <button
+                    onClick={() => {
+                      requestLocation();
+                    }}
+                    className="flex-1 bg-vcb-accent hover:bg-yellow-500 text-vcb-black px-4 py-3 font-bold uppercase tracking-wide text-sm transition-colors rounded flex items-center justify-center space-x-2"
+                  >
+                    <span className="material-icons">my_location</span>
+                    <span>Use GPS</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowLocationPrompt(false);
+                      setShowManualLocation(true);
+                    }}
+                    className="flex-1 bg-white border-2 border-vcb-accent hover:bg-vcb-accent hover:text-vcb-black text-vcb-black px-4 py-3 font-bold uppercase tracking-wide text-sm transition-colors rounded flex items-center justify-center space-x-2"
+                  >
+                    <span className="material-icons">edit_location</span>
+                    <span>Enter Manually</span>
+                  </button>
+                </div>
+                <button
+                  onClick={() => setShowLocationPrompt(false)}
+                  className="w-full bg-white border border-vcb-mid-grey hover:border-vcb-black text-vcb-mid-grey hover:text-vcb-black px-4 py-2 font-medium uppercase tracking-wide text-xs transition-colors rounded"
+                >
+                  Skip for Now
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Location Input Modal */}
+      {showManualLocation && (
+        <div className="fixed inset-0 bg-vcb-black bg-opacity-75 z-50 flex items-center justify-center p-4" onClick={() => setShowManualLocation(false)}>
+          <div className="bg-white border-2 border-vcb-accent max-w-md w-full rounded-lg shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-vcb-black px-6 py-4 flex items-center justify-between border-b-2 border-vcb-accent">
+              <div className="flex items-center space-x-3">
+                <span className="material-icons text-vcb-accent text-2xl">edit_location</span>
+                <h2 className="text-white font-bold text-lg uppercase tracking-wide">Enter Your Location</h2>
+              </div>
+              <button onClick={() => setShowManualLocation(false)} className="text-white hover:text-vcb-accent transition-colors">
+                <span className="material-icons">close</span>
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-vcb-mid-grey mb-4">
+                Enter your city, street address, or area name:
+              </p>
+              <input
+                type="text"
+                value={manualLocationInput}
+                onChange={(e) => setManualLocationInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    setManualLocation(manualLocationInput);
+                  }
+                }}
+                placeholder="e.g., Pretoria, Garsfontein, or Main Street"
+                className="w-full px-4 py-3 border-2 border-vcb-light-grey focus:border-vcb-accent rounded text-vcb-black placeholder-vcb-mid-grey focus:outline-none"
+                autoFocus
+              />
+              <div className="flex space-x-3 mt-4">
+                <button
+                  onClick={() => setManualLocation(manualLocationInput)}
+                  disabled={!manualLocationInput.trim()}
+                  className="flex-1 bg-vcb-accent hover:bg-yellow-500 disabled:bg-vcb-light-grey disabled:cursor-not-allowed text-vcb-black px-4 py-3 font-bold uppercase tracking-wide text-sm transition-colors rounded flex items-center justify-center space-x-2"
+                >
+                  <span className="material-icons">check</span>
+                  <span>Set Location</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowManualLocation(false);
+                    setShowLocationPrompt(true);
+                  }}
+                  className="px-4 py-3 border-2 border-vcb-mid-grey hover:border-vcb-black text-vcb-black font-medium uppercase tracking-wide text-sm transition-colors rounded"
+                >
+                  Back
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
         {/* Footer - Fixed at bottom of screen */}
         <footer className="fixed bottom-0 left-0 right-0 bg-vcb-black border-t border-vcb-mid-grey px-4 py-2 z-30">
           <div className="max-w-7xl mx-auto flex items-center justify-between text-vcb-white">
@@ -4441,11 +4811,29 @@ CONTEXT AWARENESS:
               <span>GOGGA Beta</span>
             </div>
             <div className="flex items-center space-x-4 text-xs">
+              {userLocation?.street ? (
+                <button
+                  onClick={() => setShowLocationPrompt(true)}
+                  className="flex items-center space-x-1 text-green-400 hover:text-green-300 transition-colors"
+                  title="Click to change location"
+                >
+                  <span className="material-icons text-xs">{userLocation.isManual ? 'edit_location' : 'location_on'}</span>
+                  <span>{userLocation.street}, {userLocation.city || 'SA'}</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowLocationPrompt(true)}
+                  className="flex items-center space-x-1 text-vcb-mid-grey hover:text-vcb-accent transition-colors"
+                  title="Set your location for better search results"
+                >
+                  <span className="material-icons text-xs">location_off</span>
+                  <span>Set Location</span>
+                </button>
+              )}
+              <span>•</span>
               <a href="https://vcb-ai.online" target="_blank" rel="noopener noreferrer" className="hover:text-vcb-accent transition-colors">
                 vcb-ai.online
               </a>
-              <span>•</span>
-              <span>Pretoria, SA</span>
             </div>
           </div>
         </footer>

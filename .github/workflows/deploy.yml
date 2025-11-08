@@ -1,9 +1,8 @@
 name: Deploy to GitHub Pages
-# Trigger workflow
+
 on:
   push:
-    branches:
-      - master
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -25,26 +24,19 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '18'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
       - name: Build
-        run: npm run build
         env:
           VITE_CEREBRAS_API_KEY: ${{ secrets.VITE_CEREBRAS_API_KEY }}
           VITE_DEEPINFRA_API_KEY: ${{ secrets.VITE_DEEPINFRA_API_KEY }}
-          VITE_GOOGLE_SEARCH_API_KEY: ${{ secrets.VITE_GOOGLE_SEARCH_API_KEY }}
-          VITE_GOOGLE_SEARCH_ENGINE_ID: ${{ secrets.VITE_GOOGLE_SEARCH_ENGINE_ID }}
-          VITE_LEGAL_SEARCH_ENGINE_ID: ${{ secrets.VITE_LEGAL_SEARCH_ENGINE_ID }}
           VITE_SERPAPI_KEY: ${{ secrets.VITE_SERPAPI_KEY }}
-          VITE_SEARCH_STRATEGY: ${{ secrets.VITE_SEARCH_STRATEGY }}
-          VITE_ENABLE_CONTENT_ANALYSIS: ${{ secrets.VITE_ENABLE_CONTENT_ANALYSIS }}
-          VITE_MAX_SEARCH_RESULTS: ${{ secrets.VITE_MAX_SEARCH_RESULTS }}
-          VITE_SEARCH_CACHE_TTL: ${{ secrets.VITE_SEARCH_CACHE_TTL }}
-          VITE_MONTHLY_SEARCH_BUDGET: ${{ secrets.VITE_MONTHLY_SEARCH_BUDGET }}
+          VITE_WEATHER_API_KEY: ${{ secrets.VITE_WEATHER_API_KEY }}
+        run: npm run build
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

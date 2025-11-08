@@ -6,6 +6,31 @@ interface SerpApiResult {
   source?: string;
   date?: string;
   thumbnail?: string;
+  rating?: number;
+  reviews?: number;
+  price?: string;
+  address?: string;
+  type?: string;
+  gps_coordinates?: { latitude: number; longitude: number };
+}
+
+interface LocalPlace {
+  position: number;
+  title: string;
+  rating?: number;
+  reviews?: number;
+  price?: string;
+  description?: string;
+  thumbnail?: string;
+  address?: string;
+  type?: string;
+  gps_coordinates?: { latitude: number; longitude: number };
+  place_id?: string;
+}
+
+interface LocalMapData {
+  image?: string;
+  gps_coordinates?: { latitude: number; longitude: number };
 }
 
 interface SerpApiResponse {
@@ -26,6 +51,10 @@ interface SerpApiResponse {
     position: number;
     displayed_link?: string;
   }>;
+  local_results?: {
+    places?: LocalPlace[];
+  };
+  local_map?: LocalMapData;
   related_searches?: Array<{ query: string }>;
   people_also_ask?: Array<{ question: string; snippet: string; link: string }>;
   knowledge_graph?: {
@@ -48,8 +77,12 @@ export const searchWithSerpApi = async (query: string, options: {
   language?: string;
   device?: 'desktop' | 'mobile';
   engine?: 'google' | 'duckduckgo' | 'bing' | 'yahoo';
+  coordinates?: string; // Format: "lat,lon"
 } = {}): Promise<{
   results: SerpApiResult[];
+  localPlaces?: LocalPlace[];
+  mapImage?: string;
+  mapCoordinates?: { latitude: number; longitude: number };
   relatedQueries: string[];
   peopleAlsoAsk: Array<{ question: string; answer: string }>;
   knowledgeGraph?: { title: string; description: string };
@@ -67,12 +100,18 @@ export const searchWithSerpApi = async (query: string, options: {
   }
 
   const engine = options.engine || 'google';
-  const baseParams = {
+  const baseParams: Record<string, string> = {
     engine,
     q: sanitizedQuery,
     api_key: apiKey,
     num: Math.min(options.maxResults || 10, 20).toString()
   };
+  
+  // Add location coordinates if provided (for local results)
+  if (options.coordinates) {
+    baseParams.location = options.coordinates;
+    baseParams.uule = `w+CAIQICI${btoa(options.coordinates)}`; // Google location encoding
+  }
   
   // Engine-specific parameters
   const engineParams = (() => {
@@ -105,6 +144,8 @@ export const searchWithSerpApi = async (query: string, options: {
       : (data.organic_results || []);
     
     const relatedSearches = data.related_searches || [];
+    const localPlaces = data.local_results?.places || [];
+    const localMap = data.local_map;
 
     return {
       results: organicResults.map((item: any, index: number) => ({
@@ -116,6 +157,9 @@ export const searchWithSerpApi = async (query: string, options: {
         date: item.date,
         thumbnail: item.thumbnail
       })),
+      localPlaces: localPlaces.length > 0 ? localPlaces : undefined,
+      mapImage: localMap?.image,
+      mapCoordinates: localMap?.gps_coordinates,
       relatedQueries: relatedSearches.map((r: any) => r.query || r),
       peopleAlsoAsk: (data.people_also_ask || []).map((p: any) => ({
         question: p.question,
@@ -137,7 +181,8 @@ export const searchWithSerpApi = async (query: string, options: {
 export const multiEngineSearch = async (
   query: string,
   engines: ('google' | 'duckduckgo' | 'bing' | 'yahoo')[] = ['google', 'duckduckgo'],
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
+  coordinates?: string
 ): Promise<{
   allResults: Array<SerpApiResult & { engine: string }>;
   bestResults: SerpApiResult[];
@@ -150,7 +195,7 @@ export const multiEngineSearch = async (
   for (const engine of engines) {
     try {
       onProgress?.(`GOGGA scanning ${engine.toUpperCase()}...`);
-      const result = await searchWithSerpApi(query, { maxResults: 5, engine });
+      const result = await searchWithSerpApi(query, { maxResults: 5, engine, coordinates });
       
       const engineResults = result.results.map(r => ({ ...r, engine }));
       allResults.push(...engineResults);
@@ -188,9 +233,13 @@ export const searchWithSerpApiAndAI = async (
   query: string, 
   cerebrasApiKey: string,
   onProgress?: (message: string) => void,
-  useEngine: 'google' | 'duckduckgo' | 'bing' | 'yahoo' = 'google'
+  useEngine: 'google' | 'duckduckgo' | 'bing' | 'yahoo' = 'google',
+  coordinates?: string // Format: "lat,lon"
 ): Promise<{
   searchResults: SerpApiResult[];
+  localPlaces?: LocalPlace[];
+  mapImage?: string;
+  mapCoordinates?: { latitude: number; longitude: number };
   aiAnalysis: string;
   sources: string[];
   relatedQueries: string[];
@@ -208,7 +257,7 @@ export const searchWithSerpApiAndAI = async (
   
   try {
     // Try multi-engine search for comprehensive results
-    const multiResults = await multiEngineSearch(query, engines.slice(0, 2), onProgress);
+    const multiResults = await multiEngineSearch(query, engines.slice(0, 2), onProgress, coordinates);
     
     if (multiResults.bestResults.length > 0) {
       serpResults = {
@@ -231,6 +280,11 @@ export const searchWithSerpApiAndAI = async (
     } catch (singleError) {
       throw new Error(`All search methods failed: ${error}`);
     }
+  }
+  
+  // If we have local places, prioritize them in the response
+  if (serpResults.localPlaces && serpResults.localPlaces.length > 0) {
+    onProgress?.(`GOGGA found ${serpResults.localPlaces.length} local places nearby!`);
   }
   
   onProgress?.('GOGGA is analyzing search results...');
@@ -281,6 +335,9 @@ Be factual and cite sources by number [1], [2], etc.`;
 
     return {
       searchResults: serpResults.results,
+      localPlaces: serpResults.localPlaces,
+      mapImage: serpResults.mapImage,
+      mapCoordinates: serpResults.mapCoordinates,
       aiAnalysis: analysis,
       sources: serpResults.results.map(r => `${r.title} - ${r.link}`),
       relatedQueries: serpResults.relatedQueries,
@@ -291,6 +348,9 @@ Be factual and cite sources by number [1], [2], etc.`;
     onProgress?.('GOGGA encountered an issue but found results!');
     return {
       searchResults: serpResults.results,
+      localPlaces: serpResults.localPlaces,
+      mapImage: serpResults.mapImage,
+      mapCoordinates: serpResults.mapCoordinates,
       aiAnalysis: `Search completed using ${usedEngine} but AI analysis failed. Found ${serpResults.results.length} results.`,
       sources: serpResults.results.map(r => `${r.title} - ${r.link}`),
       relatedQueries: serpResults.relatedQueries,

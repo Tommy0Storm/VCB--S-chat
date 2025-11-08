@@ -26,9 +26,9 @@ interface SearchMetrics {
 class SearchOptimizer {
   private cache = new Map<string, CachedSearch>();
   private metrics: SearchMetrics = { totalSearches: 0, cacheHits: 0, avgResponseTime: 0 };
-  private readonly CACHE_TTL = 30 * 60 * 1000; // 30 minutes
-  private readonly MAX_CACHE_SIZE = 100;
-  private readonly BATCH_SIZE = 3;
+  private readonly CACHE_TTL = 60 * 60 * 1000; // 60 minutes for maximum retention
+  private readonly MAX_CACHE_SIZE = 200; // Increased cache size
+  private readonly BATCH_SIZE = 4; // Larger batches for comprehensive results
 
   // Progressive loading with batching
   async progressiveSearch(
@@ -51,23 +51,23 @@ class SearchOptimizer {
     let batch = 1;
 
     try {
-      // Load results in progressive batches
-      while (batch <= 3) {
+      // Load results in MAXIMUM progressive batches
+      while (batch <= 4) { // Increased from 3 to 4 batches
         const batchResults = await searchFn(query, this.BATCH_SIZE);
         
         if (batchResults.length === 0) break;
 
-        // Rank and score results
+        // Advanced rank and score results with enhanced algorithms
         const rankedResults = this.rankResults(batchResults, query);
         allResults.push(...rankedResults);
 
-        // Progressive callback
-        onProgress([...allResults], batch >= 3);
+        // Progressive callback with comprehensive data
+        onProgress([...allResults], batch >= 4);
         
         batch++;
         
-        // Small delay between batches for better UX
-        if (batch <= 3) await new Promise(resolve => setTimeout(resolve, 200));
+        // Optimized delay for maximum throughput
+        if (batch <= 4) await new Promise(resolve => setTimeout(resolve, 150));
       }
 
       // Cache successful results
@@ -96,32 +96,47 @@ class SearchOptimizer {
       const title = result.title.toLowerCase();
       const snippet = result.snippet.toLowerCase();
 
+      // MAXIMUM RANKING ALGORITHM - Multi-factor scoring
+      
       // Title relevance (highest weight)
       queryTerms.forEach(term => {
-        if (title.includes(term)) score += 10;
-        if (title.startsWith(term)) score += 5;
+        if (title.includes(term)) score += 15; // Increased weight
+        if (title.startsWith(term)) score += 8;
+        if (title.toLowerCase() === term.toLowerCase()) score += 20; // Exact match bonus
       });
 
-      // Snippet relevance
+      // Advanced snippet relevance with position weighting
       queryTerms.forEach(term => {
-        const snippetMatches = (snippet.match(new RegExp(term, 'g')) || []).length;
-        score += snippetMatches * 2;
+        const snippetMatches = (snippet.match(new RegExp(term, 'gi')) || []).length;
+        score += snippetMatches * 3; // Increased weight
+        
+        // Early position bonus (terms appearing early in snippet)
+        const firstIndex = snippet.toLowerCase().indexOf(term.toLowerCase());
+        if (firstIndex >= 0 && firstIndex < 50) score += 5;
       });
 
-      // Source quality bonus
+      // Enhanced source quality with domain authority
       const sourceBonus = {
-        'google': 3,
-        'wikipedia': 2,
-        'duckduckgo': 1
+        'google': 5,     // Increased
+        'wikipedia': 4,  // Increased
+        'duckduckgo': 2, // Increased
+        'bing': 3,
+        'academic': 6    // Highest for academic sources
       };
-      score += sourceBonus[result.source as keyof typeof sourceBonus] || 0;
+      score += sourceBonus[result.source as keyof typeof sourceBonus] || 1;
 
-      // Recency bonus (if timestamp available)
+      // Advanced recency scoring
       if (result.timestamp) {
         const age = Date.now() - result.timestamp;
         const daysSincePublished = age / (1000 * 60 * 60 * 24);
-        if (daysSincePublished < 30) score += 2;
+        if (daysSincePublished < 7) score += 5;   // Very recent
+        else if (daysSincePublished < 30) score += 3; // Recent
+        else if (daysSincePublished < 90) score += 1; // Somewhat recent
       }
+      
+      // Query complexity bonus - longer queries get more sophisticated ranking
+      if (queryTerms.length > 3) score += 2;
+      if (queryTerms.length > 6) score += 3;
 
       return { ...result, score };
     }).sort((a, b) => (b.score || 0) - (a.score || 0));
@@ -195,19 +210,27 @@ class SearchOptimizer {
     };
   }
 
-  // Preload popular queries
+  // MAXIMUM preload popular queries with enhanced coverage
   async preloadPopularQueries(queries: string[], searchFn: (query: string, limit: number) => Promise<SearchResult[]>): Promise<void> {
-    for (const query of queries) {
+    const preloadPromises = queries.map(async (query, index) => {
       if (!this.getFromCache(query)) {
         try {
-          const results = await searchFn(query, this.BATCH_SIZE);
-          this.addToCache(query, this.rankResults(results, query));
-          await new Promise(resolve => setTimeout(resolve, 100)); // Rate limiting
+          // Stagger requests to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, index * 200));
+          
+          const results = await searchFn(query, this.BATCH_SIZE * 2); // Double batch size for preload
+          const rankedResults = this.rankResults(results, query);
+          this.addToCache(query, rankedResults);
+          
+          console.log(`[Preload] Cached ${rankedResults.length} results for: ${query}`);
         } catch (error) {
           console.warn(`Failed to preload query: ${query}`, error);
         }
       }
-    }
+    });
+    
+    // Execute all preloads concurrently with proper error handling
+    await Promise.allSettled(preloadPromises);
   }
 }
 
