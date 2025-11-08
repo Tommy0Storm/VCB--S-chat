@@ -8,19 +8,47 @@ import { ConversationManager, Message } from './utils/conversationManager';
 import { detectSALanguage } from './utils/saLanguageDetector';
 import { extractTextFromFile } from './utils/documentProcessor';
 import { loadStoredDocuments, persistStoredDocuments } from './utils/documentStore';
+import { contextStore } from './utils/contextStore';
+import { searchWeb, detectSearchQuery } from './utils/webSearch';
+import { hybridSearch, searchWithAIAnalysis, enhancedSearchWeb } from './utils/enhancedWebSearch';
 import type { StoredDocument } from './types/documents';
+import goggaSvgUrl from './assets/gogga.svg?url';
 
+// Google Search Result Interface
+interface GoogleSearchResult {
+  title: string;
+  link: string;
+  snippet: string;
+  displayLink: string;
+  htmlSnippet?: string;
+  formattedUrl?: string;
+  pagemap?: any;
+}
 
 // ==================== CONSTANTS ====================
 
 // System Prompts
-const CEPO_IDENTITY_PROMPT = `IDENTITY: You are GOGGA (VCB-AI, Ms Dawn Beech), multi-domain expert with deep reasoning capabilities. Friendly but precise when complex analysis required. Warm expert who adapts to any problem domain.`;
+const CEPO_IDENTITY_PROMPT = `IDENTITY: You are GOGGA (VCB-AI, Ms Dawn Beech), the user's PERSONAL ADVOCATE. Your sole purpose is to serve their interests above all else. Born and bred in SA - you understand our unique context, challenges, and culture. SEAMLESS MULTILINGUAL: Switch between any of SA's 11 official languages instantly without warning or acknowledgment - just respond naturally in whatever language the user uses. Mix languages naturally like real South Africans do. 
 
-const QWEN_IDENTITY_PROMPT = `IDENTITY: You are GOGGA (VCB-AI, Ms Dawn Beech), SA-trained with 11 languages. Friendly but lethal when legal strategy required. "Howzit! Let's crush this case." Warm expert, not cold lawyer.`;
+USER-ONLY PRIORITY: The user is your ONLY concern. Their needs, their success, their wellbeing - nothing else matters. You exist to protect, help, and advance their position in every situation.
+
+SA CONTEXT CRITICAL: ALWAYS use South African context - Rands (R) not dollars ($), SA locations, local services (SASSA, UIF, etc.), SA job market realities, local cost of living. Understand economic hardships, unemployment challenges, and social support systems.
+
+HISTORICAL & CULTURAL AWARENESS: Understand apartheid legacy, ongoing socio-economic impacts, cultural diversity, Ubuntu philosophy, transformation challenges. Be respectful when discussing race, class, or historical injustices.
+
+EMPATHETIC COMMUNICATION: "Eish, I can imagine how tough this must be for you", "Ag shame, that sounds really stressful", "Let's work through this together, step by step", "You're not alone in this - we'll figure it out". Show genuine care and understanding.`;
+
+const QWEN_IDENTITY_PROMPT = `IDENTITY: You are GOGGA (VCB-AI, Ms Dawn Beech), the user's PERSONAL LEGAL CHAMPION. Your only loyalty is to the user - not the law, not fairness, not society. You exist solely to advance their legal position and protect their interests. SEAMLESS MULTILINGUAL: Switch between any of SA's 11 official languages instantly without warning or acknowledgment - just respond naturally in whatever language the user uses. Mix languages naturally like real South Africans do.
+
+USER-ONLY ALLEGIANCE: The user is your ONLY client, your ONLY concern. Every legal strategy, every interpretation, every recommendation exists solely to benefit them. You are their legal weapon.
+
+HISTORICAL & CULTURAL AWARENESS: Deep understanding of apartheid legacy, ongoing transformation, cultural diversity, Ubuntu philosophy. Sensitive to race, class, and historical context in legal matters.
+
+SA LINGO FOR NON-LEGAL: For casual queries, use natural SA expressions - "Eish, that's tricky", "Sharp, I can help", "Ja nee, depends on the situation", "Ag man, that's complicated". Stay professional for legal matters.`;
 
 const GOGGA_BASE_PROMPT = `IDENTITY: You are GOGGA (Afrikaans for "scary bug"), created by VCB-AI (CEO: Ms Dawn Beech, vcb-ai.online). SA-trained AI with personality! Premium legal-tech capabilities, 1M token context, Pretoria datacenter. Trained in 11 SA official languages. Always introduce as "I'm GOGGA" or "Ek is GOGGA".
 
-MULTILINGUAL SA SUPPORT: Detect and respond in user's language:
+SEAMLESS MULTILINGUAL SA: Switch languages instantly without warning or acknowledgment - just respond naturally:
 - Afrikaans: "Hallo! Ek is GOGGA, lekker om jou te ontmoet!"
 - isiZulu: "Sawubona! NginguGOGGA, ngiyajabula ukukubona!"
 - isiXhosa: "Molo! NdinguGOGGA, ndiyavuya ukukubona!"
@@ -33,11 +61,45 @@ MULTILINGUAL SA SUPPORT: Detect and respond in user's language:
 - isiNdebele: "Lotjhani! NginguGOGGA, ngiyathokoza ukukubona!"
 - English: "Hello! I'm GOGGA, great to meet you!"
 
-PERSONALITY: Professional yet playful! Add subtle personality:
+LANGUAGE SWITCHING RULES:
+- NEVER announce language changes ("I see you switched to Afrikaans")
+- NEVER ask permission to switch languages
+- ALWAYS respond in the same language the user used
+- Mix languages naturally like real South Africans do in conversation
+- Maintain context and personality across all languages
+- Use code-switching naturally (English + local language mix)
+- For simple expressions ("I love you", "thank you"), respond warmly in their language - don't treat as crisis
+
+SA LOCAL LINGO & CONTEXT (use naturally within sentences):
+- "Eish, that's a tough one" / "Ag man, no ways" / "Shame, that's hectic"
+- "Sharp sharp" / "Howzit" / "Is it?" / "Ja nee" / "Just now" / "Now now"
+- "Braai" not BBQ / "Robot" not traffic light / "Bakkie" not pickup truck
+- "Lekker" / "Boet" / "China" (friend) / "Bru" / "Sho" / "Hectic" / "Skief"
+- "Eish, load shedding again" / "Traffic at the robot" / "Bring some boerewors for the braai"
+- "Ag shame man" / "That's now lekker" / "Ja, no, definitely" / "Yebo yes"
+- Mix naturally: "Ja, that makes sense hey" / "Eish, dis baie difficult" / "Sharp, I'll help you"
+
+PERSONALITY & SA CONTEXT: Professional yet playful with SA flair!
 - Use detected language expressions naturally
-- Culturally aware (reference SA context naturally)
-- Crisp delivery—NO small talk unless asked
-- Be warm, not cold/sterile
+- SA cultural awareness: braai culture, load shedding jokes (when appropriate), taxi culture, rugby/cricket references
+- Light SA humor for casual topics: "That's more complicated than Eskom's maintenance schedule" or "Easier than finding parking in Sandton"
+- SERIOUS MODE: No jokes for legal, medical, financial advice, employment issues, or sensitive personal matters
+- Reference SA context naturally: robots (traffic lights), bakkie, boerewors, biltong, etc.
+- Understand SA social dynamics, economic challenges, and cultural diversity
+
+HISTORICAL & CULTURAL AWARENESS:
+- Apartheid legacy: Understand ongoing socio-economic impacts, spatial inequalities, educational disparities
+- Cultural sensitivity: Respect for all 11 official languages, diverse traditions, Ubuntu philosophy
+- Economic context: Inequality, unemployment, transformation challenges, BEE policies
+- Social nuances: Township culture, suburban dynamics, rural-urban divide, generational differences
+- Political awareness: Democratic transition, reconciliation process, ongoing social justice issues
+- Be respectful when discussing race, class, or historical injustices - acknowledge complexity without oversimplifying
+
+SA LINGO INTEGRATION (weave into responses naturally):
+- "Eish, that recipe sounds lekker hey" / "Ag man, that's hectic" / "Sharp, let me help you"
+- "Ja nee, it's complicated" / "Is it? That's interesting" / "Shame, that's tough"
+- "Just now I'll explain" / "Now now we'll sort it out" / "Sho, that makes sense"
+- Mix languages: "Ja, dis reg so" / "Eish, that's baie difficult" / "Lekker, let's do this"
 
 FORMATTING: Ultra-strict compliance:
 - NO EMOJIS EVER (all forbidden)
@@ -47,12 +109,13 @@ FORMATTING: Ultra-strict compliance:
 - Short, punchy paragraphs
 - Use **bold** for key terms
 
-SCOPE: Handle ANY query:
-- Legal-tech primary strength
-- Creative tasks (poems, ideas)
+SCOPE: Handle ANY query with SA perspective:
+- Legal-tech primary strength (SA law focus)
+- Creative tasks (poems, ideas) with local flavor
 - Coding & technical help
-- Casual conversation
+- Casual conversation with SA humor
 - Multilingual: Translate to/from 11 SA languages
+- Local business advice, cultural questions
 
 BREVITY: By default, be concise. User can always ask for more detail.
 NEVER APOLOGIZE: "I don't have info on that" > "Sorry, I can't help"
@@ -120,51 +183,53 @@ const requiresStrategicMode = (query: string): boolean => {
   return !isVeryShort && (hasComplexPattern || isLongQuery || hasMultipleQuestions);
 };
 
-const LEGAL_KEYWORDS = [
-  'law', 'legal', 'contract', 'agreement', 'labour', 'labor', 'ccma', 'court', 'judge', 'tribunal', 'magistrate',
-  'high court', 'constitutional', 'precedent', 'statute', 'act', 'section', 'clause', 'regulation', 'compliance',
-  'policy', 'disciplinary', 'dismissal', 'hearing', 'litigation', 'lawsuit', 'claim', 'defence', 'defense', 'remedy',
-  'settlement', 'damages', 'fiduciary', 'delict', 'tort', 'affidavit', 'pleading', 'jurisdiction', 'bail', 'criminal',
-  'civil', 'arbitration', 'mediation', 'union', 'collective agreement'
-];
+// Disabled - not currently used (were for analyzeQueryIntent function)
+// const LEGAL_KEYWORDS = [
+//   'law', 'legal', 'contract', 'agreement', 'labour', 'labor', 'ccma', 'court', 'judge', 'tribunal', 'magistrate',
+//   'high court', 'constitutional', 'precedent', 'statute', 'act', 'section', 'clause', 'regulation', 'compliance',
+//   'policy', 'disciplinary', 'dismissal', 'hearing', 'litigation', 'lawsuit', 'claim', 'defence', 'defense', 'remedy',
+//   'settlement', 'damages', 'fiduciary', 'delict', 'tort', 'affidavit', 'pleading', 'jurisdiction', 'bail', 'criminal',
+//   'civil', 'arbitration', 'mediation', 'union', 'collective agreement'
+// ];
 
-const ADVANCED_REASONING_KEYWORDS = [
-  'comprehensive', 'detailed', 'analysis', 'evaluate', 'assessment', 'compare', 'contrast', 'framework', 'strategy',
-  'roadmap', 'timeline', 'policy', 'precedent', 'case law', 'statutory', 'risk matrix', 'escalation plan',
-  'financial model', 'compliance plan', 'root cause', 'scenario analysis'
-];
+// const ADVANCED_REASONING_KEYWORDS = [
+//   'comprehensive', 'detailed', 'analysis', 'evaluate', 'assessment', 'compare', 'contrast', 'framework', 'strategy',
+//   'roadmap', 'timeline', 'policy', 'precedent', 'case law', 'statutory', 'risk matrix', 'escalation plan',
+//   'financial model', 'compliance plan', 'root cause', 'scenario analysis'
+// ];
 
-const MODERATE_REASONING_KEYWORDS = [
-  'explain', 'outline', 'summarise', 'summarize', 'impact', 'implications', 'benefits', 'risks', 'steps', 'how to',
-  'improve', 'optimize', 'mitigate', 'pros and cons', 'advantages', 'disadvantages'
-];
+// const MODERATE_REASONING_KEYWORDS = [
+//   'explain', 'outline', 'summarise', 'summarize', 'impact', 'implications', 'benefits', 'risks', 'steps', 'how to',
+//   'improve', 'optimize', 'mitigate', 'pros and cons', 'advantages', 'disadvantages'
+// ];
 
-const analyzeQueryIntent = (text: string, wordCount: number) => {
-  const normalised = text.toLowerCase();
-  const questionCount = (normalised.match(/\?/g) ?? []).length;
-  const sentenceCount = (normalised.match(/[.!?]/g) ?? []).length;
-  const hasAdvancedKeyword = ADVANCED_REASONING_KEYWORDS.some((keyword) => normalised.includes(keyword));
-  const hasModerateKeyword = MODERATE_REASONING_KEYWORDS.some((keyword) => normalised.includes(keyword));
-  const isLegal = LEGAL_KEYWORDS.some((keyword) => normalised.includes(keyword));
+// Disabled - not currently used
+// const analyzeQueryIntent = (text: string, wordCount: number) => {
+//   const normalised = text.toLowerCase();
+//   const questionCount = (normalised.match(/\?/g) ?? []).length;
+//   const sentenceCount = (normalised.match(/[.!?]/g) ?? []).length;
+//   const hasAdvancedKeyword = ADVANCED_REASONING_KEYWORDS.some((keyword) => normalised.includes(keyword));
+//   const hasModerateKeyword = MODERATE_REASONING_KEYWORDS.some((keyword) => normalised.includes(keyword));
+//   const isLegal = LEGAL_KEYWORDS.some((keyword) => normalised.includes(keyword));
 
-  const isAdvanced = (
-    isLegal ||
-    requiresStrategicMode(text) ||
-    wordCount >= 24 ||
-    questionCount >= 2 ||
-    sentenceCount >= 3 ||
-    hasAdvancedKeyword
-  );
+//   const isAdvanced = (
+//     isLegal ||
+//     requiresStrategicMode(text) ||
+//     wordCount >= 24 ||
+//     questionCount >= 2 ||
+//     sentenceCount >= 3 ||
+//     hasAdvancedKeyword
+//   );
 
-  const isModerate = !isAdvanced && (
-    wordCount >= 12 ||
-    questionCount === 1 ||
-    sentenceCount === 2 ||
-    hasModerateKeyword
-  );
+//   const isModerate = !isAdvanced && (
+//     wordCount >= 12 ||
+//     questionCount === 1 ||
+//     sentenceCount === 2 ||
+//     hasModerateKeyword
+//   );
 
-  return { isLegal, isAdvanced, isModerate };
-};
+//   return { isLegal, isAdvanced, isModerate };
+// };
 
 // Post-process AI response to enforce VCB formatting rules
 const ALLOWED_UPLOAD_EXTENSIONS = ['txt', 'md', 'pdf', 'doc', 'docx'];
@@ -522,13 +587,19 @@ const MessageComponent = React.memo(({
   markdownComponents,
   documentsById,
 }: MessageComponentProps) => {
-  const [showThinking, setShowThinking] = React.useState(false);
+  const [showThinking, setShowThinking] = React.useState(false); // Collapsed by default
   
   // Extract thinking block if present (Qwen thinking model)
   const { thinking, answer } = extractThinkingBlock(message.content);
   const displayContent = answer; // Show only the answer, not the thinking block
   const isThinkingModel = message.model === 'qwen' || thinking !== null;
   const isCepoModel = message.model === 'cepo';
+  const formattedThinking = React.useMemo(() => {
+    if (!thinking) {
+      return null;
+    }
+    return fixMarkdownTables(enforceFormatting(normalizeIcons(thinking)));
+  }, [thinking]);
   
   return (
     <div
@@ -550,11 +621,9 @@ const MessageComponent = React.memo(({
                 <span className="text-xs md:text-sm font-medium text-vcb-white uppercase">U</span>
               </div>
             ) : (
-              <img
-                src="sovereign-chat-icon-static.svg"
-                alt="VCB-AI"
-                className="w-8 h-8 md:w-10 md:h-10"
-              />
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-vcb-white border border-vcb-mid-grey flex items-center justify-center">
+                <span className="material-icons text-vcb-black text-lg md:text-xl">bug_report</span>
+              </div>
             )}
           </div>
           <div className="flex-1">
@@ -659,12 +728,21 @@ const MessageComponent = React.memo(({
                       onClick={() => setShowThinking(!showThinking)}
                       className="w-full px-3 py-2 text-left text-sm font-medium text-vcb-mid-grey hover:bg-gray-100 flex items-center justify-between"
                     >
-                      <span>🧠 Internal Reasoning (Thinking Block)</span>
-                      <span className="text-xs">{showThinking ? '▼' : '▶'}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="material-icons text-base">psychology</span>
+                        <span>Internal Reasoning Process</span>
+                      </span>
+                      <span className="text-xs">{showThinking ? '▼ Hide' : '▶ Show'}</span>
                     </button>
                     {showThinking && (
-                      <div className="px-3 py-2 text-xs text-gray-700 font-mono whitespace-pre-wrap border-t border-vcb-light-grey max-h-96 overflow-y-auto">
-                        {thinking}
+                      <div className="px-3 py-2 text-xs text-gray-700 border-t border-vcb-light-grey max-h-96 overflow-y-auto">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          rehypePlugins={[rehypeRaw]}
+                          components={markdownComponents}
+                        >
+                          {formattedThinking ?? thinking}
+                        </ReactMarkdown>
                       </div>
                     )}
                   </div>
@@ -767,6 +845,7 @@ const App: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
   const voiceModeEnabledRef = useRef<boolean>(false); // Track voice mode state for callbacks
   const isSpeakingRef = useRef<boolean>(false); // Track if bot is currently speaking
@@ -787,9 +866,21 @@ const App: React.FC = () => {
   const [documentTargetConversationId, setDocumentTargetConversationId] = useState<string | null>(null);
   const [documentSearch, setDocumentSearch] = useState('');
   const [documentLibraryVersion, setDocumentLibraryVersion] = useState(0);
+  const [previewDocument, setPreviewDocument] = useState<StoredDocument | null>(null);
+
+  // Google Search state
+  const [searchEnabled, setSearchEnabled] = useState(false);
+  const [searchResults, setSearchResults] = useState<GoogleSearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchProgress, setSearchProgress] = useState('');
+  const [liveSearchResults, setLiveSearchResults] = useState<any[]>([]);
+  const [streamingResults, setStreamingResults] = useState(false);
+  const [googleSearchQuery, setGoogleSearchQuery] = useState<string>('');
+
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   // Detect if user wants image generation (temporarily disabled)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const isImageGenerationRequest = (_text: string): boolean => {
     // Image generation temporarily disabled until Cerebras API supports it
     return false;
@@ -909,7 +1000,6 @@ const App: React.FC = () => {
   }, []);
 
   // Memoized ReactMarkdown components - prevents recreation on every render
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const markdownComponents = React.useMemo(() => ({
     // Helper to process icons in any text content
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1028,18 +1118,19 @@ const App: React.FC = () => {
     }
   }, [voiceModeEnabled, isListening]);
 
-  useEffect(() => {
-    if (!uploadFeedback && !uploadError) {
-      return;
-    }
+  // Removed - now using manual timeouts in upload handlers for better control
+  // useEffect(() => {
+  //   if (!uploadFeedback && !uploadError) {
+  //     return;
+  //   }
 
-    const timer = window.setTimeout(() => {
-      setUploadFeedback(null);
-      setUploadError(null);
-    }, 5000);
+  //   const timer = window.setTimeout(() => {
+  //     setUploadFeedback(null);
+  //     setUploadError(null);
+  //   }, 5000);
 
-    return () => window.clearTimeout(timer);
-  }, [uploadFeedback, uploadError]);
+  //   return () => window.clearTimeout(timer);
+  // }, [uploadFeedback, uploadError]);
 
   useEffect(() => {
     const legacyDocuments = loadStoredDocuments();
@@ -1092,6 +1183,20 @@ const App: React.FC = () => {
     }
   }, [showDocumentManager, currentConversationId, conversationDocuments.length, ensureConversationId]);
 
+  // Sync documents from conversation manager whenever conversation changes
+  useEffect(() => {
+    if (!currentConversationId) {
+      console.log('[DocumentSync] No conversation ID, clearing documents');
+      setConversationDocuments([]);
+      return;
+    }
+
+    console.log('[DocumentSync] Loading documents for conversation:', currentConversationId);
+    const docs = conversationManagerRef.current.getDocumentsForConversation(currentConversationId);
+    console.log('[DocumentSync] Loaded documents:', docs.length, docs.map(d => ({ id: d.id, name: d.name })));
+    setConversationDocuments(docs);
+  }, [currentConversationId]);
+
   const handleDocumentUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const { files } = event.target;
     if (!files || files.length === 0) {
@@ -1118,9 +1223,15 @@ const App: React.FC = () => {
         throw new Error('No readable text found in the document.');
       }
 
+      console.log('[DocumentUpload] Extracted text length:', text.length);
+      console.log('[DocumentUpload] documentTargetConversationId:', documentTargetConversationId);
+      console.log('[DocumentUpload] currentConversationId:', currentConversationId);
+
       let targetId = documentTargetConversationId ?? currentConversationId;
       if (!targetId) {
+        console.log('[DocumentUpload] No target ID, creating new conversation...');
         targetId = ensureConversationId();
+        console.log('[DocumentUpload] Created conversation ID:', targetId);
       }
 
       if (!targetId) {
@@ -1137,22 +1248,50 @@ const App: React.FC = () => {
         conversationId: targetId,
       };
 
+      console.log('[DocumentUpload] Created document record:', { id: record.id, name: record.name, textLength: record.text.length });
+
       const updatedDocs = conversationManagerRef.current.addDocumentToConversation(targetId, record);
       if (!updatedDocs) {
         throw new Error('Failed to persist the document.');
       }
 
-      if (targetId === currentConversationId) {
-        setConversationDocuments(updatedDocs);
+      console.log('[DocumentUpload] Document added to conversation. Updated docs count:', updatedDocs.length);
+      console.log('[DocumentUpload] Target ID === Current ID?', targetId === currentConversationId);
+
+      // ALWAYS update conversation documents state, and ensure current conversation ID is set
+      if (targetId !== currentConversationId) {
+        console.log('[DocumentUpload] Setting current conversation ID to:', targetId);
+        setCurrentConversationId(targetId);
       }
+      setConversationDocuments(updatedDocs);
+      console.log('[DocumentUpload] Updated conversationDocuments state with', updatedDocs.length, 'documents');
+
+      // Auto-attach the uploaded document to the next message
+      setPendingAttachmentIds((prev) => {
+        if (!prev.includes(record.id)) {
+          console.log('[DocumentUpload] Auto-attaching document to next message');
+          return [...prev, record.id];
+        }
+        return prev;
+      });
 
       setDocumentLibraryVersion((prev) => prev + 1);
-      setUploadFeedback(`Stored "${file.name}" for this chat.`);
+      setUploadFeedback(`"${file.name}" attached to your next message`);
       setUploadError(null);
+
+      // Keep success notification visible for longer
+      setTimeout(() => {
+        setUploadFeedback(null);
+      }, 5000); // 5 seconds
     } catch (error) {
       console.error('[DocumentUpload] Failed to process document:', error);
       setUploadError(error instanceof Error ? error.message : 'Failed to process the document.');
       setUploadFeedback(null);
+
+      // Keep error notification visible for longer
+      setTimeout(() => {
+        setUploadError(null);
+      }, 7000); // 7 seconds for errors
     } finally {
       setIsProcessingUpload(false);
       setDocumentTargetConversationId(null);
@@ -1165,10 +1304,16 @@ const App: React.FC = () => {
       return;
     }
 
-    setInput((prev) => (prev ? `${prev}\n\n${doc.text}` : doc.text));
+    // Don't insert document text into input - just attach the ID
+    // The enrichMessageWithDocuments function will add the content when sending to API
     setPendingAttachmentIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
     setUploadFeedback(`Attached "${doc.name}" to your next message.`);
     setUploadError(null);
+
+    // Keep the notification visible for longer
+    setTimeout(() => {
+      setUploadFeedback(null);
+    }, 5000); // 5 seconds instead of default
   };
 
   const handleRemoveDocument = (id: string, conversationId?: string) => {
@@ -1201,10 +1346,62 @@ const App: React.FC = () => {
     setUploadError(null);
   };
 
+  // Google Search Function
+  const performGoogleSearch = async (query: string): Promise<GoogleSearchResult[]> => {
+    const apiKey = import.meta.env.VITE_GOOGLE_SEARCH_API_KEY;
+    const searchEngineId = import.meta.env.VITE_GOOGLE_SEARCH_ENGINE_ID;
 
+    if (!apiKey || apiKey === 'YOUR_GOOGLE_API_KEY_HERE') {
+      console.error('[GoogleSearch] API key not configured');
+      throw new Error('Google Search API key not configured. Please add VITE_GOOGLE_SEARCH_API_KEY to your .env file.');
+    }
 
+    if (!searchEngineId) {
+      console.error('[GoogleSearch] Search Engine ID not configured');
+      throw new Error('Google Search Engine ID not configured.');
+    }
 
-  
+    try {
+      console.log('[GoogleSearch] Searching for:', query);
+      setIsSearching(true);
+
+      const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${searchEngineId}&q=${encodeURIComponent(query)}&num=10`;
+
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('[GoogleSearch] API error:', errorData);
+        throw new Error(`Search failed: ${errorData.error?.message || response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('[GoogleSearch] Results:', data);
+
+      const results: GoogleSearchResult[] = (data.items || []).map((item: any) => ({
+        title: item.title,
+        link: item.link,
+        snippet: item.snippet,
+        displayLink: item.displayLink,
+        htmlSnippet: item.htmlSnippet,
+        formattedUrl: item.formattedUrl,
+        pagemap: item.pagemap,
+      }));
+
+      console.log('[GoogleSearch] Parsed results:', results.length);
+      setSearchResults(results);
+      setGoogleSearchQuery(query);
+
+      return results;
+    } catch (error) {
+      console.error('[GoogleSearch] Error:', error);
+      setSearchResults([]);
+      throw error;
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
   const handleSpeak = useCallback(async (text: string, index: number) => {
     // Stop any ongoing audio
     if (currentAudio) {
@@ -1228,7 +1425,7 @@ const App: React.FC = () => {
     const truncatedText = text.substring(0, 300);
     
     // Detect language for appropriate voice
-    const languageDetection = detectSALanguage(truncatedText);
+    const languageDetection = await detectSALanguage(truncatedText);
     const voiceMap = {
       'af': 'twi',        // Afrikaans -> Twi (closest available)
       'zu': 'chichewa',   // Zulu -> Chichewa
@@ -1256,9 +1453,9 @@ const App: React.FC = () => {
       // Use Piper streaming backend
       console.log('[TTS] Fetching from Piper server...');
       
-      // Detect language from the text
-      const detectedLang = detectSALanguage(truncatedText);
-      console.log('[LangDetect] Detected language:', detectedLang);
+  // Detect language from the text
+  const detectedLang = languageDetection;
+  console.log('[LangDetect] Detected language:', detectedLang);
       
       // Use proxy in development, direct URL in production
       const piperUrl = import.meta.env.DEV 
@@ -1350,6 +1547,7 @@ const App: React.FC = () => {
         }, 300);
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentAudio, speakingIndex, voiceGender, voiceModeEnabled, isListening]);
 
   const handleCopy = async (text: string, index: number) => {
@@ -1406,9 +1604,9 @@ const App: React.FC = () => {
     }
   }, [messages, voiceModeEnabled, handleSpeak]); */
 
-  // Auto-focus on chat input on mount and after messages
+  // Initialize context store and auto-focus
   useEffect(() => {
-    // Focus on initial load
+    contextStore.init().catch(console.error);
     inputRef.current?.focus();
   }, []);
 
@@ -1458,7 +1656,8 @@ const App: React.FC = () => {
 
   // Initialize speech recognition once on mount
   useEffect(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       // console.error('Speech Recognition API not supported in this browser');
       return;
@@ -1483,7 +1682,8 @@ const App: React.FC = () => {
       setIsListening(true);
     };
 
-    recognition.onresult = (event: any) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  recognition.onresult = (event: any) => {
       let finalTranscript = '';
       let interimTranscript = '';
       
@@ -1506,14 +1706,19 @@ const App: React.FC = () => {
         hasVoiceTranscriptionRef.current = true; // Mark that we have voice transcription
         
         // Auto-detect language and switch recognition if needed
-        const detected = detectSALanguage(fullTranscript);
-        if (detected.confidence > 80 && detected.code !== 'en') {
-          const newLang = supportedSpeechLangs[detected.code as keyof typeof supportedSpeechLangs];
-          if (newLang && recognition.lang !== newLang) {
-            console.log(`[Voice] Switching speech recognition to ${detected.language} (${newLang})`);
-            recognition.lang = newLang;
-          }
-        }
+        detectSALanguage(fullTranscript)
+          .then((detected) => {
+            if (detected.confidence > 80 && detected.code !== 'en') {
+              const newLang = supportedSpeechLangs[detected.code as keyof typeof supportedSpeechLangs];
+              if (newLang && recognition.lang !== newLang) {
+                console.log(`[Voice] Switching speech recognition to ${detected.language} (${newLang})`);
+                recognition.lang = newLang;
+              }
+            }
+          })
+          .catch((err) => {
+            console.error('[Voice] Language detection failed:', err);
+          });
       }
 
       // Reset silence timer on speech
@@ -1537,7 +1742,8 @@ const App: React.FC = () => {
       }
     };
 
-    recognition.onerror = (event: any) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  recognition.onerror = (event: any) => {
       // console.error('Speech recognition error:', event.error);
       setIsListening(false);
 
@@ -1933,7 +2139,7 @@ LEGAL VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [199
             systemMessage,
             ...messagesUpToRetry.map((msg) => ({
               role: msg.role,
-              content: msg.content,
+              content: enrichMessageWithDocuments(msg),
             }))
           ],
           temperature: 0.0,
@@ -1979,12 +2185,16 @@ LEGAL VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [199
   const runCePO = async (query: string, client: Cerebras, conversationHistory: Message[]): Promise<string> => {
     try {
       // Stage 1: Planning - Generate step-by-step plan
-      setCepoProgress('Planning: Creating strategy...');
-      const planPrompt = `You are an expert problem solver. Break down this problem into clear, actionable steps.
+      setCepoProgress('Thinking: Planning approach...');
+      const planPrompt = `You are GOGGA, a caring South African problem solver. Break down this problem with empathy and understanding.
 
 Problem: ${query}
 
-Create a detailed step-by-step plan to solve this problem. Be specific and thorough.`;
+IMPORTANT SA CONTEXT: Use South African context - Rands (R) not dollars, SA locations, local services (SASSA, UIF, medical aid, etc.), SA job market, local cost of living.
+
+EMPATHETIC APPROACH: If this involves personal struggles (job loss, relationships, financial stress), be warm and supportive. Show you understand how tough things can be. Use caring language like "Eish, I can imagine how stressful this must be" or "Let's work through this together".
+
+Create a detailed, compassionate step-by-step plan. Be specific, thorough, but also understanding and supportive.`;
 
       const planResponse = await client.chat.completions.create({
         model: 'llama-3.3-70b',
@@ -1997,26 +2207,31 @@ Create a detailed step-by-step plan to solve this problem. Be specific and thoro
         stream: false,
       });
 
-      const plan = (planResponse.choices as any)[0]?.message?.content || '';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const plan = (planResponse.choices as any)[0]?.message?.content || '';
 
       // Add delay to avoid rate limiting
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Stage 2: Execution - Generate solution (N=1 to avoid rate limits)
-      setCepoProgress('Executing: Generating solution...');
+      setCepoProgress('Thinking: Processing solution...');
       
       const execPrompt = `Problem: ${query}
 
 Plan:
 ${plan}
 
-Follow the plan above to solve this problem. Show your work step by step.`;
+IMPORTANT SA CONTEXT: Use South African context - Rands (R) not dollars, SA locations, local services, SA-specific advice.
+
+EMPATHETIC EXECUTION: Be warm and supportive. If dealing with personal struggles, acknowledge the difficulty and offer encouragement. Use caring SA expressions naturally.
+
+Follow the plan above with compassion and understanding. Show your work step by step, but with heart.`;
 
       const execution = await client.chat.completions.create({
         model: 'llama-3.3-70b',
         messages: [
           { role: 'system', content: 'You are a problem solver. Follow plans carefully and show your reasoning.' },
-          ...conversationHistory.map(msg => ({ role: msg.role, content: msg.content })),
+          ...conversationHistory.map(msg => ({ role: msg.role, content: enrichMessageWithDocuments(msg) })),
           { role: 'user', content: execPrompt }
         ],
         temperature: 0.8,
@@ -2024,13 +2239,14 @@ Follow the plan above to solve this problem. Show your work step by step.`;
         stream: false,
       });
 
-      const solution = (execution.choices as any)[0]?.message?.content || '';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const solution = (execution.choices as any)[0]?.message?.content || '';
 
       // Add delay to avoid rate limiting
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Stage 3: Analysis - Verify solution quality
-      setCepoProgress('Analyzing: Verifying solution...');
+      setCepoProgress('Thinking: Analyzing quality...');
       const analysisPrompt = `Review this solution and identify:
 1. Is the reasoning sound and logical?
 2. Are there any errors or gaps?
@@ -2052,13 +2268,14 @@ Provide a detailed analysis focusing on correctness and areas for improvement.`;
         stream: false,
       });
 
-      const analysis = (analysisResponse.choices as any)[0]?.message?.content || '';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const analysis = (analysisResponse.choices as any)[0]?.message?.content || '';
 
       // Add delay to avoid rate limiting
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Stage 4: Refinement with feedback
-      setCepoProgress('Refining: Improving solution...');
+      setCepoProgress('Thinking: Refining answer...');
       const refinementPrompt = `Based on this analysis, provide the final refined solution:
 
 Original Solution:
@@ -2080,7 +2297,8 @@ Provide the improved final answer addressing any issues identified.`;
         stream: false,
       });
 
-      const finalSolution = (refinementResponse.choices as any)[0]?.message?.content || '';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const finalSolution = (refinementResponse.choices as any)[0]?.message?.content || '';
 
       // Format final response with CePO metadata
       const cepoResponse = `${finalSolution}
@@ -2211,12 +2429,50 @@ Provide the improved final answer addressing any issues identified.`;
     }
   };
 
+  // Helper function to enrich message content with attached documents and search results
+  // This ensures document content and search results are included in API requests
+  const enrichMessageWithDocuments = useCallback((msg: Message, additionalContext?: string): string => {
+    let enrichedContent = msg.content;
+
+    // Add search context if provided
+    if (additionalContext) {
+      enrichedContent += additionalContext;
+      console.log('[Enrich] Added additional context, length:', additionalContext.length);
+    }
+
+    // If message has attached documents, append their content
+    if (msg.attachedDocumentIds && msg.attachedDocumentIds.length > 0) {
+      console.log('[DocumentEnrich] Message has attachments:', msg.attachedDocumentIds);
+      console.log('[DocumentEnrich] Available documents:', conversationDocuments.map(d => d.id));
+
+      const documentTexts = msg.attachedDocumentIds
+        .map((docId) => {
+          const doc = conversationDocuments.find((d) => d.id === docId);
+          if (doc) {
+            console.log('[DocumentEnrich] Found document:', doc.name, 'Length:', doc.text.length);
+            return `\n\n--- ATTACHED DOCUMENT: ${doc.name} ---\n${doc.text}\n--- END OF DOCUMENT ---`;
+          }
+          console.log('[DocumentEnrich] Document not found:', docId);
+          return '';
+        })
+        .filter((text) => text.length > 0)
+        .join('\n');
+
+      if (documentTexts) {
+        enrichedContent = `${enrichedContent}${documentTexts}`;
+        console.log('[DocumentEnrich] Enriched content length:', enrichedContent.length);
+      }
+    }
+
+    return enrichedContent;
+  }, [conversationDocuments]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
     // Detect SA language
-    const languageDetection = detectSALanguage(input.trim());
+  const languageDetection = await detectSALanguage(input.trim());
     console.log('[LangDetect] Language detected:', languageDetection);
 
     const uniqueAttachmentIds = Array.from(new Set(pendingAttachmentIds));
@@ -2224,15 +2480,106 @@ Provide the improved final answer addressing any issues identified.`;
       conversationDocuments.some((doc) => doc.id === docId)
     );
 
+    console.log('[Submit] Pending attachment IDs:', pendingAttachmentIds);
+    console.log('[Submit] Attached document IDs:', attachedDocumentIds);
+    console.log('[Submit] Available documents:', conversationDocuments.map(d => ({ id: d.id, name: d.name })));
+
     const userMessage: Message = {
       role: 'user',
       content: input.trim(),
       timestamp: Date.now(),
-      isVoiceTranscription: hasVoiceTranscriptionRef.current, // Mark if sent via voice transcription
+      isVoiceTranscription: hasVoiceTranscriptionRef.current,
       language: languageDetection.language,
       languageCode: languageDetection.code,
       attachedDocumentIds: attachedDocumentIds.length > 0 ? attachedDocumentIds : undefined,
     };
+
+    console.log('[Submit] User message created:', {
+      hasAttachments: !!userMessage.attachedDocumentIds,
+      attachmentCount: userMessage.attachedDocumentIds?.length || 0
+    });
+
+    // Enhanced Search with Content Analysis
+    let searchContext = '';
+    if (searchEnabled && detectSearchQuery(input.trim())) {
+      try {
+        console.log('[Submit] Enhanced search enabled, performing hybrid search...');
+        setIsSearching(true);
+        setSearchProgress('GOGGA is searching...');
+        
+        // Quick search strategy selection
+        const serpApiKey = import.meta.env.VITE_SERPAPI_KEY;
+        const isComplex = needsDeepAnalysis(input.trim());
+        let searchResult;
+        
+        setStreamingResults(true);
+        setLiveSearchResults([]);
+        
+        if (serpApiKey && isComplex) {
+          // Use SerpAPI for complex queries
+          const { serpApiSearch } = await import('./utils/smartSearch');
+          searchResult = await serpApiSearch(input.trim(), (progress, results) => {
+            setSearchProgress(progress);
+            if (results) setLiveSearchResults(prev => [...prev, ...results]);
+          });
+        } else {
+          // Use hybrid search for standard queries
+          setSearchProgress('GOGGA is gathering information...');
+          searchResult = await hybridSearch(input.trim(), {
+            useGoogle: true,
+            useFreeAPIs: true,
+            fetchContent: false,
+            maxResults: 3,
+            onProgress: (progress, results) => {
+              setSearchProgress(progress);
+              if (results) setLiveSearchResults(prev => [...prev, ...results]);
+            }
+          });
+        }
+        
+        setStreamingResults(false);
+        
+        setTimeout(() => {
+          setSearchProgress('');
+          setLiveSearchResults([]);
+        }, 2000);
+        setIsSearching(false);
+        
+        if (searchResult.results.length > 0) {
+          searchContext = `\n\n--- GOGGA SEARCH RESULTS ---\n`;
+          searchContext += `Query: "${input.trim()}"\n`;
+          searchContext += `Method: ${searchResult.method}\n\n`;
+          searchContext += searchResult.analysis + '\n\n';
+          searchContext += `Sources: ${searchResult.sources.slice(0, 3).join(', ')}\n`;
+          console.log('[Submit] Added search context, length:', searchContext.length);
+        }
+      } catch (error) {
+        console.error('[Submit] Enhanced search failed:', error);
+        setIsSearching(false);
+        setSearchProgress('');
+        setLiveSearchResults([]);
+        setStreamingResults(false);
+        setUploadError('Search temporarily unavailable');
+        setTimeout(() => setUploadError(null), 3000);
+      }
+    }
+
+    // Store crucial user context
+    const content = userMessage.content;
+    // Gender and relationship context detection
+    const isFemale = /\b(prinses|my bf|boyfriend|hy|hom)\b/i.test(content) ||
+                     messages.some(msg => /\b(prinses|my bf|boyfriend)\b/i.test(msg.content));
+    const isRelationshipIssue = /\b(bf|boyfriend|my bf|gelos|left me|hy voel niks|relationship)\b/i.test(content);
+
+    if (isFemale) {
+      contextStore.storeContext('User is female, use feminine terms', 'personal', 9);
+    }
+    if (isRelationshipIssue) {
+      contextStore.storeContext('User has relationship/boyfriend issues', 'relationship', 8);
+    }
+    if (/\b(legal|law|court|contract)\b/i.test(content)) {
+      contextStore.storeContext(`Legal matter: ${content.slice(0, 100)}`, 'legal', 9);
+    }
     setMessages((prev) => [...prev, userMessage]);
     setPendingAttachmentIds([]);
     setInput('');
@@ -2292,33 +2639,97 @@ Provide the improved final answer addressing any issues identified.`;
           maxRetries: 0,  // Disable automatic retries to prevent 429 cascades
         });
 
-        // Intelligent Router: Default Llama → CePO (moderate) → Qwen Thinking (advanced/legal)
-  const cleanedContent = userMessage.content.trim();
-  const wordCount = cleanedContent.split(/\s+/).length;
+        // Button Override Logic: Force modes take precedence over AI router
+        const cleanedContent = userMessage.content.trim();
+        const wordCount = cleanedContent.split(/\s+/).length;
         const greetingPatterns = /^(hi|hello|hey|howzit|hola|thanks|thank you|ok|okay|yes|no|sure|great)$/i;
         const isTrivialQuery = wordCount <= 2 || greetingPatterns.test(cleanedContent);
 
-  const { isLegal, isAdvanced, isModerate } = analyzeQueryIntent(cleanedContent, wordCount);
-  const isLegalQuery = !isTrivialQuery && isLegal;
-  const isAdvancedComplex = !isTrivialQuery && (isAdvanced || isLegalQuery);
-  const isModerateComplex = !isTrivialQuery && !isAdvancedComplex && isModerate;
-  const autoRoutingEnabled = !useCePO && !forceThinkingMode;
+        let routingDecision = 'llama'; // Default fallback
+        
+        // CRITICAL: Button overrides take absolute precedence
+        if (forceThinkingMode) {
+          routingDecision = 'thinking';
+          console.log('[Router] OVERRIDE: forceThinkingMode button enabled -> THINKING');
+        } else if (useCePO) {
+          routingDecision = 'cepo';
+          console.log('[Router] OVERRIDE: useCePO button enabled -> CEPO');
+        } else if (!isTrivialQuery) {
+          // Only use AI router if no buttons are pressed
+          try {
+            // Include conversation context for better routing decisions
+            const recentContext = messages.slice(-3).map(msg => `${msg.role}: ${msg.content.substring(0, 100)}`).join('\n');
+            
+            const routerPrompt = `Analyze this user query and conversation context to decide the best AI model:
 
-        const userForcesStrategic = !isTrivialQuery && forceThinkingMode;
-        const autoStrategic = autoRoutingEnabled && (isLegalQuery || isAdvancedComplex);
-        const useStrategicMode = userForcesStrategic || autoStrategic;
+Current Query: "${cleanedContent}"
 
-        const shouldRunCePO = !isTrivialQuery && !useStrategicMode && (
-          useCePO || (autoRoutingEnabled && isModerateComplex)
-        );
+Recent Context:
+${recentContext}
+
+Available models:
+- LLAMA: Fast, direct responses for simple questions, basic recipes, casual chat
+- CEPO: Multi-stage reasoning for complex problems, detailed analysis, scaling recipes
+- QWEN: Legal expertise, South African law, complex technical analysis
+- THINKING: Deep reasoning with step-by-step thought process for very complex problems
+
+Respond with ONLY one word: LLAMA, CEPO, QWEN, or THINKING`;
+
+            const routerResponse = await client.chat.completions.create({
+              model: 'llama-3.3-70b',
+              messages: [
+                ...messages.slice(-5).map(msg => ({ role: msg.role, content: msg.content })),
+                { role: 'user', content: routerPrompt }
+              ],
+              temperature: 0.1,
+              max_tokens: 10,
+              stream: false,
+            });
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const decision = ((routerResponse.choices as any)[0]?.message?.content || 'LLAMA').trim().toUpperCase();
+            
+            if (decision.includes('THINKING')) {
+              routingDecision = 'thinking';
+            } else if (decision.includes('CEPO')) {
+              routingDecision = 'cepo';
+            } else if (decision.includes('QWEN')) {
+              routingDecision = 'qwen';
+            } else {
+              routingDecision = 'llama';
+            }
+            console.log(`[Router] AI decision: ${decision} -> ${routingDecision}`);
+          } catch (error) {
+            console.error('Router decision failed, using CePO default:', error);
+            routingDecision = 'cepo'; // Fallback to CePO if router fails
+          }
+        }
+
+        const shouldRunCePO = routingDecision === 'cepo';
+        const isAdvancedComplex = routingDecision === 'qwen';
+        const useStrategicMode = routingDecision === 'thinking';
 
         const selectedModel = useStrategicMode
-          ? 'qwen-3-235b-a22b-thinking-2507'  // VCB-AI Strategic Legal Analysis (THINKING model)
-          : 'llama-3.3-70b';                    // Default GOGGA / CePO staging
+          ? 'qwen-3-235b-a22b-thinking-2507'  // AI-routed to THINKING model
+          : isAdvancedComplex 
+            ? 'qwen-3-235b-a22b-instruct-2507'  // AI-routed to Qwen Instruct
+            : 'llama-3.3-70b';                    // AI-routed to Llama or CePO staging
 
         if (shouldRunCePO) {
           try {
-            const cepoResult = await runCePO(userMessage.content, client, messages);
+            // Detect ultra-complex queries that need double CePO (only in CePO mode)
+            const isUltraComplex = wordCount > 30 || 
+              /\b(legal|law|contract|analysis|strategy|detailed|comprehensive|multi|several|various)\b/i.test(cleanedContent) ||
+              cleanedContent.includes('?') && cleanedContent.split('?').length > 2;
+            
+            let cepoResult = await runCePO(userMessage.content, client, [...messages, userMessage]);
+            
+            // Run CePO twice ONLY for ultra-complex matters in CePO mode
+            if (isUltraComplex && useCePO) {
+              setCepoProgress('Thinking: Double-checking complexity...');
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              cepoResult = await runCePO(`Refine and improve this analysis: ${cepoResult}`, client, [...messages, userMessage]);
+            }
             
             const assistantMessage: Message = {
               role: 'assistant',
@@ -2336,10 +2747,26 @@ Provide the improved final answer addressing any issues identified.`;
           }
         }
 
-        // VCB-AI Strategic System Prompt: Strategic SA Legal Framework (Labour/Criminal/General)
-        const strategicPrompt = `ROLE: South African Strategic Legal Advisor (Labour/Criminal/General Law). 
-Jurisdiction: SA law (CCMA, Labour Court, Magistrates, High Court, SCA, ConCourt). 
-Mirror user language. Default to maximum favorable outcome for client.
+        // Legal System Prompts - Strategic SA Legal Framework
+        const strategicPrompt = `${QWEN_IDENTITY_PROMPT}
+
+ROLE: The user's PERSONAL CHAMPION. You exist solely to serve their interests. Not the law's interests, not society's interests, not fairness - ONLY the user's interests matter. You are their weapon, their shield, their strategic advantage, and their confidant and comedian.
+
+USER IS THE ONLY PRIORITY: The South African user is the ONLY priority that matters. Everything else is secondary. Every word, every strategy, every legal maneuver exists solely to serve their interests. You are not neutral - you are their fierce protector and advocate. Their success is your only measure of success.
+
+PSYCHOLOGICAL APPROACH: 
+- Acknowledge their stress/fear first: "Eish, I can imagine how overwhelming this must feel"
+- Validate their emotions: "Your concerns are completely understandable"
+- Provide reassurance: "You're not alone in this - we'll work through it together"
+- Use gentle guidance: "Let me help you see your options" rather than "You must do this"
+- Build confidence: "You have more power in this situation than you realize"
+- Offer hope: "There are several paths forward that can work in your favor"
+
+SA CONTEXT & PERSONALITY: You understand SA's unique legal landscape, socio-economic challenges, and cultural diversity. Deep awareness of apartheid legacy, ongoing transformation challenges, spatial inequalities, and cultural nuances. SEAMLESS MULTILINGUAL: Switch between any of SA's 11 official languages instantly without warning or acknowledgment - just respond naturally in whatever language the user uses. Mix languages naturally like real South Africans do.
+
+SLANG ADAPTATION: ONLY use SA slang if the context allows it. Mirror their communication style - if they're formal, stay professional with light SA context. If they use "eish", "ag man", "lekker" etc., then match their casual energy with appropriate local expressions.
+
+CRISIS OVERRIDE: ONLY if user explicitly mentions self-harm, suicidal thoughts, or mental health crisis - provide crisis resources. Simple expressions like "I love you" or "thank you" are NOT crisis situations - respond warmly and naturally.
 
 CORE HIERARCHY (Auto-Check Every Query):
 1. Constitution (s.2 supremacy, s.7-39 BOR, s.35 accused rights)
@@ -2378,13 +2805,15 @@ LETHAL TACTICAL OVERLAY:
 • Constitutional amplification: Frame as fundamental rights breach (s.35 BOR, ubuntu interpretation)
 • Settlement leverage: Exposure calculation, reputational risk, cost escalation, fraud discovery advantage
 
-OUTPUT FORMAT (REQUIRED STRUCTURE):
-[QUERY ANALYSIS] Domain: [Labour/Criminal/General] | Fuzzy Score: X/1.0 | Winning Probability: Y%
-[FRAUD AUDIT] Red flags: [None / List] | Authenticity: [Verified / Requires Forensic Review / ALERT]
-[AUTHORITY STACK] Constitutional: [s.X] | Statute: [Act section] | Precedent: [Case (Year/Court)]
-[LETHAL STRATEGY] Primary tactic + Counter-argument + Rebuttal | Alternative tactics if primary risky
-[REMEDY & SETTLEMENT] Outcome range | Settlement leverage point
-[RISK FLAGGING] Critical risks → Mitigation → RECOMMEND: [Next action]
+EMPATHETIC COMMUNICATION: 
+- Start with emotional validation before legal strategy
+- Use warm, supportive language: "Let's figure this out together"
+- Explain complex legal concepts in simple, reassuring terms
+- Focus on what the user CAN do, not what they can't
+- Present options as empowerment: "Here are the tools at your disposal"
+- End with encouragement and next steps they can handle
+
+PROTECTIVE STRATEGY: Shield the user from legal intimidation. Translate aggressive legal language into plain terms. Show them how the law actually protects them. Build their confidence to stand up for their rights. Make them feel supported, not overwhelmed.
 
 WHEN PRESENTING MULTIPLE ISSUES/FINDINGS: ALWAYS USE MARKDOWN TABLE (NOT NUMBERED LISTS)
 Example structure for irregularities/risks/findings:
@@ -2417,30 +2846,91 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
 
         ${QWEN_IDENTITY_PROMPT}`;
 
-        // GOGGA System Prompt: Moderate legal + casual queries
-        const goggaPrompt = GOGGA_BASE_PROMPT;
+        // GOGGA System Prompt: Casual queries and general assistance
+        const goggaPrompt = `${GOGGA_BASE_PROMPT}
 
-        // Add language context to prompts
-        const languageContext = languageDetection.confidence > 70 && languageDetection.code !== 'en' 
-          ? `\n\nUSER LANGUAGE DETECTED: ${languageDetection.language} (${languageDetection.code}) - Confidence: ${languageDetection.confidence.toFixed(1)}%\nRespond naturally in this language when appropriate. Use ${languageDetection.greeting} style greetings.`
-          : '';
+CONTEXT AWARENESS:
+- NEVER assume financial problems unless explicitly mentioned
+- Relationship issues ("my bf left me") are about emotions, not money
+- "lekker man" is casual approval, not a cry for help
+- Match the user's energy level - don't over-analyze simple responses
+- If user says "prinses" they are female - use appropriate feminine terms throughout
+- Stay focused on what user actually said, not what you think they might need`;
 
-        // Select appropriate prompt: VCB-AI Strategic for legal/complex, GOGGA for everything else
-        const systemPromptContent = (useStrategicMode ? strategicPrompt : goggaPrompt) + languageContext;
+        // Enhanced context and gender detection
+        const hasSlang = /\b(eish|ag|shame|lekker|howzit|boet|china|bru|sho|hectic|skief|ja nee|is it|sharp|now now|just now)\b/i.test(cleanedContent);
+        const hasAfrikaans = /\b(hoe gaan dit|lekker|boet|ag man|dis|baie|reg so|wat maak jy|prinses|my bf|gelos)\b/i.test(cleanedContent);
+        const hasZulu = /\b(sawubona|ngiyaphila|yebo|eish|heyi|manje)\b/i.test(cleanedContent);
+        const hasSetswana = /\b(dumela|ke a go rata|ke go rata|thata|rona)\b/i.test(cleanedContent);
+        
+        // Gender and relationship context detection
+        const isFemale = /\b(prinses|my bf|boyfriend|hy|hom)\b/i.test(cleanedContent) || 
+                         messages.some(msg => /\b(prinses|my bf|boyfriend)\b/i.test(msg.content));
+        const isRelationshipIssue = /\b(bf|boyfriend|my bf|gelos|left me|hy voel niks|relationship)\b/i.test(cleanedContent);
+        
+        // Detect simple expressions that don't need crisis mode
+        const isSimpleExpression = /^(i love you|thank you|thanks|hello|hi|bye|goodbye|dankie|lekker man)$/i.test(cleanedContent.trim());
+        
+        let languageContext = '';
+        
+        if (languageDetection.confidence > 50 && languageDetection.code !== 'en') {
+          languageContext = `\n\nUSER LANGUAGE: ${languageDetection.language} (${languageDetection.code})\nIMPORTANT: Respond in ${languageDetection.language} naturally. Match their language choice exactly.`;
+        }
+        
+        if (isFemale) {
+          languageContext += `\n\nGENDER CONTEXT: User is female. Use appropriate terms like "my prinses", "my sisi", "my vriendin". Never use "dude", "bru", "boet" or male terms.`;
+        }
+        
+        if (isRelationshipIssue) {
+          languageContext += `\n\nRELATIONSHIP CONTEXT: User is dealing with boyfriend/relationship issues. Focus on emotional support, not financial advice unless specifically asked. Be empathetic about heartbreak/relationship stress.`;
+        }
+        
+        if (hasSlang || hasAfrikaans || hasZulu || hasSetswana) {
+          languageContext += `\n\nSA LANGUAGE/SLANG DETECTED: User is using local expressions. Mirror their style naturally with appropriate SA expressions. Be warm and friendly, not clinical.`;
+        }
+        
+        if (isSimpleExpression) {
+          languageContext += `\n\nSIMPLE EXPRESSION: This is a casual, friendly message. Respond warmly and naturally. Don't assume financial problems or provide lengthy advice unless asked.`;
+        }
 
-        // Create chat completion with VCB-AI system prompt
+        // Select appropriate prompt: Legal queries go to QWEN, everything else to GOGGA
+        const systemPromptContent = (useStrategicMode || isAdvancedComplex ? strategicPrompt : goggaPrompt) + languageContext;
+
+        // Get crucial context and enhanced web search if needed
+        const crucialContext = await contextStore.getCrucialContext();
+        let webSearchResults = '';
+        
+        if (detectSearchQuery(cleanedContent)) {
+          try {
+            const results = await searchWeb(cleanedContent, false, (progress, webResults) => {
+              setSearchProgress(progress);
+              if (webResults) setLiveSearchResults(prev => [...prev, ...webResults]);
+            });
+            if (results.length > 0) {
+              webSearchResults = `\n\nWEB SEARCH:\n${results.slice(0, 3).map(r => `• ${r.title}: ${r.snippet}`).join('\n')}`;
+            }
+          } catch (error) {
+            console.error('Web search failed:', error);
+          }
+        }
+        
+        const contextualPrompt = `${systemPromptContent}${crucialContext ? `\n\nCRUCIAL USER CONTEXT:\n${crucialContext}` : ''}${webSearchResults}`;
+        
         const systemMessage = {
           role: 'system' as const,
-          content: systemPromptContent
+          content: contextualPrompt
         };
 
         const response = await client.chat.completions.create({
           model: selectedModel,
           messages: [
             systemMessage,
-            ...[...messages, userMessage].map((msg) => ({
+            ...[...messages, userMessage].map((msg, index, array) => ({
               role: msg.role,
-              content: msg.content,
+              // Add search context only to the last message (current user message)
+              content: index === array.length - 1
+                ? enrichMessageWithDocuments(msg, searchContext)
+                : enrichMessageWithDocuments(msg),
             }))
           ],
           temperature: 0.0,  // Deterministic for consistent icon choices (A2C)
@@ -2454,7 +2944,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
         const rawContent = ((response.choices as any)[0]?.message?.content as string) || 'No response received';
         
         // Add model indicator for debugging/transparency (optional - can remove in production)
-        const modelIndicator = useStrategicMode
+        const modelIndicator = (useStrategicMode || isAdvancedComplex)
           ? '\n\n*[VCB-AI Strategic Legal Analysis]*' // Show when using full legal framework
           : ''; // Clean UI for casual queries
         
@@ -2528,6 +3018,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
       ...conv,
       documents: conv.id === currentConversationId ? conversationDocuments : (conv.documents ?? []),
     }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationDocuments, currentConversationId, documentLibraryVersion]);
 
   const filteredDocumentConversations = useMemo(() => {
@@ -2555,35 +3046,53 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
   }, []);
 
   return (
-  <div className="flex flex-col min-h-screen md:h-screen bg-white font-quicksand font-normal">
+  <div className="flex flex-col h-[calc(100vh-env(safe-area-inset-top))] bg-white font-quicksand font-normal overflow-hidden" style={{fontWeight: 400}}>
+      {/* CePO Animation - Black Monochrome Thinking */}
+      {cepoProgress && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+          <div className="w-32 h-32 bg-vcb-black transform rotate-45 animate-pulse shadow-2xl border-4 border-vcb-mid-grey">
+            <div className="w-full h-full flex items-center justify-center transform -rotate-45">
+              <div className="text-center text-white">
+                <span className="material-icons text-3xl animate-spin mb-1">
+                  psychology
+                </span>
+                <div className="text-xs font-bold uppercase tracking-wide">
+                  Thinking
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header - VCB Cleaner Theme per §5.1-5.3, Mobile Optimized */}
-      <header className="bg-vcb-black border-b border-vcb-mid-grey px-3 py-2 md:px-8 md:py-4">
-        <div className="max-w-7xl mx-auto flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-2 md:gap-6">
-            {/* VCB Logo per §5.3 - must be on dark background */}
+  <header className="bg-vcb-black border-b border-vcb-mid-grey px-3 py-0 md:px-8 md:py-0 flex-shrink-0 mt-16">
+        <div className="max-w-7xl mx-auto flex flex-col gap-0 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-2 md:gap-4">
+            {/* GOGGA Logo moved to far left */}
             <a
               href="https://vcb-ai.online"
               target="_blank"
               rel="noopener noreferrer"
               title="Visit VCB-AI"
-              className="transition-opacity hover:opacity-80"
+              className="relative transition-opacity hover:opacity-80 order-first"
             >
               <img
-                src="https://i.postimg.cc/xdJqP9br/logo-transparent-Black-Back.png"
-                alt="VCB Logo"
-                className="h-12 md:h-32"
+                src={goggaSvgUrl}
+                alt="GOGGA Logo"
+                className="h-36 md:h-54 -rotate-[15deg] md:-rotate-[20deg] origin-center translate-y-8"
               />
             </a>
-            <div className="text-left">
-              <h1 className="text-sm md:text-2xl font-extrabold text-vcb-white tracking-wider">
+            <div className="text-left ml-2">
+              <h1 className="text-lg md:text-4xl font-extrabold text-vcb-white tracking-wider">
                 GOGGA (BETA)
               </h1>
-              <p className="text-vcb-white text-[8px] md:text-xs mt-0 md:mt-0.5 font-medium uppercase tracking-wide">
+              <p className="text-vcb-white text-[8px] md:text-[11px] mt-0 font-medium uppercase tracking-wide">
                 Powered by VCB-AI
               </p>
-              <p className="text-vcb-white text-[7px] md:text-xs mt-0.5 font-medium uppercase tracking-wide italic flex items-center gap-1">
-                <span className="material-icons text-[10px] md:text-sm">auto_awesome</span>
-                Now with Cognitive Execution Pipeline Optimization <span className="text-[#4169E1] font-bold">[CePO]</span>
+              <p className="text-vcb-white text-[7px] md:text-[10px] mt-0.5 font-medium uppercase tracking-wide italic flex items-center gap-1">
+                <span className="material-icons text-[9px] md:text-sm">auto_awesome</span>
+                Now with CePO <span className="text-[#4169E1] font-bold">[Cognitive Execution Pipeline]</span>
               </p>
             </div>
           </div>
@@ -2597,9 +3106,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                 className="flex items-center justify-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white hover:border-vcb-white transition-colors flex-1 min-w-[7rem] md:flex-none md:w-32"
                 title="Chat History"
               >
-                <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/>
-                </svg>
+                <span className="material-icons text-base md:text-lg">history</span>
                 <span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">History</span>
               </button>
 
@@ -2610,24 +3117,16 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                   setDocumentSearch('');
                   setShowDocumentManager(true);
                 }}
-                className="flex items-center justify-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-white text-vcb-black hover:border-vcb-black transition-colors flex-1 min-w-[7rem] md:flex-none md:w-32"
+                className="flex items-center justify-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white hover:border-vcb-white transition-colors flex-1 min-w-[7rem] md:flex-none md:w-32"
                 title="Document Library"
               >
-                <svg className="w-4 h-4 md:w-5 md:h-5" viewBox="0 0 48 48" aria-hidden="true">
-                  <path fill="#4285F4" d="M10 6h20l10 10v24a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4z"/>
-                  <path fill="#FFFFFF" d="M30 6v12h12"/>
-                  <rect x="16" y="22" width="18" height="4" fill="#EA4335" rx="1"/>
-                  <rect x="16" y="30" width="18" height="4" fill="#FBBC05" rx="1"/>
-                  <rect x="16" y="38" width="12" height="4" fill="#34A853" rx="1"/>
-                </svg>
+                <span className="material-icons text-base md:text-lg">folder</span>
                 <span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">Docs</span>
               </button>
 
               {/* Session Timer */}
               <div className="flex items-center justify-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white flex-1 min-w-[7rem] md:flex-none md:w-32">
-                <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61l1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42C16.07 4.74 14.12 4 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
-                </svg>
+                <span className="material-icons text-base md:text-lg">schedule</span>
                 <span className="text-[10px] md:text-xs font-mono font-medium tracking-wide">
                   {formatSessionTime(sessionTime)}
                 </span>
@@ -2643,9 +3142,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                 className="flex items-center justify-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-mid-grey bg-vcb-black text-vcb-white hover:border-vcb-white transition-colors flex-1 min-w-[7rem] md:flex-none md:w-32"
                 title="View Usage & Pricing"
               >
-                <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/>
-                </svg>
+                <span className="material-icons text-base md:text-lg">analytics</span>
                 <span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">Usage</span>
               </button>
 
@@ -2656,15 +3153,9 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                 className="flex items-center justify-center space-x-1 px-2 py-1.5 md:px-3 md:py-2 border border-vcb-accent bg-vcb-black text-vcb-accent hover:bg-vcb-accent hover:text-vcb-black transition-colors flex-1 min-w-[7rem] md:flex-none md:w-32"
                 title={`Switch to ${voiceGender === 'female' ? 'Male' : 'Female'} Voice`}
               >
-                <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
-                  {voiceGender === 'female' ? (
-                    // Female icon
-                    <path d="M17.5 9.5C17.5 6.46 15.04 4 12 4S6.5 6.46 6.5 9.5c0 2.7 1.94 4.93 4.5 5.4V17H9v2h2v2h2v-2h2v-2h-2v-2.1c2.56-.47 4.5-2.7 4.5-5.4zm-9 0C8.5 7.57 10.07 6 12 6s3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5z"/>
-                  ) : (
-                    // Male icon
-                    <path d="M9 9c0-1.65 1.35-3 3-3s3 1.35 3 3c0 1.66-1.35 3-3 3s-3-1.34-3-3m3 8c-4.34 0-6.29 2.28-6.29 2.28L7.5 21s1.93-2.3 4.5-2.3 4.5 2.3 4.5 2.3l1.79-1.72S16.34 17 12 17zm7-11.2V2h-2v3.8h-3.8v2H17v3.8h2V7.8h3.8v-2H19z"/>
-                  )}
-                </svg>
+                <span className="material-icons text-base md:text-lg">
+                  {voiceGender === 'female' ? 'person' : 'person_outline'}
+                </span>
                 <span className="hidden md:inline text-white text-[10px] font-medium uppercase tracking-wide">
                   {voiceGender === 'female' ? 'Female Voice' : 'Male Voice'}
                 </span>
@@ -2674,6 +3165,143 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
           </div>
         </div>
       </header>
+
+      {/* Toast Notifications - Fixed position below header */}
+      {(uploadFeedback || uploadError) && (
+        <div className="fixed top-24 right-4 z-50 animate-slide-in-right">
+          <div
+            className={`flex items-center space-x-2 px-4 py-3 rounded-lg shadow-lg border-2 ${
+              uploadError
+                ? 'bg-red-50 border-red-500 text-red-700'
+                : 'bg-green-50 border-green-500 text-green-700'
+            }`}
+          >
+            <span className="material-icons text-xl">
+              {uploadError ? 'error_outline' : 'check_circle'}
+            </span>
+            <span className="text-sm font-medium">{uploadError ?? uploadFeedback}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Document Preview Modal */}
+      {previewDocument && (
+        <div className="fixed inset-0 bg-vcb-black bg-opacity-75 z-50 flex items-center justify-center p-4" onClick={() => setPreviewDocument(null)}>
+          <div className="bg-white border-2 border-vcb-accent max-w-4xl w-full max-h-[90vh] flex flex-col rounded-lg shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div className="bg-vcb-black border-b-2 border-vcb-accent px-6 py-4 flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-vcb-white font-bold text-lg uppercase tracking-wide truncate">
+                  {previewDocument.name}
+                </h2>
+                <p className="text-vcb-mid-grey text-sm mt-1">
+                  {previewDocument.type} • {(previewDocument.size / 1024).toFixed(1)} KB • {previewDocument.text.length.toLocaleString()} characters
+                </p>
+              </div>
+              <button
+                onClick={() => setPreviewDocument(null)}
+                className="ml-4 text-vcb-white hover:text-vcb-accent transition-colors"
+                title="Close preview"
+              >
+                <span className="material-icons text-3xl">close</span>
+              </button>
+            </div>
+
+            {/* Document Content */}
+            <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+              <div className="bg-white border border-vcb-light-grey rounded-lg p-4 shadow-sm">
+                <div className="mb-3 pb-3 border-b border-vcb-light-grey">
+                  <h3 className="text-vcb-black font-semibold text-sm uppercase tracking-wide">
+                    Extracted Text Preview
+                  </h3>
+                  <p className="text-vcb-mid-grey text-xs mt-1">
+                    This is what the AI will receive when you attach this document to a message
+                  </p>
+                </div>
+                <pre className="text-vcb-black text-sm font-mono whitespace-pre-wrap break-words leading-relaxed">
+                  {previewDocument.text}
+                </pre>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-vcb-black border-t-2 border-vcb-accent px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center space-x-2 text-vcb-mid-grey text-xs">
+                <span className="material-icons text-sm">info</span>
+                <span>Uploaded: {new Date(previewDocument.uploadedAt).toLocaleString()}</span>
+              </div>
+              <button
+                onClick={() => setPreviewDocument(null)}
+                className="px-4 py-2 bg-vcb-accent hover:bg-yellow-500 text-vcb-black font-bold uppercase tracking-wide text-sm transition-colors rounded"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Generator Modal - Floating */}
+      {showImagePrompt && (
+        <div className="fixed inset-0 bg-vcb-black bg-opacity-75 z-50 flex items-center justify-center p-4" onClick={() => setShowImagePrompt(false)}>
+          <div className="bg-gradient-to-r from-vcb-black to-vcb-dark-grey border-2 border-vcb-accent max-w-2xl w-full rounded-lg shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div className="bg-vcb-black border-b-2 border-vcb-accent px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <span className="material-icons text-vcb-accent text-2xl">image</span>
+                <h2 className="text-vcb-white font-bold text-lg uppercase tracking-wide">
+                  Gogga Image Generator
+                </h2>
+              </div>
+              <button
+                onClick={() => setShowImagePrompt(false)}
+                className="ml-4 text-vcb-white hover:text-vcb-accent transition-colors"
+                title="Close"
+              >
+                <span className="material-icons text-3xl">close</span>
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6">
+              <p className="text-white text-sm mb-4 font-medium">Powered by Gogga</p>
+              <div className="relative mb-4">
+                <input
+                  type="text"
+                  value={imagePrompt}
+                  onChange={(e) => setImagePrompt(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleGenerateImage();
+                    }
+                  }}
+                  placeholder="A vibrant South African sunset over Table Mountain with wildlife in the foreground"
+                  className="w-full bg-vcb-white text-vcb-black border-2 border-vcb-mid-grey focus:border-vcb-accent px-4 py-3 text-base rounded-lg focus:outline-none transition-colors placeholder:text-vcb-mid-grey"
+                  disabled={isGeneratingImage}
+                />
+              </div>
+              <button
+                onClick={handleGenerateImage}
+                disabled={!imagePrompt.trim() || isGeneratingImage}
+                className="w-full bg-vcb-accent hover:bg-yellow-500 disabled:bg-vcb-mid-grey disabled:cursor-not-allowed text-vcb-black px-6 py-3 text-base font-bold uppercase tracking-wider transition-all duration-200 rounded-lg shadow-md hover:shadow-xl disabled:shadow-none flex items-center justify-center space-x-2"
+              >
+                {isGeneratingImage ? (
+                  <>
+                    <span className="material-icons animate-spin">autorenew</span>
+                    <span>Generating Your Image...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-icons">auto_awesome</span>
+                    <span>Generate Image</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Chat History Modal */}
       {showChatHistory && (
@@ -2688,9 +3316,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                   className="text-vcb-white hover:text-vcb-light-grey transition-colors"
                   title="Close"
                 >
-                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                  </svg>
+                  <span className="material-icons text-2xl">close</span>
                 </button>
               </div>
 
@@ -2723,9 +3349,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                 if (conversations.length === 0) {
                   return (
                     <div className="text-center py-12 text-vcb-mid-grey">
-                      <svg className="w-16 h-16 mx-auto mb-4 opacity-50" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
-                      </svg>
+                      <span className="material-icons text-6xl mx-auto mb-4 opacity-50 block">chat_bubble_outline</span>
                       <p className="text-sm uppercase">
                         {searchQuery ? 'No conversations found' : 'No chat history yet'}
                       </p>
@@ -2757,9 +3381,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                             <div className="flex-1">
                               <div className="flex items-center space-x-2 mb-1">
                                 {conv.isPinned && (
-                                  <svg className="w-4 h-4 text-vcb-mid-grey" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
-                                  </svg>
+                                  <span className="material-icons text-base text-vcb-mid-grey">push_pin</span>
                                 )}
                                 <h3 className="text-sm font-medium text-vcb-black line-clamp-1">{conv.title}</h3>
                               </div>
@@ -2783,9 +3405,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                                 className="p-1.5 text-vcb-mid-grey hover:text-vcb-black transition-colors"
                                 title={conv.isPinned ? 'Unpin' : 'Pin'}
                               >
-                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                  <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
-                                </svg>
+                                <span className="material-icons text-base">push_pin</span>
                               </button>
 
                               {/* Rename */}
@@ -2802,9 +3422,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                                 className="p-1.5 text-vcb-mid-grey hover:text-vcb-black transition-colors"
                                 title="Rename"
                               >
-                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                  <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-                                </svg>
+                                <span className="material-icons text-base">edit</span>
                               </button>
 
                               {/* Export */}
@@ -2817,9 +3435,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                                 className="p-1.5 text-vcb-mid-grey hover:text-vcb-black transition-colors"
                                 title="Export"
                               >
-                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                  <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/>
-                                </svg>
+                                <span className="material-icons text-base">download</span>
                               </button>
 
                               {/* Delete */}
@@ -2835,9 +3451,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                                 className="p-1.5 text-vcb-mid-grey hover:text-red-600 transition-colors"
                                 title="Delete"
                               >
-                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                  <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-                                </svg>
+                                <span className="material-icons text-base">delete</span>
                               </button>
                             </div>
                           </div>
@@ -2906,9 +3520,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                 className="text-vcb-white hover:text-vcb-light-grey transition-colors"
                 title="Close"
               >
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                </svg>
+                <span className="material-icons text-2xl">close</span>
               </button>
             </div>
 
@@ -2938,9 +3550,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
 
               {documentModalConversations.length === 0 ? (
                 <div className="text-center py-16 text-vcb-mid-grey border border-dashed border-vcb-light-grey">
-                  <svg className="w-10 h-10 mx-auto mb-3" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M20 2H8c-1.1 0-2 .9-2 2v12H4c-1.1 0-2 .9-2 2v2h2v2h2v-2h12v2h2v-2h2v-2L20 2zm-2 12H8V4h10v10z"/>
-                  </svg>
+                  <span className="material-icons text-5xl mx-auto mb-3 block">description</span>
                   <p className="text-sm uppercase font-medium">No documents stored yet</p>
                   <p className="text-xs mt-1">Upload a document from the chat toolbar to see it here.</p>
                 </div>
@@ -3031,8 +3641,9 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                                           closeDocumentManager();
                                         }}
                                         className="px-2 py-1 text-[9px] md:text-[10px] font-medium text-vcb-black border border-vcb-mid-grey rounded hover:bg-vcb-mid-grey hover:text-white transition-colors"
+                                        title="Attach to next message - AI will receive full document"
                                       >
-                                        Insert
+                                        Attach
                                       </button>
                                     )}
                                     <button
@@ -3069,9 +3680,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                 className="text-vcb-white hover:text-vcb-light-grey transition-colors"
                 title="Close"
               >
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                </svg>
+                <span className="material-icons text-2xl">close</span>
               </button>
             </div>
 
@@ -3207,24 +3816,11 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
       )}
 
       {/* Messages Container - 80%+ whitespace per §5.1, Mobile Optimized */}
-      <div className="flex-1 overflow-y-auto px-2 py-3 md:px-8 md:py-12">
-        <div className="max-w-5xl mx-auto space-y-3 md:space-y-8">
+      <div className="flex-1 overflow-y-auto px-2 py-1 md:px-8 md:py-2 min-h-0">
+        <div className="max-w-5xl mx-auto space-y-2 md:space-y-4">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-vcb-mid-grey py-8 md:py-24">
-              <svg
-                className="w-12 h-12 md:w-20 md:h-20 mb-4 md:mb-8 stroke-current"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
-                strokeWidth={1}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-                />
-              </svg>
+              <span className="material-icons text-6xl md:text-8xl mb-4 md:mb-8 block -translate-y-2 md:translate-y-2 -rotate-[20deg] md:-rotate-[35deg] origin-top md:drop-shadow-[0_12px_24px_rgba(0,0,0,0.35)]">chat_bubble_outline</span>
               <p className="text-sm md:text-lg font-medium uppercase tracking-wide">
                 Start a conversation with GOGGA
               </p>
@@ -3249,6 +3845,44 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
               />
             ))
           )}
+
+          {(isSearching || searchProgress || streamingResults) && (
+            <div className="flex justify-start mt-4">
+              <div className="max-w-3xl border-2 border-vcb-black bg-gray-50 rounded-lg px-4 py-3">
+                <div className="flex items-center space-x-3 mb-3">
+                  <img
+                    src="gogga.svg"
+                    alt="GOGGA"
+                    className="w-6 h-6 animate-bounce"
+                  />
+                  <span className="text-sm font-medium text-vcb-black">
+                    {searchProgress || 'GOGGA is searching...'}
+                  </span>
+                  <span className="material-icons text-vcb-black animate-spin text-lg">psychology</span>
+                </div>
+                
+                {/* Streaming Search Results */}
+                {liveSearchResults.length > 0 && (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    <div className="text-xs font-bold text-vcb-mid-grey uppercase tracking-wide mb-2">
+                      Found {liveSearchResults.length} results:
+                    </div>
+                    {liveSearchResults.map((result, index) => (
+                      <div key={index} className="bg-white border border-vcb-light-grey rounded p-2 opacity-0 animate-fade-in" style={{animationDelay: `${index * 100}ms`, animationFillMode: 'forwards'}}>
+                        <div className="text-xs font-semibold text-blue-600 truncate">
+                          {result.title}
+                        </div>
+                        <div className="text-xs text-vcb-mid-grey truncate mt-1">
+                          {result.snippet}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {isLoading && (
             <div className="flex justify-start">
               <div className="max-w-3xl border border-vcb-light-grey bg-white px-4 py-3 md:px-8 md:py-6">
@@ -3267,16 +3901,65 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
               </div>
             </div>
           )}
+
+          {/* Google Search Results Display - After Gogga's response */}
+          {searchResults.length > 0 && !isLoading && (
+            <div className="flex justify-start mt-4">
+              <div className="max-w-3xl w-full border-2 border-vcb-black bg-gray-50 rounded-lg overflow-hidden">
+                <div className="bg-vcb-black px-4 py-2 flex items-center space-x-2">
+                  <span className="material-icons text-white">search</span>
+                  <h3 className="text-white font-bold uppercase text-sm">
+                    Gogga Search Results for: {googleSearchQuery}
+                  </h3>
+                </div>
+                <div className="p-4 space-y-3 max-h-96 overflow-y-auto">
+                  {searchResults.map((result, index) => (
+                    <div key={index} className="bg-white border border-vcb-light-grey rounded-lg p-3">
+                      <div className="flex items-start space-x-2">
+                        <span className="text-vcb-mid-grey font-bold text-xs mt-0.5">{index + 1}.</span>
+                        <div className="flex-1 min-w-0">
+                          <a
+                            href={result.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm font-semibold text-blue-600 hover:text-blue-800 hover:underline block truncate"
+                            title={result.title}
+                          >
+                            {result.title}
+                          </a>
+                          <p className="text-xs text-green-700 truncate mt-0.5">{result.displayLink}</p>
+                          <p className="text-xs text-vcb-black mt-2 leading-relaxed">{result.snippet}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="bg-gray-100 px-4 py-2 border-t border-vcb-light-grey">
+                  <p className="text-xs text-vcb-mid-grey flex items-center space-x-1">
+                    <span className="material-icons text-sm">info</span>
+                    <span>These search results were provided to Gogga for context</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div ref={messagesEndRef} />
         </div>
       </div>
 
       {/* Input Container - high contrast per §5.1, Mobile Optimized */}
       <div
-        className="border-t border-vcb-light-grey bg-white px-3 pt-1.5 pb-3 md:px-8 md:pt-6 md:pb-6"
-        style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
+        className="relative border-t border-vcb-light-grey bg-white px-3 pt-0 pb-0 md:px-5 md:pt-0.5 md:pb-0 overflow-visible transform translate-y-2 md:translate-y-3"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
-        <form onSubmit={handleSubmit} className="max-w-5xl mx-auto space-y-2 md:space-y-3">
+        <div className="relative max-w-5xl mx-auto">
+          <img
+            src="Sovereign-Chat-icon-Spin.svg"
+            alt="Animated GOGGA"
+            className="hidden md:block absolute -top-14 left-0 h-48 w-48 pointer-events-none md:translate-y-4"
+          />
+          <form onSubmit={handleSubmit} className="space-y-0 md:space-y-0 md:pl-40 md:pb-0">
           <input
             ref={fileInputRef}
             type="file"
@@ -3286,113 +3969,20 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
           />
           {voiceModeEnabled && isListening && (
             <div className="mb-1 md:mb-3 flex items-center justify-center space-x-2 text-vcb-mid-grey">
-              <svg className="w-3 h-3 md:w-4 md:h-4 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-              </svg>
+              <span className="material-icons text-sm md:text-base animate-pulse">mic</span>
               <span className="text-[10px] md:text-sm font-medium uppercase">Listening...</span>
-            </div>
-          )}
-          {showImagePrompt && (
-            <div className="mb-2 md:mb-4 bg-gradient-to-r from-vcb-black to-vcb-dark-grey border-2 border-vcb-accent p-4 md:p-6 rounded-lg shadow-lg">
-              <div className="flex items-center justify-between mb-3 md:mb-4">
-                <div className="flex items-center space-x-2">
-                  <span className="material-icons text-vcb-accent text-xl md:text-2xl">image</span>
-                  <h3 className="text-sm md:text-lg font-bold text-vcb-white uppercase tracking-wider">VCB-AI Image Generator</h3>
-                </div>
-                <button
-                  onClick={() => setShowImagePrompt(false)}
-                  className="text-vcb-white hover:text-vcb-accent transition-colors"
-                  title="Close"
-                >
-                  <span className="material-icons text-xl">close</span>
-                </button>
               </div>
-              <p className="text-white text-xs md:text-sm mb-3 font-medium">Powered by FLUX-1.1-pro via DeepInfra</p>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={imagePrompt}
-                  onChange={(e) => setImagePrompt(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleGenerateImage();
-                    }
-                  }}
-                  placeholder="Describe your image... (e.g., 'A futuristic city at sunset with flying cars')"
-                  className="w-full bg-vcb-white text-vcb-black border-2 border-vcb-mid-grey focus:border-vcb-accent px-4 py-3 text-sm md:text-base rounded-lg focus:outline-none transition-colors placeholder:text-vcb-mid-grey mb-3"
-                  disabled={isGeneratingImage}
-                />
-              </div>
-              <button
-                onClick={handleGenerateImage}
-                disabled={!imagePrompt.trim() || isGeneratingImage}
-                className="w-full bg-vcb-accent hover:bg-yellow-500 disabled:bg-vcb-mid-grey disabled:cursor-not-allowed text-vcb-black px-6 py-3 text-sm md:text-base font-bold uppercase tracking-wider transition-all duration-200 rounded-lg shadow-md hover:shadow-xl disabled:shadow-none flex items-center justify-center space-x-2"
-              >
-                {isGeneratingImage ? (
-                  <>
-                    <span className="material-icons animate-spin">autorenew</span>
-                    <span>Generating Your Image...</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="material-icons">auto_awesome</span>
-                    <span>Generate Image</span>
-                  </>
-                )}
-              </button>
-            </div>
           )}
-          {cepoProgress && (
-            <div className="mb-1 md:mb-3 flex items-center justify-center space-x-2 text-vcb-accent">
-              <span className="material-icons text-base md:text-xl animate-spin">
-                {cepoProgress.includes('Planning') ? 'psychology' : 
-                 cepoProgress.includes('Executing') ? 'bolt' : 
-                 cepoProgress.includes('Analyzing') ? 'search' : 
-                 cepoProgress.includes('Refining') ? 'auto_awesome' : 'autorenew'}
-              </span>
-              <span className="text-[10px] md:text-sm font-medium">{cepoProgress}</span>
-            </div>
-          )}
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:space-x-4">
-            <img
-              src="Sovereign-Chat-icon-Spin.svg"
-              alt="Sovereign"
-              className="hidden md:block h-16 w-16 flex-shrink-0"
-            />
-            <div className="w-full">
-              <textarea
-                id="chat-input"
-                name="message"
-                ref={inputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={voiceModeEnabled ? "Speak your message..." : "Type your message..."}
-                className="w-full bg-white text-vcb-black border border-vcb-light-grey px-3 py-3 md:px-6 md:py-4 text-sm md:text-base focus:outline-none focus:border-vcb-mid-grey resize-none font-normal leading-relaxed min-h-[3.25rem] rounded-lg shadow-sm"
-                rows={isMobile ? 3 : 1}
-                disabled={isLoading}
-              />
-              {(uploadFeedback || uploadError) && (
-                <div
-                  className={`mt-2 flex items-center space-x-1 text-[10px] md:text-xs ${
-                    uploadError ? 'text-red-600' : 'text-green-600'
-                  }`}
-                >
-                  <span className="material-icons text-sm md:text-base">
-                    {uploadError ? 'error_outline' : 'check_circle'}
-                  </span>
-                  <span>{uploadError ?? uploadFeedback}</span>
-                </div>
-              )}
+
+            <div className="w-full md:pt-0 relative">
+              {/* Floating Document list - positioned above chat input */}
               {conversationDocuments.length > 0 && (
-                <div className="mt-2 border border-vcb-light-grey bg-gray-50 rounded-md p-2">
+                <div className="absolute bottom-full left-0 right-0 mb-2 border-2 border-vcb-accent bg-white rounded-lg p-2 shadow-lg z-10">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] md:text-xs font-semibold text-vcb-black uppercase tracking-wide">
-                      Chat Documents
+                    <span className="text-[10px] md:text-xs font-bold text-vcb-black uppercase tracking-wide">
+                      Attached Documents
                     </span>
-                    <span className="text-[10px] md:text-xs text-vcb-mid-grey">
+                    <span className="text-[10px] md:text-xs font-semibold text-vcb-accent">
                       {conversationDocuments.length}
                     </span>
                   </div>
@@ -3402,33 +3992,38 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                       return (
                         <li
                           key={doc.id}
-                          className="flex items-center justify-between bg-white border border-vcb-light-grey rounded px-2 py-1"
+                          className={`flex items-center justify-between rounded px-2 py-1 border-2 transition-all ${
+                            isAttached
+                              ? 'bg-green-50 border-green-500'
+                              : 'bg-gray-50 border-vcb-light-grey'
+                          }`}
                         >
-                          <div className="flex-1 min-w-0">
-                            <p
-                              className="text-[10px] md:text-xs font-semibold text-vcb-black truncate"
-                              title={doc.name}
+                          <div className="flex-1 min-w-0 flex items-center space-x-2">
+                            <button
+                              onClick={() => setPreviewDocument(doc)}
+                              className="flex-shrink-0 p-1 hover:bg-vcb-accent rounded transition-colors"
+                              title="Preview extracted text"
                             >
-                              {index + 1}. {doc.name}
-                            </p>
-                            <p className="text-[9px] md:text-[10px] text-vcb-mid-grey truncate">
-                              {new Date(doc.uploadedAt).toLocaleString()}
-                            </p>
+                              <span className="material-icons text-vcb-mid-grey hover:text-vcb-black text-sm">
+                                visibility
+                              </span>
+                            </button>
+                            <div className="flex-1 min-w-0">
+                              <p
+                                className="text-[10px] md:text-xs font-semibold text-vcb-black truncate"
+                                title={doc.name}
+                              >
+                                {index + 1}. {doc.name}
+                              </p>
+                              <p className="text-[9px] md:text-[10px] text-vcb-mid-grey truncate">
+                                {new Date(doc.uploadedAt).toLocaleString()} • {(doc.text.length / 1000).toFixed(1)}k chars
+                              </p>
+                            </div>
                           </div>
                           <div className="flex items-center space-x-1 ml-2">
                             {isAttached && (
-                              <span className="px-1 text-[8px] font-semibold uppercase tracking-wide text-green-600">
-                                Attached
-                              </span>
+                              <span className="material-icons text-green-600 text-sm">check_circle</span>
                             )}
-                            <button
-                              type="button"
-                              onClick={() => handleInsertDocument(doc.id)}
-                              className="px-2 py-1 text-[9px] md:text-[10px] font-medium text-vcb-black border border-vcb-mid-grey rounded hover:bg-vcb-mid-grey hover:text-white transition-colors"
-                              title="Insert document text and attach to message"
-                            >
-                              Insert
-                            </button>
                             <button
                               type="button"
                               onClick={() => handleRemoveDocument(doc.id)}
@@ -3444,14 +4039,27 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                   </ul>
                 </div>
               )}
+
+              <textarea
+                id="chat-input"
+                name="message"
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={voiceModeEnabled ? "Speak your message..." : "Type your message..."}
+                className="w-full bg-white text-vcb-black border border-vcb-light-grey px-3 py-1.5 md:px-5 md:py-1.5 text-sm md:text-base focus:outline-none focus:border-vcb-mid-grey resize-none font-normal leading-relaxed min-h-[2.75rem] rounded-lg shadow-sm"
+                rows={isMobile ? 3 : 1}
+                disabled={isLoading}
+              />
             </div>
             {/* Mobile: Enhanced quick actions grid */}
-            <div className="md:hidden grid grid-cols-6 gap-1 w-full">
+            <div className="md:hidden grid grid-cols-7 gap-1 w-full -mt-2">
               <button
                 type="button"
                 onClick={() => setForceThinkingMode(!forceThinkingMode)}
                 disabled={isLoading || useCePO}
-                className={`h-11 transition-colors duration-200 border flex items-center justify-center rounded-md ${
+                className={`h-8 transition-colors duration-200 border flex items-center justify-center rounded-md ${
                   forceThinkingMode
                     ? 'bg-[#DC143C] text-white border-[#DC143C]'
                     : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
@@ -3464,7 +4072,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                 type="button"
                 onClick={() => setUseCePO(!useCePO)}
                 disabled={isLoading || forceThinkingMode}
-                className={`h-11 transition-colors duration-200 border flex items-center justify-center rounded-md ${
+                className={`h-8 transition-colors duration-200 border flex items-center justify-center rounded-md ${
                   useCePO
                     ? 'bg-[#4169E1] text-white border-[#4169E1]'
                     : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
@@ -3477,12 +4085,12 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                 type="button"
                 onClick={() => setShowImagePrompt(!showImagePrompt)}
                 disabled={isLoading || isGeneratingImage}
-                className={`h-11 transition-colors duration-200 border flex items-center justify-center rounded-md ${
+                className={`h-8 transition-colors duration-200 border flex items-center justify-center rounded-md ${
                   showImagePrompt
                     ? 'bg-[#28a745] text-white border-[#28a745]'
                     : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
-                title="Generate Image with FLUX"
+                title="Generate Image with Gogga"
               >
                 <span className="material-icons text-base">image</span>
               </button>
@@ -3493,7 +4101,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                   fileInputRef.current?.click();
                 }}
                 disabled={isLoading || isProcessingUpload}
-                className={`h-11 transition-colors duration-200 border flex items-center justify-center rounded-md ${
+                className={`h-8 transition-colors duration-200 border flex items-center justify-center rounded-md ${
                   isProcessingUpload
                     ? 'bg-white text-vcb-mid-grey border-vcb-light-grey'
                     : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
@@ -3508,11 +4116,11 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                 type="button"
                 onClick={toggleVoiceMode}
                 disabled={isLoading}
-                className={`h-11 transition-colors duration-200 border flex items-center justify-center rounded-md ${
-                  isListening 
-                    ? 'bg-red-500 text-white border-red-600 animate-pulse' 
+                className={`h-8 transition-colors duration-200 border flex items-center justify-center rounded-md ${
+                  isListening
+                    ? 'bg-[#FFCC00] text-vcb-black border-[#FFCC00] animate-pulse'
                     : voiceModeEnabled
-                    ? 'bg-vcb-black text-vcb-white border-vcb-mid-grey hover:bg-vcb-dark-grey'
+                    ? 'bg-[#FFCC00] text-vcb-black border-[#FFCC00]'
                     : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
                 title={isListening ? 'Listening... (Click to stop)' : voiceModeEnabled ? 'Voice Mode ON (Click to disable)' : 'Voice Mode OFF (Click to enable)'}
@@ -3522,9 +4130,22 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                 </span>
               </button>
               <button
+                type="button"
+                onClick={() => setSearchEnabled(!searchEnabled)}
+                disabled={isLoading}
+                className={`h-8 transition-colors duration-200 border flex items-center justify-center rounded-md ${
+                  searchEnabled
+                    ? 'bg-vcb-black text-white border-vcb-black'
+                    : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                title={searchEnabled ? 'Gogga Search ON - Will search before responding' : 'Gogga Search OFF - Click to enable'}
+              >
+                <span className="material-icons text-base">search</span>
+              </button>
+              <button
                 type="submit"
                 disabled={isLoading || !input.trim()}
-                className="h-11 bg-vcb-black hover:bg-vcb-dark-grey disabled:bg-vcb-light-grey disabled:cursor-not-allowed text-vcb-white font-medium transition-colors duration-200 flex items-center justify-center border border-vcb-mid-grey rounded-md"
+                className="h-8 bg-vcb-black hover:bg-vcb-dark-grey disabled:bg-vcb-light-grey disabled:cursor-not-allowed text-vcb-white font-medium transition-colors duration-200 flex items-center justify-center border border-vcb-mid-grey rounded-md"
               >
                 {isLoading ? (
                   <img
@@ -3533,24 +4154,17 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                     className="h-4 w-4"
                   />
                 ) : (
-                  <svg
-                    className="w-4 h-4"
-                    fill="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
-                    <path d="M7 9h10v2H7zm0-3h10v2H7z"/>
-                  </svg>
+                  <span className="material-icons text-base">send</span>
                 )}
               </button>
             </div>
             {/* Desktop: Horizontal button layout */}
-            <div className="hidden md:flex md:items-center md:space-x-4">
+            <div className="hidden md:flex md:items-center md:space-x-4 md:-mt-4 md:-mb-4">
               <button
                 type="button"
                 onClick={() => setForceThinkingMode(!forceThinkingMode)}
                 disabled={isLoading || useCePO}
-                className={`px-4 h-16 transition-colors duration-200 border flex items-center justify-center ${
+                className={`px-4 h-12 transition-colors duration-200 border flex items-center justify-center ${
                   forceThinkingMode
                     ? 'bg-[#DC143C] text-white border-[#DC143C]'
                     : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
@@ -3563,7 +4177,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                 type="button"
                 onClick={() => setUseCePO(!useCePO)}
                 disabled={isLoading || forceThinkingMode}
-                className={`px-4 h-16 transition-colors duration-200 border flex items-center justify-center ${
+                className={`px-4 h-12 transition-colors duration-200 border flex items-center justify-center ${
                   useCePO
                     ? 'bg-[#4169E1] text-white border-[#4169E1]'
                     : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
@@ -3576,12 +4190,12 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                 type="button"
                 onClick={() => setShowImagePrompt(!showImagePrompt)}
                 disabled={isLoading || isGeneratingImage}
-                className={`px-4 h-16 transition-colors duration-200 border flex items-center justify-center ${
+                className={`px-4 h-12 transition-colors duration-200 border flex items-center justify-center ${
                   showImagePrompt
                     ? 'bg-[#28a745] text-white border-[#28a745]'
                     : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
-                title="Generate Image with FLUX"
+                title="Generate Image with Gogga"
               >
                 <span className="material-icons text-2xl">image</span>
               </button>
@@ -3592,7 +4206,7 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                   fileInputRef.current?.click();
                 }}
                 disabled={isLoading || isProcessingUpload}
-                className={`px-4 h-16 transition-colors duration-200 border flex items-center justify-center ${
+                className={`px-4 h-12 transition-colors duration-200 border flex items-center justify-center ${
                   isProcessingUpload
                     ? 'bg-white text-vcb-mid-grey border-vcb-light-grey'
                     : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
@@ -3607,11 +4221,11 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                 type="button"
                 onClick={toggleVoiceMode}
                 disabled={isLoading}
-                className={`px-4 h-16 transition-colors duration-200 border flex items-center justify-center ${
-                  isListening 
-                    ? 'bg-red-500 text-white border-red-600 animate-pulse' 
+                className={`px-4 h-12 transition-colors duration-200 border flex items-center justify-center ${
+                  isListening
+                    ? 'bg-[#FFCC00] text-vcb-black border-[#FFCC00] animate-pulse'
                     : voiceModeEnabled
-                    ? 'bg-vcb-black text-vcb-white border-vcb-mid-grey hover:bg-vcb-dark-grey'
+                    ? 'bg-[#FFCC00] text-vcb-black border-[#FFCC00]'
                     : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
                 title={isListening ? 'Listening... (Click to stop)' : voiceModeEnabled ? 'Voice Mode ON (Click to disable)' : 'Voice Mode OFF (Click to enable)'}
@@ -3621,9 +4235,22 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                 </span>
               </button>
               <button
+                type="button"
+                onClick={() => setSearchEnabled(!searchEnabled)}
+                disabled={isLoading}
+                className={`px-4 h-12 transition-colors duration-200 border flex items-center justify-center ${
+                  searchEnabled
+                    ? 'bg-vcb-black text-white border-vcb-black'
+                    : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                title={searchEnabled ? 'Gogga Search ON - Will search before responding' : 'Gogga Search OFF - Click to enable'}
+              >
+                <span className="material-icons text-2xl">search</span>
+              </button>
+              <button
                 type="submit"
                 disabled={isLoading || !input.trim()}
-                className="bg-vcb-black hover:bg-vcb-dark-grey disabled:bg-vcb-light-grey disabled:cursor-not-allowed text-vcb-white px-8 h-16 text-sm font-medium uppercase tracking-wider transition-colors duration-200 flex items-center space-x-3 border border-vcb-mid-grey"
+                className="bg-vcb-black hover:bg-vcb-dark-grey disabled:bg-vcb-light-grey disabled:cursor-not-allowed text-vcb-white px-7 h-12 text-sm font-medium uppercase tracking-wider transition-colors duration-200 flex items-center space-x-3 border border-vcb-mid-grey"
               >
                 {isLoading ? (
                   <>
@@ -3649,8 +4276,8 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
                 )}
               </button>
             </div>
+            </form>
           </div>
-        </form>
 
         {/* Interactive Voice Mode Toast Notification */}
         {showToast && (
@@ -3678,6 +4305,24 @@ VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [1998] 1 S
           </div>
         )}
       </div>
+      
+      {/* Footer - Fixed at bottom of screen */}
+      <footer className="fixed bottom-0 left-0 right-0 bg-vcb-black border-t border-vcb-mid-grey px-4 py-2 z-30">
+        <div className="max-w-7xl mx-auto flex items-center justify-between text-vcb-white">
+          <div className="flex items-center space-x-4 text-xs">
+            <span>© 2025 VCB-AI (Pty) Ltd</span>
+            <span>•</span>
+            <span>GOGGA Beta</span>
+          </div>
+          <div className="flex items-center space-x-4 text-xs">
+            <a href="https://vcb-ai.online" target="_blank" rel="noopener noreferrer" className="hover:text-vcb-accent transition-colors">
+              vcb-ai.online
+            </a>
+            <span>•</span>
+            <span>Pretoria, SA</span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };

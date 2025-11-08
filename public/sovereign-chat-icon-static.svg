@@ -1,27 +1,76 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
-    <!-- Circular dark background -->
-    <circle cx="512" cy="512" r="486.4" fill="#1a1a1a"/>
-    
-    <!-- Chat bubbles group  -->
+<svg viewBox="0 0 200 210" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <pattern id="sa-flag" patternUnits="userSpaceOnUse" x="50" y="120" width="100" height="66.67" viewBox="0 0 900 600" patternTransform="rotate(90 100 153.33)">
+            <rect width="900" height="600" fill="#ffffff"/>
+            <rect width="900" height="200" fill="#de3831"/>
+            <rect y="400" width="900" height="200" fill="#002395"/>
+            <path d="M0 200h900v200H0z" fill="#ffffff"/>
+            <path d="M0 240h900v120H0z" fill="#007a4d"/>
+            <path d="M0 0v600L300 300z" fill="#ffb612"/>
+            <path d="M0 40v520L260 300z" fill="#000000"/>
+        </pattern>
+    </defs>
+
     <g>
-        <!-- Bubble 1 (150px radius, 200px orbit) -->
+        <!-- Body -->
+        <ellipse cx="100" cy="145" rx="43.75" ry="62.5" fill="url(#sa-flag)" />
+
+        <!-- Head -->
+        <circle cx="100" cy="100" r="40" fill="#282828" />
+
+        <!-- Eyes -->
         <g>
-            <circle cx="371" cy="371" r="150" fill="#4a4a4a"/>
-            <path d="M 289 479 L 259 549 L 329 509 Z" fill="#4a4a4a"/>
+            <circle cx="85" cy="90" r="10" fill="#ffffff" />
+            <circle cx="85" cy="92" r="4" fill="#000000" />
+
+            <circle cx="115" cy="90" r="10" fill="#ffffff" />
+            <circle cx="115" cy="92" r="4" fill="#000000" />
         </g>
-        
-        <!-- Bubble 2 (150px radius, 200px orbit) -->
+
+        <!-- Mouth -->
         <g>
-            <circle cx="653" cy="653" r="150" fill="#6a6a6a"/>
-            <path d="M 735 545 L 765 475 L 695 515 Z" fill="#6a6a6a"/>
+            <path d="M 77.5 112 C 85.5 126, 114.5 126, 122.5 112 Q 100 122 77.5 112 Z" fill="#ffffff" />
+            <path d="M 100 112 V 122" stroke="#282828" stroke-width="1.5" stroke-linecap="round" />
+            <path d="M 87.5 112 V 119" stroke="#282828" stroke-width="1" stroke-linecap="round" />
+            <path d="M 112.5 112 V 119" stroke="#282828" stroke-width="1" stroke-linecap="round" />
+        </g>
+
+        <!-- Bow Tie -->
+        <g fill="#ffb612" stroke="#282828" stroke-width="1.5" stroke-linejoin="round">
+            <path d="M 100 140 L 80 130 L 80 150 Z" />
+            <path d="M 100 140 L 120 130 L 120 150 Z" />
+            <circle cx="100" cy="140" r="5" />
+        </g>
+
+        <!-- Antennae -->
+        <g>
+            <g stroke="#282828" stroke-width="5" stroke-linecap="round" fill="none">
+                <path d="M 85 65 C 90 55, 70 50, 75 40 C 80 30, 60 25, 65 15" />
+                <path d="M 115 65 C 110 55, 130 50, 125 40 C 120 30, 140 25, 135 15" />
+            </g>
+            <circle cx="65" cy="10" r="5" fill="#de3831" />
+            <circle cx="135" cy="10" r="5" fill="#ffb612" />
+        </g>
+
+        <!-- Legs -->
+        <g stroke="#282828" stroke-width="3" stroke-linecap="round" fill="none">
+            <path d="M 60 180 Q 40 185 30 195" />
+            <path d="M 62.5 185 Q 42.5 190 32.5 200" />
+            <path d="M 65 190 Q 45 195 35 205" />
+            <path d="M 140 180 Q 160 185 170 195" />
+            <path d="M 137.5 185 Q 157.5 190 167.5 200" />
+            <path d="M 135 190 Q 155 195 165 205" />
+        </g>
+
+        <!-- Arms -->
+        <g stroke="#282828" stroke-width="3" stroke-linecap="round" fill="none">
+            <path d="M 60 155 Q 40 160 30 150" />
+            <path d="M 140 155 Q 160 160 170 150" />
+            <path d="M 61 162.5 Q 41 167.5 31 157.5" />
+            <path d="M 139 162.5 Q 159 167.5 169 157.5" />
+            <path d="M 62 170 Q 42 175 32 165" />
+            <path d="M 138 170 Q 158 175 168 165" />
         </g>
     </g>
-    
-    <!-- Central letter S (stationary) -->
-    <text x="512" y="540" font-family="Quicksand, Arial, sans-serif" font-size="420" font-weight="bold" 
-          fill="#FFFFFF" text-anchor="middle" dominant-baseline="middle">S</text>
-    
-    <!-- Circular border -->
-    <circle cx="512" cy="512" r="486.4" fill="none" stroke="#000000" stroke-width="8"/>
 </svg>

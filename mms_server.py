@@ -4,7 +4,19 @@ import io
 import wave
 import numpy as np
 import os
+import random
+import threading
+from typing import Dict, List, Optional
 from gtts import gTTS
+
+# Attempt to auto-load environment variables from .env files
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    print("[OK] Loaded environment variables from .env")
+except ImportError:
+    print("[INFO] python-dotenv not installed; environment variables from .env were not loaded")
 
 # Try to import MMS dependencies
 try:
@@ -16,6 +28,15 @@ try:
 except ImportError as e:
     MMS_AVAILABLE = False
     print(f"[WARNING] MMS not available: {e}")
+
+# Try to import Transformers pipeline for AfroLID support
+try:
+    from transformers import pipeline
+    TRANSFORMERS_PIPELINE_AVAILABLE = True
+except ImportError as e:
+    TRANSFORMERS_PIPELINE_AVAILABLE = False
+    pipeline = None
+    print(f"[WARNING] Transformers pipeline unavailable: {e}")
 
 app = Flask(__name__)
 CORS(app)
@@ -37,6 +58,76 @@ SA_LANGUAGE_CODES = {
 
 # gTTS only supports these
 GTTS_SUPPORTED = {'en', 'af'}
+
+# Language metadata for AfroLID detection and greetings
+SA_LANGUAGE_METADATA: Dict[str, Dict[str, object]] = {
+    'en': {
+        'name': 'English',
+        'greetings': ['Hello!', 'Good day!', 'Howzit!'],
+        'afrolid_labels': ['eng']
+    },
+    'af': {
+        'name': 'Afrikaans',
+        'greetings': ['Hallo!', 'Goeie dag!', 'Howzit!'],
+        'afrolid_labels': ['afr']
+    },
+    'zu': {
+        'name': 'Zulu',
+        'greetings': ['Sawubona!', 'Sanibonani!', 'Yebo!'],
+        'afrolid_labels': ['zul']
+    },
+    'xh': {
+        'name': 'Xhosa',
+        'greetings': ['Molo!', 'Molweni!', 'Ewe!'],
+        'afrolid_labels': ['xho']
+    },
+    'nso': {
+        'name': 'Sepedi',
+        'greetings': ['Dumela!', 'Thobela!', 'Ee!'],
+        'afrolid_labels': ['nso']
+    },
+    'tn': {
+        'name': 'Setswana',
+        'greetings': ['Dumela!', 'Dumelang!', 'Ee rra!'],
+        'afrolid_labels': ['tsn']
+    },
+    'st': {
+        'name': 'Sesotho',
+        'greetings': ['Dumela!', 'Dumelang!', 'Kea leboha!'],
+        'afrolid_labels': ['sot']
+    },
+    'ts': {
+        'name': 'Xitsonga',
+        'greetings': ['Avuxeni!', 'Xewani!', 'Ina!'],
+        'afrolid_labels': ['tso']
+    },
+    'ss': {
+        'name': 'siSwati',
+        'greetings': ['Sawubona!', 'Sanibonani!', 'Yebo make!'],
+        'afrolid_labels': ['ssw']
+    },
+    've': {
+        'name': 'Tshivenda',
+        'greetings': ['Ndaa!', 'Matsheloni!', 'Vho-vho!'],
+        'afrolid_labels': ['ven']
+    },
+    'nr': {
+        'name': 'isiNdebele',
+        'greetings': ['Lotjhani!', 'Salibonani!', 'Yebo baba!'],
+        'afrolid_labels': ['nbl']
+    },
+}
+
+AFROLID_LABEL_TO_CODE: Dict[str, str] = {}
+for code, metadata in SA_LANGUAGE_METADATA.items():
+    for label in metadata.get('afrolid_labels', []):
+        AFROLID_LABEL_TO_CODE[label.lower()] = code
+
+AFROLID_MODEL_ID = os.getenv('AFROLID_MODEL_ID', 'UBC-NLP/afrolid_1.5')
+AFROLID_TOP_K = int(os.getenv('AFROLID_TOP_K', '5'))
+
+afrolid_pipeline = None
+afrolid_lock = threading.Lock()
 
 # Model cache
 mms_models = {}
@@ -63,6 +154,138 @@ def health():
         'service': 'MMS Multilingual TTS Server (HF API)',
         'supported_languages': list(SA_LANGUAGE_CODES.keys())
     })
+
+@app.route('/detect-language', methods=['POST'])
+def detect_language_endpoint():
+    data = request.get_json(silent=True) or {}
+    text = str(data.get('text', '')).strip()
+
+    if not text:
+        detection = _fallback_detection('empty_text')
+        detection['error'] = 'Text is required'
+        return jsonify(detection)
+
+    detection = detect_language_afrolid(text)
+    return jsonify(detection)
+
+def _get_language_metadata(code: str) -> Dict[str, object]:
+    return SA_LANGUAGE_METADATA.get(code, SA_LANGUAGE_METADATA['en'])
+
+def _get_language_name(code: str) -> str:
+    metadata = _get_language_metadata(code)
+    name = metadata.get('name')
+    return name if isinstance(name, str) else 'English'
+
+def _get_greetings(code: str) -> List[str]:
+    metadata = _get_language_metadata(code)
+    greetings = metadata.get('greetings', [])
+    if isinstance(greetings, list) and greetings:
+        return [str(greet) for greet in greetings]
+    return ['Hello!']
+
+def _fallback_detection(reason: str, candidates: Optional[List[Dict[str, object]]] = None) -> Dict[str, object]:
+    code = 'en'
+    return {
+        'language': _get_language_name(code),
+        'code': code,
+        'confidence': 55.0,
+        'greeting': random.choice(_get_greetings(code)),
+        'source': 'fallback',
+        'model': AFROLID_MODEL_ID if TRANSFORMERS_PIPELINE_AVAILABLE else None,
+        'reason': reason,
+        'candidates': candidates or []
+    }
+
+def _load_afrolid_pipeline():
+    global afrolid_pipeline
+
+    if not TRANSFORMERS_PIPELINE_AVAILABLE:
+        return None
+
+    if afrolid_pipeline is not None:
+        return afrolid_pipeline
+
+    with afrolid_lock:
+        if afrolid_pipeline is None:
+            try:
+                print(f"[AFROLID] Loading language identification model: {AFROLID_MODEL_ID}")
+                afrolid_pipeline = pipeline(
+                    'text-classification',
+                    model=AFROLID_MODEL_ID,
+                    device=-1,
+                    trust_remote_code=True
+                )
+                print(f"[AFROLID] Model ready: {AFROLID_MODEL_ID}")
+            except Exception as exc:
+                print(f"[AFROLID] Failed to load model: {exc}")
+                afrolid_pipeline = None
+
+    return afrolid_pipeline
+
+def detect_language_afrolid(text: str) -> Dict[str, object]:
+    cleaned_text = (text or '').strip()
+    if len(cleaned_text) < 3:
+        return _fallback_detection('insufficient_text')
+
+    pipeline_instance = _load_afrolid_pipeline()
+    if pipeline_instance is None:
+        return _fallback_detection('pipeline_unavailable')
+
+    try:
+        predictions_raw = pipeline_instance(cleaned_text, top_k=AFROLID_TOP_K)
+    except Exception as exc:
+        print(f"[AFROLID] Detection error: {exc}")
+        return _fallback_detection('pipeline_runtime_error')
+
+    if not predictions_raw:
+        return _fallback_detection('no_predictions')
+
+    # Normalize pipeline output to a flat list of dicts
+    if isinstance(predictions_raw, list) and predictions_raw and isinstance(predictions_raw[0], list):
+        predictions = predictions_raw[0]
+    elif isinstance(predictions_raw, list):
+        predictions = predictions_raw
+    else:
+        predictions = [predictions_raw]
+
+    candidates: List[Dict[str, object]] = []
+    best_code: Optional[str] = None
+    best_confidence: float = 0.0
+
+    for item in predictions:
+        label_value = str(item.get('label', '')).lower()
+        score_fraction = float(item.get('score', 0.0))
+        score_percent = max(min(score_fraction * 100.0, 100.0), 0.0)
+        mapped_code = AFROLID_LABEL_TO_CODE.get(label_value)
+
+        candidate_payload: Dict[str, object] = {
+            'label': label_value,
+            'score': round(score_percent, 2)
+        }
+
+        if mapped_code:
+            candidate_payload['code'] = mapped_code
+            candidate_payload['language'] = _get_language_name(mapped_code)
+
+            if score_percent > best_confidence:
+                best_confidence = score_percent
+                best_code = mapped_code
+
+        candidates.append(candidate_payload)
+
+    if best_code is None:
+        return _fallback_detection('no_supported_language', candidates)
+
+    greeting = random.choice(_get_greetings(best_code))
+    return {
+        'language': _get_language_name(best_code),
+        'code': best_code,
+        'confidence': round(min(best_confidence, 99.0), 2),
+        'greeting': greeting,
+        'source': 'afrolid',
+        'model': AFROLID_MODEL_ID,
+        'candidates': candidates
+    }
 
 def generate_silent_audio():
     """Generate 1 second of silent audio as fallback"""

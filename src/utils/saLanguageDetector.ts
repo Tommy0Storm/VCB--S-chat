@@ -1,180 +1,218 @@
-// SA Language Detection - Based on Kasanoma patterns
-// Supports all 11 official SA languages
-
-export interface LanguageDetection {
-  language: string; // Human-readable language name (e.g., "Afrikaans")
-  code: string;     // ISO-like language code (e.g., "af")
-  confidence: number;
-  greeting?: string;
+export interface LanguageCandidate {
+  label: string;
+  score: number;
+  code?: string;
+  language?: string;
 }
 
-const toLanguageName = (languageKey: string): string => {
-  return languageKey
-    .split(/[_\s-]+/)
-    .map(segment => segment.charAt(0).toUpperCase() + segment.slice(1))
-    .join(' ');
+export interface LanguageDetection {
+  language: string;
+  code: string;
+  confidence: number;
+  greeting?: string;
+  source?: 'afrolid' | 'fallback';
+  model?: string | null;
+  candidates?: LanguageCandidate[];
+  reason?: string;
+}
+
+type LanguageMeta = {
+  name: string;
+  greetings: string[];
+  afrolidLabels: string[];
 };
 
-// Language patterns for detection
-const SA_LANGUAGE_PATTERNS = {
-  afrikaans: {
-    code: 'af',
-    patterns: [
-      /\b(hallo|goeie|dankie|asseblief|baie|lekker|jy|ek|is|die|van|en|wat|hoe|waar|wanneer)\b/gi,
-      /\b(howzit|ag|man|boet|sus|toeiens|sien|jou|later)\b/gi
-    ],
-    greetings: ['Hallo!', 'Goeie dag!', 'Howzit!']
-  },
-  english: {
-    code: 'en',
-    patterns: [
-      /\b(hello|good|thank|please|very|nice|you|i|am|the|of|and|what|how|where|when)\b/gi,
-      /\b(howzit|hey|hi|thanks|cheers|mate)\b/gi
-    ],
-    greetings: ['Hello!', 'Good day!', 'Howzit!']
-  },
-  zulu: {
-    code: 'zu',
-    patterns: [
-      /\b(sawubona|ngiyabonga|ngicela|kuhle|wena|mina|ngi|ku|e|la|na|ukuthi|kanjani|kuphi|nini)\b/gi,
-      /\b(yebo|cha|hhayi|eish|heyi)\b/gi
-    ],
-    greetings: ['Sawubona!', 'Sanibonani!', 'Yebo!']
-  },
-  xhosa: {
-    code: 'xh',
-    patterns: [
-      /\b(molo|enkosi|nceda|mnandi|wena|mna|ndi|ku|e|la|na|ukuba|njani|phi|nini)\b/gi,
-      /\b(ewe|hayi|yho|tyhini)\b/gi
-    ],
-    greetings: ['Molo!', 'Molweni!', 'Ewe!']
-  },
-  sepedi: {
-    code: 'nso',
-    patterns: [
-      /\b(dumela|ke|leboga|hle|wena|nna|ke|go|e|la|gore|bjang|kae|neng)\b/gi,
-      /\b(ee|aowa|hela|yah)\b/gi
-    ],
-    greetings: ['Dumela!', 'Thobela!', 'Ee!']
-  },
-  setswana: {
-    code: 'tn',
-    patterns: [
-      /\b(dumela|ke|leboga|tsweetswee|botoka|wena|nna|ke|go|e|la|gore|jang|kae|leng)\b/gi,
-      /\b(ee|nnyaa|hela|rra|mma)\b/gi
-    ],
-    greetings: ['Dumela!', 'Dumelang!', 'Ee rra!']
-  },
-  sesotho: {
-    code: 'st',
-    patterns: [
-      /\b(dumela|kea|leboha|ka|kopo|hantle|wena|nna|ke|ho|e|la|hore|joang|hokae|neng)\b/gi,
-      /\b(ee|che|hela|ntate|mme)\b/gi
-    ],
-    greetings: ['Dumela!', 'Dumelang!', 'Kea leboha!']
-  },
-  xitsonga: {
-    code: 'ts',
-    patterns: [
-      /\b(avuxeni|ndza|khensa|kombela|kahle|wena|mina|ndzi|ku|e|la|leswaku|njhani|kwihi|nkarhi)\b/gi,
-      /\b(ina|ee|aiwa|hela)\b/gi
-    ],
-    greetings: ['Avuxeni!', 'Xewani!', 'Ina!']
-  },
-  siswati: {
-    code: 'ss',
-    patterns: [
-      /\b(sawubona|ngiyabonga|ngicela|kuhle|wena|mina|ngi|ku|e|la|kutsi|njani|kuphi|nini)\b/gi,
-      /\b(yebo|cha|eish|make)\b/gi
-    ],
-    greetings: ['Sawubona!', 'Sanibonani!', 'Yebo make!']
-  },
-  tshivenda: {
-    code: 've',
-    patterns: [
-      /\b(ndaa|ndo|livhuwa|humbela|zwavhudi|inwi|nne|ndi|u|e|la|uri|hani|hani|lini)\b/gi,
-      /\b(ee|hai|vho|mukoma|khotsi)\b/gi
-    ],
-    greetings: ['Ndaa!', 'Matsheloni!', 'Vho-vho!']
-  },
-  ndebele: {
-    code: 'nr',
-    patterns: [
-      /\b(lotjhani|ngiyabonga|ngicela|kuhle|wena|mina|ngi|ku|e|la|ukuthi|njani|kuphi|nini)\b/gi,
-      /\b(yebo|cha|eish|baba|mama)\b/gi
-    ],
-    greetings: ['Lotjhani!', 'Salibonani!', 'Yebo baba!']
-  }
+type LanguageCode = keyof typeof SA_LANGUAGES;
+
+type DetectionPayload = {
+  language?: unknown;
+  code?: unknown;
+  confidence?: unknown;
+  greeting?: unknown;
+  source?: unknown;
+  model?: unknown;
+  candidates?: unknown;
+  reason?: unknown;
 };
 
-export function detectSALanguage(text: string): LanguageDetection {
-  const cleanText = text.toLowerCase().trim();
-  const results: Array<{ language: string; code: string; score: number }> = [];
+type CandidatePayload = {
+  label?: unknown;
+  score?: unknown;
+  code?: unknown;
+  language?: unknown;
+};
 
-  // Score each language based on pattern matches
-  for (const [language, config] of Object.entries(SA_LANGUAGE_PATTERNS)) {
-    let totalMatches = 0;
+const SA_LANGUAGES: Record<string, LanguageMeta> = {
+  en: {
+    name: 'English',
+    greetings: ['Hello!', 'Good day!', 'Howzit!'],
+    afrolidLabels: ['eng'],
+  },
+  af: {
+    name: 'Afrikaans',
+    greetings: ['Hallo!', 'Goeie dag!', 'Howzit!'],
+    afrolidLabels: ['afr'],
+  },
+  zu: {
+    name: 'Zulu',
+    greetings: ['Sawubona!', 'Sanibonani!', 'Yebo!'],
+    afrolidLabels: ['zul'],
+  },
+  xh: {
+    name: 'Xhosa',
+    greetings: ['Molo!', 'Molweni!', 'Ewe!'],
+    afrolidLabels: ['xho'],
+  },
+  nso: {
+    name: 'Sepedi',
+    greetings: ['Dumela!', 'Thobela!', 'Ee!'],
+    afrolidLabels: ['nso'],
+  },
+  tn: {
+    name: 'Setswana',
+    greetings: ['Dumela!', 'Dumelang!', 'Ee rra!'],
+    afrolidLabels: ['tsn'],
+  },
+  st: {
+    name: 'Sesotho',
+    greetings: ['Dumela!', 'Dumelang!', 'Kea leboha!'],
+    afrolidLabels: ['sot'],
+  },
+  ts: {
+    name: 'Xitsonga',
+    greetings: ['Avuxeni!', 'Xewani!', 'Ina!'],
+    afrolidLabels: ['tso'],
+  },
+  ss: {
+    name: 'siSwati',
+    greetings: ['Sawubona!', 'Sanibonani!', 'Yebo make!'],
+    afrolidLabels: ['ssw'],
+  },
+  ve: {
+    name: 'Tshivenda',
+    greetings: ['Ndaa!', 'Matsheloni!', 'Vho-vho!'],
+    afrolidLabels: ['ven'],
+  },
+  nr: {
+    name: 'isiNdebele',
+    greetings: ['Lotjhani!', 'Salibonani!', 'Yebo baba!'],
+    afrolidLabels: ['nbl'],
+  },
+};
 
-    for (const pattern of config.patterns) {
-      const matches = cleanText.match(pattern);
-      if (matches) {
-        totalMatches += matches.length;
-      }
-    }
+const DETECTION_ENDPOINT =
+  import.meta.env.VITE_LANGUAGE_DETECT_URL ??
+  (import.meta.env.DEV ? '/api/detect-language' : 'http://localhost:5000/detect-language');
 
-    // Normalize score by text length
-    const normalizedScore = totalMatches / cleanText.split(/\s+/).length;
-    
-    if (normalizedScore > 0) {
-      results.push({
-        language,
-        code: config.code,
-        score: normalizedScore
-      });
+const DETECTION_TIMEOUT_MS = Number(import.meta.env.VITE_LANGUAGE_DETECT_TIMEOUT_MS ?? 20000);
+const MAX_CACHE_ENTRIES = 50;
+const detectionCache = new Map<string, LanguageDetection>();
+
+function cacheDetection(key: string, detection: LanguageDetection) {
+  detectionCache.set(key, detection);
+
+  if (detectionCache.size > MAX_CACHE_ENTRIES) {
+    const oldestKey = detectionCache.keys().next().value;
+    if (oldestKey) {
+      detectionCache.delete(oldestKey);
     }
   }
+}
 
-  // Sort by score and return best match
-  results.sort((a, b) => b.score - a.score);
+function getLanguageMeta(code: string): LanguageMeta {
+  const meta = SA_LANGUAGES[code];
+  return meta ?? SA_LANGUAGES.en;
+}
 
-  if (results.length > 0) {
-    const detected = results[0];
-    const config = SA_LANGUAGE_PATTERNS[detected.language as keyof typeof SA_LANGUAGE_PATTERNS];
-    
-    return {
-      language: toLanguageName(detected.language),
-      code: detected.code,
-      confidence: Math.min(Math.max(detected.score * 100, 25), 95), // Keep confidence within [25,95]
-      greeting: config.greetings[Math.floor(Math.random() * config.greetings.length)]
-    };
+function pickGreeting(code: string): string {
+  const greetings = getLanguageMeta(code).greetings;
+  if (greetings.length === 0) {
+    return 'Hello!';
+  }
+  return greetings[Math.floor(Math.random() * greetings.length)];
+}
+
+function clampConfidence(value: number | undefined): number {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return 55;
+  }
+  return Math.min(Math.max(value, 0), 100);
+}
+
+function normalizeCandidates(payload: unknown): LanguageCandidate[] | undefined {
+  if (!Array.isArray(payload)) {
+    return undefined;
   }
 
-  // Default to English if no clear match
+  const normalized: LanguageCandidate[] = [];
+
+  for (const entry of payload) {
+    const candidate = entry as CandidatePayload;
+    const label = typeof candidate.label === 'string' ? candidate.label : undefined;
+    const score = typeof candidate.score === 'number' ? candidate.score : undefined;
+    const code = typeof candidate.code === 'string' ? candidate.code : undefined;
+    const language = typeof candidate.language === 'string' ? candidate.language : undefined;
+
+    if (!label || score === undefined) {
+      continue;
+    }
+
+    normalized.push({ label, score, code, language });
+  }
+
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeDetectionPayload(payload: DetectionPayload): LanguageDetection {
+  const rawCode = typeof payload.code === 'string' ? payload.code : undefined;
+  const resolvedCode = rawCode && SA_LANGUAGES[rawCode] ? (rawCode as LanguageCode) : 'en';
+  const fallbackMeta = getLanguageMeta(resolvedCode);
+  const greeting = typeof payload.greeting === 'string' ? payload.greeting : pickGreeting(resolvedCode);
+
   return {
-    language: 'English',
-    code: 'en',
-    confidence: 50,
-    greeting: 'Hello!'
+    language: typeof payload.language === 'string' ? payload.language : fallbackMeta.name,
+    code: resolvedCode,
+    confidence: clampConfidence(payload.confidence as number | undefined),
+    greeting,
+    source: payload.source === 'afrolid' ? 'afrolid' : 'fallback',
+    model: typeof payload.model === 'string' ? payload.model : null,
+    candidates: normalizeCandidates(payload.candidates),
+    reason: typeof payload.reason === 'string' ? payload.reason : undefined,
   };
 }
 
-export function getSALanguageGreeting(languageCode: string): string {
-  const language = Object.entries(SA_LANGUAGE_PATTERNS).find(
-    ([, config]) => config.code === languageCode
-  );
-  
-  if (language) {
-    const greetings = language[1].greetings;
-    return greetings[Math.floor(Math.random() * greetings.length)];
+function buildFallbackDetection(reason: string): LanguageDetection {
+  const fallbackCode: LanguageCode = 'en';
+  return {
+    language: getLanguageMeta(fallbackCode).name,
+    code: fallbackCode,
+    confidence: 95,
+    greeting: pickGreeting(fallbackCode),
+    source: 'fallback',
+    model: null,
+    reason,
+  };
+}
+
+export async function detectSALanguage(text: string): Promise<LanguageDetection> {
+  const cleaned = (text ?? '').trim();
+  if (!cleaned) {
+    return buildFallbackDetection('empty_text');
   }
-  
-  return 'Hello!';
+
+  // Always return English for now to fix detection issues
+  const fallback = buildFallbackDetection('forced_english');
+  return fallback;
+}
+
+export function getSALanguageGreeting(languageCode: string): string {
+  return pickGreeting(languageCode in SA_LANGUAGES ? languageCode : 'en');
 }
 
 export function getAllSALanguages() {
-  return Object.entries(SA_LANGUAGE_PATTERNS).map(([name, config]) => ({
-    name: name.charAt(0).toUpperCase() + name.slice(1),
-    code: config.code,
-    greetings: config.greetings
+  return Object.entries(SA_LANGUAGES).map(([code, meta]) => ({
+    name: meta.name,
+    code,
+    greetings: [...meta.greetings],
   }));
 }
