@@ -813,8 +813,8 @@ const MessageComponent = React.memo(({
             )}
           </div>
         </div>
+        </div>
       </div>
-    </div>
     </ErrorBoundary>
   );
 });
@@ -3022,7 +3022,7 @@ CONTEXT AWARENESS:
 
   return (
     <ErrorBoundary>
-  <div className="flex flex-col h-[calc(100vh-env(safe-area-inset-top))] bg-white font-quicksand font-normal overflow-hidden" style={{fontWeight: 400}}>
+      <div className="flex flex-col h-[calc(100vh-env(safe-area-inset-top))] bg-white font-quicksand font-normal overflow-hidden" style={{fontWeight: 400}}>
       {/* CePO Animation - Black Monochrome Thinking */}
       {cepoProgress && (
         <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
