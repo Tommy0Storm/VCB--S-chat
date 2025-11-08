@@ -4513,18 +4513,12 @@ LOCATION USAGE INSTRUCTIONS:
               <button
                 type="button"
                 onClick={toggleVoiceMode}
-                disabled={isLoading}
-                className={`h-8 transition-colors duration-200 border flex items-center justify-center rounded-md ${
-                  isListening
-                    ? 'bg-[#FFCC00] text-vcb-black border-[#FFCC00] animate-pulse'
-                    : voiceModeEnabled
-                    ? 'bg-[#FFCC00] text-vcb-black border-[#FFCC00]'
-                    : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
-                title={isListening ? 'Listening... (Click to stop)' : voiceModeEnabled ? 'Voice Mode ON (Click to disable)' : 'Voice Mode OFF (Click to enable)'}
+                disabled={true}
+                className="h-8 transition-colors duration-200 border flex items-center justify-center rounded-md bg-vcb-light-grey text-vcb-mid-grey border-vcb-light-grey opacity-50 cursor-not-allowed"
+                title="Voice Mode (Disabled)"
               >
                 <span className="material-icons text-base">
-                  {isListening ? 'mic' : 'mic_off'}
+                  mic_off
                 </span>
               </button>
               <button
@@ -4618,18 +4612,12 @@ LOCATION USAGE INSTRUCTIONS:
               <button
                 type="button"
                 onClick={toggleVoiceMode}
-                disabled={isLoading}
-                className={`px-4 h-12 transition-colors duration-200 border flex items-center justify-center ${
-                  isListening
-                    ? 'bg-[#FFCC00] text-vcb-black border-[#FFCC00] animate-pulse'
-                    : voiceModeEnabled
-                    ? 'bg-[#FFCC00] text-vcb-black border-[#FFCC00]'
-                    : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
-                title={isListening ? 'Listening... (Click to stop)' : voiceModeEnabled ? 'Voice Mode ON (Click to disable)' : 'Voice Mode OFF (Click to enable)'}
+                disabled={true}
+                className="px-4 h-12 transition-colors duration-200 border flex items-center justify-center bg-vcb-light-grey text-vcb-mid-grey border-vcb-light-grey opacity-50 cursor-not-allowed"
+                title="Voice Mode (Disabled)"
               >
                 <span className="material-icons text-2xl">
-                  {isListening ? 'mic' : 'mic_off'}
+                  mic_off
                 </span>
               </button>
               <button
