@@ -9,9 +9,7 @@ export const sanitizeMarkdown = (content: string): string => {
     ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'code', 'pre', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'blockquote', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td'],
     ALLOWED_ATTR: ['href', 'title', 'class'],
     ALLOW_DATA_ATTR: false,
-    FORBID_SCRIPT: true,
-    FORBID_TAGS: ['script', 'object', 'embed', 'form', 'input', 'iframe'],
-    STRIP_COMMENTS: true
+    FORBID_TAGS: ['script', 'object', 'embed', 'form', 'input', 'iframe']
   });
   
   return cleaned.trim();
