@@ -6,7 +6,6 @@ interface SearchOptions {
   progressive?: boolean;
   useCache?: boolean;
   maxResults?: number;
-  timeout?: number;
 }
 
 interface SearchResponse {
@@ -58,8 +57,7 @@ class EnhancedSearchEngine {
               useGoogle: true,
               useFreeAPIs: true,
               maxResults: limit * 2, // Double results for better ranking
-              fetchContent: true,     // Enable content fetching
-              timeout: 8000          // Extended timeout
+              fetchContent: true     // Enable content fetching
             });
             return this.convertToSearchResults(searchResult.results);
           },

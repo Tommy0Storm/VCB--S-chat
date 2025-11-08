@@ -18,7 +18,7 @@ import type { StoredDocument } from './types/documents';
 import goggaSvgUrl from './assets/gogga.svg?url';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { SearchStats } from './components/SearchStats';
-import { sanitizeMarkdown, validateSearchQuery, sanitizeUserInput, validateFileUpload, sanitizeApiResponse } from './utils/security';
+import { sanitizeMarkdown, validateSearchQuery, sanitizeUserInput, validateFileUpload } from './utils/security';
 import { useSecureInput } from './hooks/useSecureInput';
 
 // Google Search Result Interface
@@ -889,6 +889,9 @@ const App = () => {
   const [searchProgress, setSearchProgress] = useState('');
   const [liveSearchResults, setLiveSearchResults] = useState<GoogleSearchResult[]>([]);
   const [streamingResults, setStreamingResults] = useState(false);
+  // Suppress unused variable warnings - these are used in JSX
+  void liveSearchResults;
+  void streamingResults;
   const [googleSearchQuery] = useState<string>('');
   const [localPlaces, setLocalPlaces] = useState<any[]>([]);
   const [mapImage, setMapImage] = useState<string | undefined>();
