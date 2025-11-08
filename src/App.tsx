@@ -896,7 +896,8 @@ const App = () => {
   const [localPlaces, setLocalPlaces] = useState<any[]>([]);
   const [mapImage, setMapImage] = useState<string | undefined>();
   const [userLocation, setUserLocation] = useState<{lat: number, lon: number, city?: string, street?: string, isManual?: boolean} | null>(null);
-  const [showLocationPrompt, setShowLocationPrompt] = useState(false);`n  const [locationPromptExpanded, setLocationPromptExpanded] = useState(false);
+  const [showLocationPrompt, setShowLocationPrompt] = useState(false);
+  const [locationPromptExpanded, setLocationPromptExpanded] = useState(false);
   const [showManualLocation, setShowManualLocation] = useState(false);
   const [manualLocationInput, setManualLocationInput] = useState('');
   const [weatherData, setWeatherData] = useState<WeatherForecast | null>(null);
@@ -4098,14 +4099,15 @@ LOCATION USAGE INSTRUCTIONS:
         </div>
       )}
 
+      {/* Weather Widget - Below GOGGA's feet */}
+      {!isMobile && userLocation?.city && (
+        <div className="fixed top-64 left-4 z-20 w-64">
+          <WeatherWidget location={userLocation.city} />
+        </div>
+      )}
+
       {/* Messages Container - 80%+ whitespace per §5.1, Mobile Optimized */}
       <div className="flex-1 overflow-y-auto px-2 py-1 md:px-8 md:py-2 min-h-0">
-        {/* Weather Widget - Desktop Only, Top Left */}
-        {!isMobile && userLocation?.city && (
-          <div className="fixed top-32 left-4 z-20 w-64">
-            <WeatherWidget location={userLocation.city} />
-          </div>
-        )}
         
         <div className="max-w-5xl mx-auto space-y-2 md:space-y-4">
           {messages.length === 0 ? (

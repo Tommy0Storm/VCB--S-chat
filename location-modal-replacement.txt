@@ -1,0 +1,75 @@
+      {showLocationPrompt && (
+        <div className="fixed top-32 left-4 z-50">
+          <div 
+            className="bg-white border-2 border-vcb-accent rounded-lg shadow-2xl cursor-pointer transition-all duration-300"
+            style={{ width: locationPromptExpanded ? '400px' : '200px' }}
+            onClick={() => !locationPromptExpanded && setLocationPromptExpanded(true)}
+          >
+            {!locationPromptExpanded ? (
+              <div className="px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                <div className="flex items-center space-x-2">
+                  <span className="material-icons text-vcb-accent text-xl animate-pulse">location_on</span>
+                  <span className="text-vcb-black font-bold text-sm uppercase">Enable Location</span>
+                </div>
+                <span className="material-icons text-vcb-mid-grey text-lg">expand_more</span>
+              </div>
+            ) : (
+              <div onClick={(e) => e.stopPropagation()}>
+                <div className="bg-vcb-black px-4 py-3 flex items-center justify-between border-b-2 border-vcb-accent">
+                  <div className="flex items-center space-x-2">
+                    <span className="material-icons text-vcb-accent text-xl">location_on</span>
+                    <h2 className="text-white font-bold text-sm uppercase tracking-wide">Enable Location</h2>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setLocationPromptExpanded(false);
+                      setShowLocationPrompt(false);
+                    }}
+                    className="text-white hover:text-vcb-accent transition-colors"
+                  >
+                    <span className="material-icons text-xl">close</span>
+                  </button>
+                </div>
+                <div className="p-4">
+                  <p className="text-vcb-black text-xs mb-3 leading-relaxed">
+                    GOGGA can provide better local recommendations if you share your location.
+                  </p>
+                  <div className="space-y-2">
+                    <button
+                      onClick={requestLocation}
+                      className="w-full bg-vcb-accent hover:bg-yellow-500 text-vcb-black px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all rounded shadow-md flex items-center justify-center space-x-2"
+                    >
+                      <span className="material-icons text-sm">my_location</span>
+                      <span>Use GPS</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowManualLocation(true);
+                        setShowLocationPrompt(false);
+                        setLocationPromptExpanded(false);
+                      }}
+                      className="w-full bg-vcb-black hover:bg-vcb-dark-grey text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all rounded shadow-md flex items-center justify-center space-x-2"
+                    >
+                      <span className="material-icons text-sm">edit_location</span>
+                      <span>Enter Manually</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setLocationPromptExpanded(false);
+                        setShowLocationPrompt(false);
+                      }}
+                      className="w-full bg-vcb-mid-grey hover:bg-vcb-dark-grey text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all rounded shadow-md flex items-center justify-center space-x-2"
+                    >
+                      <span className="material-icons text-sm">close</span>
+                      <span>Skip</span>
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-vcb-mid-grey mt-3 text-center">
+                    Your location is never stored or shared.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
