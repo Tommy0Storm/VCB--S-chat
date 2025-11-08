@@ -1,5 +1,5 @@
 name: Deploy to GitHub Pages
-
+# Trigger workflow
 on:
   push:
     branches:
