@@ -130,7 +130,10 @@ export const searchWithSerpApi = async (query: string, options: {
   const params = new URLSearchParams(engineParams);
 
   try {
-    const response = await fetch(`https://serpapi.com/search?${params}`);
+    // Use CORS proxy for production deployment
+    const corsProxy = 'https://corsproxy.io/?';
+    const apiUrl = `https://serpapi.com/search?${params}`;
+    const response = await fetch(`${corsProxy}${encodeURIComponent(apiUrl)}`);
     
     if (!response.ok) {
       throw new Error(`SerpAPI error: ${response.status}`);
