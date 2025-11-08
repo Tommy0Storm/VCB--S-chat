@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { smartSearch } from '../utils/smartSearch';
 import { SEARCH_STRATEGIES } from '../utils/searchConfig';
+import { searchCache } from '../utils/searchCache';
 
 interface SearchControlsProps {
   onStrategyChange?: (strategy: keyof typeof SEARCH_STRATEGIES) => void;
@@ -78,7 +79,7 @@ export const SearchControls: React.FC<SearchControlsProps> = ({
           <div className="text-[10px] text-vcb-mid-grey uppercase">Remaining</div>
         </div>
         <div>
-          <div className="text-lg font-bold text-vcb-black">{stats.cacheSize}</div>
+          <div className="text-lg font-bold text-vcb-black">{searchCache.size()}</div>
           <div className="text-[10px] text-vcb-mid-grey uppercase">Cached</div>
         </div>
       </div>
@@ -98,14 +99,17 @@ export const SearchControls: React.FC<SearchControlsProps> = ({
             <div className="flex justify-between">
               <span className="text-vcb-mid-grey">Cache Hit Rate:</span>
               <span className="font-medium text-vcb-black">
-                {stats.cacheSize > 0 ? '~75%' : '0%'}
+                {searchCache.size() > 0 ? '~75%' : '0%'}
               </span>
             </div>
           </div>
           
           <div className="mt-3 flex gap-2">
             <button
-              onClick={() => smartSearch.clearCache()}
+              onClick={() => {
+                searchCache.clear();
+                smartSearch.clearCache();
+              }}
               className="flex-1 px-3 py-1.5 text-xs font-medium text-vcb-mid-grey border border-vcb-light-grey rounded hover:border-vcb-mid-grey transition-colors"
             >
               Clear Cache

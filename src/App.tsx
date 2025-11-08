@@ -2501,8 +2501,20 @@ Provide the improved final answer addressing any issues identified.`;
         setSearchProgress('');
         setLiveSearchResults([]);
         setStreamingResults(false);
-        setUploadError('Search temporarily unavailable');
-        setTimeout(() => setUploadError(null), 3000);
+        
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        let userMessage = 'Search temporarily unavailable';
+        
+        if (errorMessage.includes('429') || errorMessage.includes('quota')) {
+          userMessage = 'Search quota exceeded - using cached results only';
+        } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+          userMessage = 'Network error - check your connection';
+        } else if (errorMessage.includes('API key')) {
+          userMessage = 'Search service configuration error';
+        }
+        
+        setUploadError(userMessage);
+        setTimeout(() => setUploadError(null), 5000);
       }
     }
 
@@ -3441,13 +3453,7 @@ CONTEXT AWARENESS:
           >
             <div className="bg-vcb-black border-b border-vcb-mid-grey px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <svg className="w-8 h-8" viewBox="0 0 48 48" aria-hidden="true">
-                  <path fill="#4285F4" d="M10 6h20l10 10v24a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4z"/>
-                  <path fill="#FFFFFF" d="M30 6v12h12"/>
-                  <rect x="16" y="22" width="18" height="4" fill="#EA4335" rx="1"/>
-                  <rect x="16" y="30" width="18" height="4" fill="#FBBC05" rx="1"/>
-                  <rect x="16" y="38" width="12" height="4" fill="#34A853" rx="1"/>
-                </svg>
+                <span className="material-icons text-vcb-accent text-3xl">folder_open</span>
                 <div>
                   <h2 className="text-lg font-bold text-vcb-white uppercase tracking-wider">Document Library</h2>
                   <p className="text-[10px] text-vcb-mid-grey uppercase tracking-wide">
@@ -3799,7 +3805,7 @@ CONTEXT AWARENESS:
                   <span className="text-sm font-medium text-vcb-black">
                     {searchProgress || 'GOGGA is searching...'}
                   </span>
-                  <span className="material-icons text-vcb-black animate-spin text-lg">psychology</span>
+                  <span className="material-icons text-vcb-black animate-spin text-lg">search</span>
                 </div>
                 
                 {/* Streaming Search Results */}
@@ -3810,10 +3816,22 @@ CONTEXT AWARENESS:
                     </div>
                     {liveSearchResults.map((result, index) => (
                       <div key={index} className="bg-white border border-vcb-light-grey rounded p-2 opacity-0 animate-fade-in" style={{animationDelay: `${index * 100}ms`, animationFillMode: 'forwards'}}>
-                        <div className="text-xs font-semibold text-blue-600 truncate">
-                          {result.title}
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="text-xs font-semibold text-blue-600 truncate flex-1">
+                            {result.title}
+                          </div>
+                          {result.source && (
+                            <span className={`text-[8px] px-1 py-0.5 rounded uppercase font-bold ${
+                              result.source === 'google' ? 'bg-blue-100 text-blue-700' :
+                              result.source === 'wikipedia' ? 'bg-gray-100 text-gray-700' :
+                              result.source === 'duckduckgo' ? 'bg-orange-100 text-orange-700' :
+                              'bg-green-100 text-green-700'
+                            }`}>
+                              {result.source === 'duckduckgo' ? 'DDG' : result.source}
+                            </span>
+                          )}
                         </div>
-                        <div className="text-xs text-vcb-mid-grey truncate mt-1">
+                        <div className="text-xs text-vcb-mid-grey truncate">
                           {result.snippet}
                         </div>
                       </div>

@@ -35,6 +35,7 @@ jobs:
         run: npm run build
         env:
           VITE_CEREBRAS_API_KEY: ${{ secrets.VITE_CEREBRAS_API_KEY }}
+          VITE_DEEPINFRA_API_KEY: ${{ secrets.VITE_DEEPINFRA_API_KEY }}
           VITE_GOOGLE_SEARCH_API_KEY: ${{ secrets.VITE_GOOGLE_SEARCH_API_KEY }}
           VITE_GOOGLE_SEARCH_ENGINE_ID: ${{ secrets.VITE_GOOGLE_SEARCH_ENGINE_ID }}
           VITE_LEGAL_SEARCH_ENGINE_ID: ${{ secrets.VITE_LEGAL_SEARCH_ENGINE_ID }}

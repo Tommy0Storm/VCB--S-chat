@@ -5,7 +5,10 @@ interface SearchResult {
   content?: string;
   summary?: string;
   relevanceScore?: number;
+  source?: 'google' | 'duckduckgo' | 'wikipedia' | 'cache';
 }
+
+import { searchCache } from './searchCache';
 
 // Multiple free proxy services for content fetching
 const PROXY_SERVICES = [
@@ -138,6 +141,12 @@ const generateAlternativeQuery = (query: string, isLegal: boolean): string => {
 
 // Enhanced search with content analysis and AI summarization
 export const enhancedSearchWeb = async (query: string, fetchContent = false, maxResults = 5): Promise<SearchResult[]> => {
+  // Check cache first
+  const cached = searchCache.get(query);
+  if (cached) {
+    console.log('[GOGGA Cache] Using cached results');
+    return cached.results.map(r => ({ ...r, source: 'cache' as const }));
+  }
   const apiKey = import.meta.env.VITE_GOOGLE_SEARCH_API_KEY;
   const isLegal = detectLegalQuery(query);
   const engineId = isLegal 
@@ -181,7 +190,8 @@ export const enhancedSearchWeb = async (query: string, fetchContent = false, max
     let results = (data.items || []).map((item: any) => ({
       title: item.title,
       link: item.link,
-      snippet: item.snippet
+      snippet: item.snippet,
+      source: 'google' as const
     }));
     
     // Second search if results are insufficient or poor quality
@@ -211,7 +221,8 @@ export const enhancedSearchWeb = async (query: string, fetchContent = false, max
         const altResults = (altData.items || []).map((item: any) => ({
           title: item.title,
           link: item.link,
-          snippet: item.snippet
+          snippet: item.snippet,
+          source: 'google' as const
         }));
         
         results = [...results, ...altResults];
@@ -245,9 +256,13 @@ export const enhancedSearchWeb = async (query: string, fetchContent = false, max
       // Sort by relevance score
       resultsWithContent.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
       
+      // Cache results
+      searchCache.set(query, [...resultsWithContent, ...results.slice(3)], 'google');
       return [...resultsWithContent, ...results.slice(3)];
     }
     
+    // Cache results
+    searchCache.set(query, results, 'google');
     return results;
   } catch (error) {
     console.error('Web search error:', error);
@@ -401,6 +416,14 @@ export const searchWithFreeAPIs = async (query: string): Promise<{
   results: SearchResult[];
   summary: string;
 }> => {
+  // Check cache first
+  const cached = searchCache.get(query);
+  if (cached && cached.source !== 'google') {
+    return {
+      results: cached.results,
+      summary: `Cached summary for "${query}"`
+    };
+  }
   try {
     // Use DuckDuckGo Instant Answer API (free)
     const ddgResponse = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`);
@@ -419,7 +442,8 @@ export const searchWithFreeAPIs = async (query: string): Promise<{
         title: ddgData.Heading || 'DuckDuckGo Summary',
         link: ddgData.AbstractURL || 'https://duckduckgo.com',
         snippet: ddgData.Abstract,
-        content: ddgData.Abstract
+        content: ddgData.Abstract,
+        source: 'duckduckgo' as const
       });
       summary += ddgData.Abstract + '\n\n';
     }
@@ -432,7 +456,8 @@ export const searchWithFreeAPIs = async (query: string): Promise<{
             title: topic.Text.split(' - ')[0] || 'Related Topic',
             link: topic.FirstURL,
             snippet: topic.Text,
-            content: topic.Text
+            content: topic.Text,
+            source: 'duckduckgo' as const
           });
         }
       });
@@ -444,9 +469,15 @@ export const searchWithFreeAPIs = async (query: string): Promise<{
         title: wikiData.title + ' (Wikipedia)',
         link: wikiData.content_urls?.desktop?.page || 'https://wikipedia.org',
         snippet: wikiData.extract.slice(0, 200) + '...',
-        content: wikiData.extract
+        content: wikiData.extract,
+        source: 'wikipedia' as const
       });
       summary += `Wikipedia: ${wikiData.extract}\n\n`;
+    }
+    
+    // Cache the results
+    if (results.length > 0) {
+      searchCache.set(query, results, 'free-apis');
     }
     
     return {
@@ -474,6 +505,16 @@ export const hybridSearch = async (query: string, options: {
   sources: string[];
   method: string;
 }> => {
+  // Check cache first
+  const cached = searchCache.get(query);
+  if (cached) {
+    return {
+      results: cached.results.slice(0, options.maxResults || 5),
+      analysis: `Cached results for "${query}" (${cached.source})`,
+      sources: cached.results.map(r => `${r.title} - ${r.link}`).slice(0, 5),
+      method: `Cache (${cached.source})`
+    };
+  }
   const { useGoogle = true, useFreeAPIs = true, fetchContent = true, maxResults = 5 } = options;
   
   let allResults: SearchResult[] = [];
@@ -518,6 +559,11 @@ export const hybridSearch = async (query: string, options: {
     : 'No relevant results found for this query.';
   
   const sources = uniqueResults.map(r => `${r.title} - ${r.link}`);
+  
+  // Cache the results if we have any
+  if (uniqueResults.length > 0) {
+    searchCache.set(query, uniqueResults, methods[0] || 'hybrid');
+  }
   
   return {
     results: uniqueResults,
