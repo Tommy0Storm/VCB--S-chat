@@ -3149,14 +3149,35 @@ CONTEXT AWARENESS:
           }
         }
         
-        const contextualPrompt = `${systemPromptContent}${crucialContext ? `\n\nCRUCIAL USER CONTEXT:\n${crucialContext}` : ''}${weatherContext}${webSearchResults}
+        // Add user location context if available
+        let locationContext = '';
+        if (userLocation) {
+          locationContext = `\n\nUSER LOCATION CONTEXT:\n`;
+          if (userLocation.city) {
+            locationContext += `City: ${userLocation.city}\n`;
+          }
+          if (userLocation.street) {
+            locationContext += `Street: ${userLocation.street}\n`;
+          }
+          locationContext += `Coordinates: ${userLocation.lat.toFixed(4)}, ${userLocation.lon.toFixed(4)}\n`;
+          locationContext += `Location Type: ${userLocation.isManual ? 'Manually entered' : 'GPS detected'}\n`;
+          locationContext += `\nIMPORTANT: Use this location for all local recommendations, searches, and context-aware responses.`;
+        }
+        
+        const contextualPrompt = `${systemPromptContent}${crucialContext ? `\n\nCRUCIAL USER CONTEXT:\n${crucialContext}` : ''}${locationContext}${weatherContext}${webSearchResults}
 
 WEATHER USAGE INSTRUCTIONS:
 - ALWAYS check weather when recommending outdoor activities, restaurants, or events
 - Mention weather conditions when relevant (e.g., "Perfect weather for a braai today!")
 - Warn about rain/storms when suggesting outdoor plans
 - For sports events, mention weather conditions
-- Consider temperature when recommending clothing or activities`;
+- Consider temperature when recommending clothing or activities
+
+LOCATION USAGE INSTRUCTIONS:
+- When user asks for local recommendations, use their location
+- Mention specific areas/suburbs when relevant
+- Consider distance and travel time for suggestions
+- Use local landmarks and references they would recognize`;
         
         const systemMessage = {
           role: 'system' as const,
