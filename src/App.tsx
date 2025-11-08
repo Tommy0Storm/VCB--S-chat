@@ -897,7 +897,6 @@ const App = () => {
   const [mapImage, setMapImage] = useState<string | undefined>();
   const [userLocation, setUserLocation] = useState<{lat: number, lon: number, city?: string, street?: string, isManual?: boolean} | null>(null);
   const [showLocationPrompt, setShowLocationPrompt] = useState(false);
-  const [locationPromptExpanded, setLocationPromptExpanded] = useState(false);
   const [showManualLocation, setShowManualLocation] = useState(false);
   const [manualLocationInput, setManualLocationInput] = useState('');
   const [weatherData, setWeatherData] = useState<WeatherForecast | null>(null);
