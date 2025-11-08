@@ -64,8 +64,7 @@ export const sanitizeUserInput = (input: string): string => {
     .replace(/[<>]/g, '') // Remove angle brackets
     .replace(/javascript:/gi, '') // Remove javascript protocol
     .replace(/on\w+\s*=/gi, '') // Remove event handlers
-    .trim()
-    .substring(0, 10000); // Limit length
+    .substring(0, 10000); // Limit length but preserve spaces
 };
 
 // File upload validation
