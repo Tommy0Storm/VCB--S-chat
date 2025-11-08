@@ -56,7 +56,7 @@ export class GOGGASearchOrchestrator {
         })),
         synthesis,
         confidence,
-        sources: multiResults.bestResults.map(r => `${r.title} - ${r.link}`),
+        sources: multiResults.bestResults.map((r: any) => `${r.title} - ${r.link}`),
         processingTime: Date.now() - startTime,
         method: `GOGGA Multi-Engine (${multiResults.totalSources} sources)`
       };

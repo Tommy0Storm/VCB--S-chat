@@ -1346,61 +1346,7 @@ const App = () => {
     setUploadError(null);
   };
 
-  // Google Search Function
-  const performGoogleSearch = async (query: string): Promise<GoogleSearchResult[]> => {
-    const apiKey = import.meta.env.VITE_GOOGLE_SEARCH_API_KEY;
-    const searchEngineId = import.meta.env.VITE_GOOGLE_SEARCH_ENGINE_ID;
 
-    if (!apiKey || apiKey === 'YOUR_GOOGLE_API_KEY_HERE') {
-      console.error('[GoogleSearch] API key not configured');
-      throw new Error('Google Search API key not configured. Please add VITE_GOOGLE_SEARCH_API_KEY to your .env file.');
-    }
-
-    if (!searchEngineId) {
-      console.error('[GoogleSearch] Search Engine ID not configured');
-      throw new Error('Google Search Engine ID not configured.');
-    }
-
-    try {
-      console.log('[GoogleSearch] Searching for:', query);
-      setIsSearching(true);
-
-      const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${searchEngineId}&q=${encodeURIComponent(query)}&num=10`;
-
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('[GoogleSearch] API error:', errorData);
-        throw new Error(`Search failed: ${errorData.error?.message || response.statusText}`);
-      }
-
-      const data = await response.json();
-      console.log('[GoogleSearch] Results:', data);
-
-      const results: GoogleSearchResult[] = (data.items || []).map((item: any) => ({
-        title: item.title,
-        link: item.link,
-        snippet: item.snippet,
-        displayLink: item.displayLink,
-        htmlSnippet: item.htmlSnippet,
-        formattedUrl: item.formattedUrl,
-        pagemap: item.pagemap,
-      }));
-
-      console.log('[GoogleSearch] Parsed results:', results.length);
-      setSearchResults(results);
-      setGoogleSearchQuery(query);
-
-      return results;
-    } catch (error) {
-      console.error('[GoogleSearch] Error:', error);
-      setSearchResults([]);
-      throw error;
-    } finally {
-      setIsSearching(false);
-    }
-  };
 
   const handleSpeak = useCallback(async (text: string, index: number) => {
     // Stop any ongoing audio
