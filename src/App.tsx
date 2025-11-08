@@ -1013,7 +1013,7 @@ const App = () => {
       });
     }
     if (Array.isArray(children)) {
-      return children.map((child, index) => typeof child === 'string' ? processIcons(child) : child);
+      return children.map((child) => typeof child === 'string' ? processIcons(child) : child);
     }
     return children;
   }, []);
