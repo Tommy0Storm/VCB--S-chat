@@ -10,10 +10,11 @@ import { extractTextFromFile } from './utils/documentProcessor';
 import { loadStoredDocuments, persistStoredDocuments } from './utils/documentStore';
 import { contextStore } from './utils/contextStore';
 import { searchWeb, detectSearchQuery } from './utils/webSearch';
-import { hybridSearch } from './utils/enhancedWebSearch';
+import { useProgressiveSearch } from './hooks/useProgressiveSearch';
 import type { StoredDocument } from './types/documents';
 import goggaSvgUrl from './assets/gogga.svg?url';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { SearchStats } from './components/SearchStats';
 import { sanitizeMarkdown, validateSearchQuery, sanitizeUserInput, validateFileUpload, sanitizeApiResponse } from './utils/security';
 import { useSecureInput } from './hooks/useSecureInput';
 
@@ -846,6 +847,7 @@ const App = () => {
   const [imagePrompt, setImagePrompt] = useState('');
   const [showImagePrompt, setShowImagePrompt] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [showSearchStats, setShowSearchStats] = useState(false);
   const [sessionTime, setSessionTime] = useState(0); // Session time in seconds
   const sessionStartRef = useRef<number>(Date.now());
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -882,6 +884,9 @@ const App = () => {
   const [liveSearchResults, setLiveSearchResults] = useState<GoogleSearchResult[]>([]);
   const [streamingResults, setStreamingResults] = useState(false);
   const [googleSearchQuery] = useState<string>('');
+  
+  // Progressive search hook
+  const progressiveSearch = useProgressiveSearch();
 
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
@@ -2560,59 +2565,53 @@ Provide the improved final answer addressing any issues identified.`;
       attachmentCount: userMessage.attachedDocumentIds?.length || 0
     });
 
-    // Enhanced Search with Content Analysis
+    // Enhanced Progressive Search
     let searchContext = '';
     const searchValidation = validateSearchQuery(secureInput.value.trim());
     if (searchEnabled && searchValidation.isValid && detectSearchQuery(searchValidation.sanitized)) {
       try {
-        console.log('[Submit] Enhanced search enabled, performing hybrid search...');
+        console.log('[Submit] Enhanced progressive search enabled...');
         setIsSearching(true);
         setSearchProgress('GOGGA is searching...');
-        
-        // Quick search strategy selection
-        const serpApiKey = import.meta.env.VITE_SERPAPI_KEY;
-        const isComplex = secureInput.value.trim().split(' ').length > 15;
-        let searchResult;
-        
         setStreamingResults(true);
         setLiveSearchResults([]);
         
-        if (serpApiKey && isComplex) {
-          // Use SerpAPI for complex queries
-          const { serpApiSearch } = await import('./utils/smartSearch');
-          searchResult = await serpApiSearch(secureInput.value.trim(), (progress: string) => {
-            setSearchProgress(progress);
-          });
-        } else {
-          // Use hybrid search for standard queries
-          setSearchProgress('GOGGA is gathering information...');
-          searchResult = await hybridSearch(secureInput.value.trim(), {
-            useGoogle: true,
-            useFreeAPIs: true,
-            fetchContent: false,
-            maxResults: 3,
-
-          });
+        // Use progressive search with real-time updates
+        await progressiveSearch.search(searchValidation.sanitized, {
+          maxResults: 6,
+          useCache: true,
+          progressive: true
+        });
+        
+        // Convert progressive results to live results for display
+        if (progressiveSearch.results.length > 0) {
+          const convertedResults = progressiveSearch.results.map(result => ({
+            title: result.title,
+            snippet: result.snippet,
+            link: result.link,
+            displayLink: new URL(result.link).hostname,
+            source: result.source
+          }));
+          setLiveSearchResults(convertedResults);
+          
+          searchContext = `\n\n--- GOGGA PROGRESSIVE SEARCH ---\n`;
+          searchContext += `Query: "${searchValidation.sanitized}"\n`;
+          searchContext += `Found: ${progressiveSearch.results.length} results\n`;
+          searchContext += `Cache: ${progressiveSearch.cacheStats.hitRate}\n\n`;
+          searchContext += progressiveSearch.results.slice(0, 3)
+            .map(r => `• ${r.title}: ${r.snippet}`).join('\n') + '\n';
+          console.log('[Submit] Added progressive search context, length:', searchContext.length);
         }
         
         setStreamingResults(false);
-        
         setTimeout(() => {
           setSearchProgress('');
           setLiveSearchResults([]);
-        }, 2000);
+        }, 3000);
         setIsSearching(false);
         
-        if (searchResult.results.length > 0) {
-          searchContext = `\n\n--- GOGGA SEARCH RESULTS ---\n`;
-          searchContext += `Query: "${searchValidation.sanitized}"\n`;
-          searchContext += `Method: ${searchResult.method}\n\n`;
-          searchContext += searchResult.analysis + '\n\n';
-          searchContext += `Sources: ${searchResult.sources.slice(0, 3).join(', ')}\n`;
-          console.log('[Submit] Added search context, length:', searchContext.length);
-        }
       } catch (error) {
-        console.error('[Submit] Enhanced search failed:', error);
+        console.error('[Submit] Progressive search failed:', error);
         setIsSearching(false);
         setSearchProgress('');
         setLiveSearchResults([]);
@@ -2622,15 +2621,13 @@ Provide the improved final answer addressing any issues identified.`;
         let userMessage = 'Search temporarily unavailable';
         
         if (errorMessage.includes('429') || errorMessage.includes('quota')) {
-          userMessage = 'Search quota exceeded - using cached results only';
+          userMessage = 'Search quota exceeded - using cached results';
         } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
-          userMessage = 'Network error - check your connection';
-        } else if (errorMessage.includes('API key')) {
-          userMessage = 'Search service configuration error';
+          userMessage = 'Network error - check connection';
         }
         
         setUploadError(userMessage);
-        setTimeout(() => setUploadError(null), 5000);
+        setTimeout(() => setUploadError(null), 4000);
       }
     }
 
@@ -3931,7 +3928,7 @@ CONTEXT AWARENESS:
             ))
           )}
 
-          {(isSearching || searchProgress || streamingResults) && (
+          {(isSearching || searchProgress || streamingResults || progressiveSearch.isSearching) && (
             <div className="flex justify-start mt-4">
               <div className="max-w-3xl border-2 border-vcb-black bg-gray-50 rounded-lg px-4 py-3">
                 <div className="flex items-center space-x-3 mb-3">
@@ -3944,30 +3941,55 @@ CONTEXT AWARENESS:
                     {searchProgress || 'GOGGA is searching...'}
                   </span>
                   <span className="material-icons text-vcb-black animate-spin text-lg">search</span>
+                  {progressiveSearch.isSearching && (
+                    <div className="text-xs text-vcb-mid-grey">
+                      {progressiveSearch.progress}%
+                    </div>
+                  )}
                 </div>
                 
-                {/* Streaming Search Results */}
-                {liveSearchResults.length > 0 && (
+                {/* Progressive Search Results */}
+                {(liveSearchResults.length > 0 || progressiveSearch.results.length > 0) && (
                   <div className="space-y-2 max-h-48 overflow-y-auto">
-                    <div className="text-xs font-bold text-vcb-mid-grey uppercase tracking-wide mb-2">
-                      Found {liveSearchResults.length} results:
+                    <div className="text-xs font-bold text-vcb-mid-grey uppercase tracking-wide mb-2 flex items-center justify-between">
+                      <span>Found {(liveSearchResults.length || progressiveSearch.results.length)} results</span>
+                      {progressiveSearch.cacheStats.hitRate !== '0%' && (
+                        <span className="text-[8px] bg-green-100 text-green-700 px-1 py-0.5 rounded">
+                          Cache: {progressiveSearch.cacheStats.hitRate}
+                        </span>
+                      )}
                     </div>
-                    {liveSearchResults.map((result, index) => (
+                    {(liveSearchResults.length > 0 ? liveSearchResults : 
+                      progressiveSearch.results.map(r => ({
+                        title: r.title,
+                        snippet: r.snippet,
+                        source: r.source,
+                        score: r.score,
+                        displayLink: ''
+                      }))
+                    ).map((result, index) => (
                       <div key={index} className="bg-white border border-vcb-light-grey rounded p-2 opacity-0 animate-fade-in" style={{animationDelay: `${index * 100}ms`, animationFillMode: 'forwards'}}>
                         <div className="flex items-center justify-between mb-1">
                           <div className="text-xs font-semibold text-blue-600 truncate flex-1">
                             {result.title}
                           </div>
-                          {result.source && (
-                            <span className={`text-[8px] px-1 py-0.5 rounded uppercase font-bold ${
-                              result.source === 'google' ? 'bg-blue-100 text-blue-700' :
-                              result.source === 'wikipedia' ? 'bg-gray-100 text-gray-700' :
-                              result.source === 'duckduckgo' ? 'bg-orange-100 text-orange-700' :
-                              'bg-green-100 text-green-700'
-                            }`}>
-                              {result.source === 'duckduckgo' ? 'DDG' : result.source}
-                            </span>
-                          )}
+                          <div className="flex items-center space-x-1">
+                            {'score' in result && result.score && (
+                              <span className="text-[8px] bg-gray-100 text-gray-600 px-1 py-0.5 rounded">
+                                {Math.round(result.score)}
+                              </span>
+                            )}
+                            {result.source && (
+                              <span className={`text-[8px] px-1 py-0.5 rounded uppercase font-bold ${
+                                result.source === 'google' ? 'bg-blue-100 text-blue-700' :
+                                result.source === 'wikipedia' ? 'bg-gray-100 text-gray-700' :
+                                result.source === 'duckduckgo' ? 'bg-orange-100 text-orange-700' :
+                                'bg-green-100 text-green-700'
+                              }`}>
+                                {result.source === 'duckduckgo' ? 'DDG' : result.source}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <div className="text-xs text-vcb-mid-grey truncate">
                           {result.snippet}
@@ -4341,6 +4363,7 @@ CONTEXT AWARENESS:
                     : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
                 title={searchEnabled ? 'Gogga Search ON - Will search before responding' : 'Gogga Search OFF - Click to enable'}
+                onDoubleClick={() => setShowSearchStats(true)}
               >
                 <span className="material-icons text-2xl">search</span>
               </button>
@@ -4403,6 +4426,12 @@ CONTEXT AWARENESS:
         )}
       </div>
       
+      {/* Search Stats Modal */}
+      <SearchStats 
+        isVisible={showSearchStats} 
+        onClose={() => setShowSearchStats(false)} 
+      />
+
         {/* Footer - Fixed at bottom of screen */}
         <footer className="fixed bottom-0 left-0 right-0 bg-vcb-black border-t border-vcb-mid-grey px-4 py-2 z-30">
           <div className="max-w-7xl mx-auto flex items-center justify-between text-vcb-white">
