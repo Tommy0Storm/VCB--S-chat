@@ -4690,7 +4690,7 @@ WEATHER USAGE INSTRUCTIONS:
 
       {/* Location Permission Prompt */}
       {showLocationPrompt && (
-        <div className="fixed inset-0 bg-vcb-black bg-opacity-75 z-50 flex items-center justify-center p-4" onClick={() => setShowLocationPrompt(false)}>
+        <div className="fixed top-32 left-0 right-0 z-50 flex justify-center p-4" onClick={() => setShowLocationPrompt(false)}>
           <div className="bg-white border-2 border-vcb-accent max-w-md w-full rounded-lg shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="bg-vcb-black px-6 py-4 flex items-center space-x-3 border-b-2 border-vcb-accent">
               <img src="gogga.svg" alt="GOGGA" className="w-8 h-8" />
