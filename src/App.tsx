@@ -13,6 +13,9 @@ import { searchWeb, detectSearchQuery } from './utils/webSearch';
 import { hybridSearch } from './utils/enhancedWebSearch';
 import type { StoredDocument } from './types/documents';
 import goggaSvgUrl from './assets/gogga.svg?url';
+import { ErrorBoundary, SearchErrorBoundary, ChatErrorBoundary } from './components/ErrorBoundary';
+import { sanitizeMarkdown, validateSearchQuery, sanitizeUserInput, validateFileUpload, sanitizeApiResponse } from './utils/security';
+import { useSecureInput } from './hooks/useSecureInput';
 
 // Google Search Result Interface
 interface GoogleSearchResult {
@@ -812,6 +815,7 @@ const MessageComponent = React.memo(({
         </div>
       </div>
     </div>
+    </ErrorBoundary>
   );
 });
 
@@ -819,7 +823,7 @@ MessageComponent.displayName = 'MessageComponent';
 
 const App = () => {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
+  const secureInput = useSecureInput('');
   const [isLoading, setIsLoading] = useState(false);
   const [speakingIndex, setSpeakingIndex] = useState<number | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
@@ -1205,6 +1209,14 @@ const App = () => {
 
     const file = files[0];
     event.target.value = '';
+
+    // Security validation
+    const fileValidation = validateFileUpload(file);
+    if (!fileValidation.isValid) {
+      setUploadError(fileValidation.error || 'File validation failed');
+      setUploadFeedback(null);
+      return;
+    }
 
     const extension = (file.name.split('.').pop() || '').toLowerCase();
     if (!ALLOWED_UPLOAD_EXTENSIONS.includes(extension)) {
@@ -2415,10 +2427,16 @@ Provide the improved final answer addressing any issues identified.`;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    if (!secureInput.value.trim() || isLoading) return;
+
+    // Validate input security
+    if (!secureInput.validateAndSet(secureInput.value)) {
+      setUploadError(secureInput.error || 'Invalid input detected');
+      return;
+    }
 
     // Detect SA language
-  const languageDetection = await detectSALanguage(input.trim());
+  const languageDetection = await detectSALanguage(secureInput.value.trim());
     console.log('[LangDetect] Language detected:', languageDetection);
 
     const uniqueAttachmentIds = Array.from(new Set(pendingAttachmentIds));
@@ -2432,7 +2450,7 @@ Provide the improved final answer addressing any issues identified.`;
 
     const userMessage: Message = {
       role: 'user',
-      content: input.trim(),
+      content: sanitizeUserInput(secureInput.value.trim()),
       timestamp: Date.now(),
       isVoiceTranscription: hasVoiceTranscriptionRef.current,
       language: languageDetection.language,
@@ -2447,7 +2465,8 @@ Provide the improved final answer addressing any issues identified.`;
 
     // Enhanced Search with Content Analysis
     let searchContext = '';
-    if (searchEnabled && detectSearchQuery(input.trim())) {
+    const searchValidation = validateSearchQuery(secureInput.value.trim());
+    if (searchEnabled && searchValidation.isValid && detectSearchQuery(searchValidation.sanitized)) {
       try {
         console.log('[Submit] Enhanced search enabled, performing hybrid search...');
         setIsSearching(true);
@@ -2489,7 +2508,7 @@ Provide the improved final answer addressing any issues identified.`;
         
         if (searchResult.results.length > 0) {
           searchContext = `\n\n--- GOGGA SEARCH RESULTS ---\n`;
-          searchContext += `Query: "${input.trim()}"\n`;
+          searchContext += `Query: "${searchValidation.sanitized}"\n`;
           searchContext += `Method: ${searchResult.method}\n\n`;
           searchContext += searchResult.analysis + '\n\n';
           searchContext += `Sources: ${searchResult.sources.slice(0, 3).join(', ')}\n`;
@@ -2536,7 +2555,7 @@ Provide the improved final answer addressing any issues identified.`;
     }
     setMessages((prev) => [...prev, userMessage]);
     setPendingAttachmentIds([]);
-    setInput('');
+    secureInput.reset();
     setIsLoading(true);
     isProcessingMessageRef.current = true; // Mark that we're processing a message
     hasVoiceTranscriptionRef.current = false; // Reset voice transcription flag
@@ -2896,12 +2915,15 @@ CONTEXT AWARENESS:
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const rawContent = ((response.choices as any)[0]?.message?.content as string) || 'No response received';
         
+        // Sanitize API response
+        const sanitizedContent = sanitizeApiResponse(rawContent);
+        
         // Add model indicator for debugging/transparency (optional - can remove in production)
         const modelIndicator = (useStrategicMode || isAdvancedComplex)
           ? '\n\n*[VCB-AI Strategic Legal Analysis]*' // Show when using full legal framework
           : ''; // Clean UI for casual queries
         
-        const processedContent = fixMarkdownTables(enforceFormatting(normalizeIcons(rawContent + modelIndicator)));
+        const processedContent = fixMarkdownTables(enforceFormatting(normalizeIcons(sanitizeMarkdown(sanitizedContent + modelIndicator))));
 
         const assistantMessage: Message = {
           role: 'assistant',
@@ -2999,6 +3021,7 @@ CONTEXT AWARENESS:
   }, []);
 
   return (
+    <ErrorBoundary>
   <div className="flex flex-col h-[calc(100vh-env(safe-area-inset-top))] bg-white font-quicksand font-normal overflow-hidden" style={{fontWeight: 400}}>
       {/* CePO Animation - Black Monochrome Thinking */}
       {cepoProgress && (
@@ -4003,8 +4026,8 @@ CONTEXT AWARENESS:
                 id="chat-input"
                 name="message"
                 ref={inputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
+                value={secureInput.value}
+                onChange={(e) => secureInput.validateAndSet(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={voiceModeEnabled ? "Speak your message..." : "Type your message..."}
                 className="w-full bg-white text-vcb-black border border-vcb-light-grey px-3 py-1.5 md:px-5 md:py-1.5 text-sm md:text-base focus:outline-none focus:border-vcb-mid-grey resize-none font-normal leading-relaxed min-h-[2.75rem] rounded-lg shadow-sm"
