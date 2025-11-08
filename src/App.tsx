@@ -10,7 +10,7 @@ import { extractTextFromFile } from './utils/documentProcessor';
 import { loadStoredDocuments, persistStoredDocuments } from './utils/documentStore';
 import { contextStore } from './utils/contextStore';
 import { searchWeb, detectSearchQuery } from './utils/webSearch';
-import { hybridSearch, searchWithAIAnalysis, enhancedSearchWeb } from './utils/enhancedWebSearch';
+import { hybridSearch } from './utils/enhancedWebSearch';
 import type { StoredDocument } from './types/documents';
 import goggaSvgUrl from './assets/gogga.svg?url';
 
@@ -817,7 +817,7 @@ const MessageComponent = React.memo(({
 
 MessageComponent.displayName = 'MessageComponent';
 
-const App: React.FC = () => {
+const App = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -2509,7 +2509,7 @@ Provide the improved final answer addressing any issues identified.`;
         
         // Quick search strategy selection
         const serpApiKey = import.meta.env.VITE_SERPAPI_KEY;
-        const isComplex = needsDeepAnalysis(input.trim());
+        const isComplex = input.trim().split(' ').length > 15;
         let searchResult;
         
         setStreamingResults(true);
@@ -2518,9 +2518,8 @@ Provide the improved final answer addressing any issues identified.`;
         if (serpApiKey && isComplex) {
           // Use SerpAPI for complex queries
           const { serpApiSearch } = await import('./utils/smartSearch');
-          searchResult = await serpApiSearch(input.trim(), (progress, results) => {
+          searchResult = await serpApiSearch(input.trim(), (progress: string) => {
             setSearchProgress(progress);
-            if (results) setLiveSearchResults(prev => [...prev, ...results]);
           });
         } else {
           // Use hybrid search for standard queries
@@ -2530,10 +2529,7 @@ Provide the improved final answer addressing any issues identified.`;
             useFreeAPIs: true,
             fetchContent: false,
             maxResults: 3,
-            onProgress: (progress, results) => {
-              setSearchProgress(progress);
-              if (results) setLiveSearchResults(prev => [...prev, ...results]);
-            }
+
           });
         }
         
@@ -2902,9 +2898,8 @@ CONTEXT AWARENESS:
         
         if (detectSearchQuery(cleanedContent)) {
           try {
-            const results = await searchWeb(cleanedContent, false, (progress, webResults) => {
+            const results = await searchWeb(cleanedContent, false, (progress: string) => {
               setSearchProgress(progress);
-              if (webResults) setLiveSearchResults(prev => [...prev, ...webResults]);
             });
             if (results.length > 0) {
               webSearchResults = `\n\nWEB SEARCH:\n${results.slice(0, 3).map(r => `• ${r.title}: ${r.snippet}`).join('\n')}`;
@@ -3192,10 +3187,10 @@ CONTEXT AWARENESS:
             <div className="bg-vcb-black border-b-2 border-vcb-accent px-6 py-4 flex items-center justify-between">
               <div className="flex-1 min-w-0">
                 <h2 className="text-vcb-white font-bold text-lg uppercase tracking-wide truncate">
-                  {previewDocument.name}
+                  {previewDocument?.name || 'Document'}
                 </h2>
                 <p className="text-vcb-mid-grey text-sm mt-1">
-                  {previewDocument.type} • {(previewDocument.size / 1024).toFixed(1)} KB • {previewDocument.text.length.toLocaleString()} characters
+                  {previewDocument?.type || 'Unknown'} • {((previewDocument?.size || 0) / 1024).toFixed(1)} KB • {(previewDocument?.text?.length || 0).toLocaleString()} characters
                 </p>
               </div>
               <button
@@ -3219,7 +3214,7 @@ CONTEXT AWARENESS:
                   </p>
                 </div>
                 <pre className="text-vcb-black text-sm font-mono whitespace-pre-wrap break-words leading-relaxed">
-                  {previewDocument.text}
+                  {previewDocument?.text || 'No content available'}
                 </pre>
               </div>
             </div>
@@ -3228,7 +3223,7 @@ CONTEXT AWARENESS:
             <div className="bg-vcb-black border-t-2 border-vcb-accent px-6 py-4 flex items-center justify-between">
               <div className="flex items-center space-x-2 text-vcb-mid-grey text-xs">
                 <span className="material-icons text-sm">info</span>
-                <span>Uploaded: {new Date(previewDocument.uploadedAt).toLocaleString()}</span>
+                <span>Uploaded: {new Date(previewDocument?.uploadedAt || Date.now()).toLocaleString()}</span>
               </div>
               <button
                 onClick={() => setPreviewDocument(null)}

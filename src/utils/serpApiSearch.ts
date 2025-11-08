@@ -217,7 +217,7 @@ export const searchWithSerpApiAndAI = async (
         peopleAlsoAsk: [],
         knowledgeGraph: undefined
       };
-      usedEngine = `Multi-Engine (${Object.keys(multiResults.engineStats).join(', ')})`;
+      usedEngine = `Multi-Engine (${Object.keys(multiResults.engineStats).join(', ')})` as any;
     } else {
       throw new Error('No results from multi-engine search');
     }

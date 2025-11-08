@@ -2,7 +2,7 @@ import { hybridSearch, searchWithAIAnalysis, searchWithFreeAPIs } from './enhanc
 import { searchWeb } from './webSearch';
 import { searchWithSerpApi, searchWithSerpApiAndAI } from './serpApiSearch';
 import { SEARCH_STRATEGIES, selectSearchStrategy, searchCache, generateCacheKey, calculateSearchCost } from './searchConfig';
-import { gogga, goggaSearch } from './goggaSearchOrchestrator';
+// import { gogga, goggaSearch } from './goggaSearchOrchestrator';
 
 interface SmartSearchResult {
   results: Array<{
@@ -278,14 +278,15 @@ export const goggaComprehensiveSearch = async (
   const startTime = Date.now();
   
   try {
-    const goggaResult = await goggaSearch(query, onProgress);
+    // const goggaResult = await goggaSearch(query, onProgress);
+    throw new Error('GOGGA search not available');
     
     return {
-      results: goggaResult.results,
-      analysis: goggaResult.synthesis,
-      sources: goggaResult.sources,
-      method: goggaResult.method,
-      cost: 0.15, // Premium search cost
+      results: [],
+      analysis: 'GOGGA search not available',
+      sources: [],
+      method: 'Fallback',
+      cost: 0,
       cached: false,
       processingTime: Date.now() - startTime
     };

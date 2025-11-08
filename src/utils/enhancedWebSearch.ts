@@ -94,7 +94,7 @@ const isResultQualityGood = (results: any[], query: string): boolean => {
   const queryTerms = query.toLowerCase().split(/\s+/);
   let relevantResults = 0;
   
-  results.forEach(result => {
+  results.forEach((result: any) => {
     const text = `${result.title} ${result.snippet}`.toLowerCase();
     const matches = queryTerms.filter(term => text.includes(term)).length;
     
@@ -223,7 +223,7 @@ export const enhancedSearchWeb = async (query: string, fetchContent = false, max
       console.log(`[GOGGA WebSearch] Fetching content from ${Math.min(results.length, 3)} results...`);
       
       // Fetch content from top results with parallel processing
-      const contentPromises = results.slice(0, 3).map(async (result, index) => {
+      const contentPromises = results.slice(0, 3).map(async (result: any, index: number) => {
         try {
           const content = await fetchPageContent(result.link);
           const relevanceScore = calculateRelevance(query, result.title, result.snippet, content);

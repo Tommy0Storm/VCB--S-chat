@@ -1,4 +1,4 @@
-import { multiEngineSearch, searchWithSerpApiAndAI } from './serpApiSearch';
+import { multiEngineSearch } from './serpApiSearch';
 import { smartSearch } from './smartSearch';
 
 interface GOGGASearchResult {
@@ -49,7 +49,7 @@ export class GOGGASearchOrchestrator {
 
       return {
         query,
-        results: multiResults.bestResults.map((r, i) => ({
+        results: multiResults.bestResults.map((r: any, i: number) => ({
           ...r,
           engine: (r as any).engine || 'unknown',
           relevanceScore: (10 - i) / 10 // Higher score for top results

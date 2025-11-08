@@ -67,7 +67,7 @@ export const searchWeb = async (
   validateSearchInputs(sanitizedQuery, apiKey, engineId);
 
   const maxRetries = 3;
-  let lastError: Error | null = null;
+  // let lastError: Error | null = null;
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -131,7 +131,7 @@ export const searchWeb = async (
     
     if (fetchContent) {
       onProgress?.('GOGGA is analyzing content...');
-      const contentPromises = results.slice(0, 3).map(async (result) => {
+      const contentPromises = results.slice(0, 3).map(async (result: any) => {
         const content = await fetchPageContent(result.link);
         return { ...result, content };
       });
@@ -148,7 +148,7 @@ export const searchWeb = async (
       // Success - break retry loop
       break;
     } catch (error) {
-      lastError = error as Error;
+      // lastError = error as Error;
       console.error(`[GOGGA Search] Attempt ${attempt} failed:`, error);
       
       if (attempt === maxRetries) {
@@ -160,6 +160,7 @@ export const searchWeb = async (
       await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
     }
   }
+  return [];
 };
 
 export const detectSearchQuery = (text: string): boolean => {
