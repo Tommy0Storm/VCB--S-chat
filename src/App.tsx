@@ -13,7 +13,7 @@ import { searchWeb, detectSearchQuery } from './utils/webSearch';
 import { hybridSearch } from './utils/enhancedWebSearch';
 import type { StoredDocument } from './types/documents';
 import goggaSvgUrl from './assets/gogga.svg?url';
-import { ErrorBoundary, SearchErrorBoundary, ChatErrorBoundary } from './components/ErrorBoundary';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { sanitizeMarkdown, validateSearchQuery, sanitizeUserInput, validateFileUpload, sanitizeApiResponse } from './utils/security';
 import { useSecureInput } from './hooks/useSecureInput';
 
@@ -25,7 +25,8 @@ interface GoogleSearchResult {
   displayLink: string;
   htmlSnippet?: string;
   formattedUrl?: string;
-  pagemap?: any;
+  pagemap?: Record<string, unknown>;
+  source?: string;
 }
 
 // ==================== CONSTANTS ====================
@@ -605,6 +606,7 @@ const MessageComponent = React.memo(({
   }, [thinking]);
   
   return (
+    <>
     <div
       className={`flex ${
         message.role === 'user' ? 'justify-end' : 'justify-start'
@@ -813,9 +815,9 @@ const MessageComponent = React.memo(({
             )}
           </div>
         </div>
-        </div>
       </div>
-    </ErrorBoundary>
+    </div>
+    </>
   );
 });
 
@@ -877,7 +879,7 @@ const App = () => {
   const [searchResults] = useState<GoogleSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchProgress, setSearchProgress] = useState('');
-  const [liveSearchResults, setLiveSearchResults] = useState<any[]>([]);
+  const [liveSearchResults, setLiveSearchResults] = useState<GoogleSearchResult[]>([]);
   const [streamingResults, setStreamingResults] = useState(false);
   const [googleSearchQuery] = useState<string>('');
 
@@ -977,11 +979,19 @@ const App = () => {
     }
   }, [conversationDocuments, currentConversationId, messages]);
 
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   const scrollToBottom = useCallback(() => {
     // Use requestAnimationFrame to prevent forced reflow during critical rendering
-    requestAnimationFrame(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
-    });
+    // Add debouncing to prevent excessive scroll calls
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+    scrollTimeoutRef.current = setTimeout(() => {
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+      });
+    }, 100);
   }, []);
 
   // Memoized icon processing helper - prevents recreation on every render
@@ -992,13 +1002,18 @@ const App = () => {
       return parts.map((part, idx) => {
         const iconMatch = part.match(/^\[([a-z_0-9]+)\]$/);
         if (iconMatch) {
-          return <span key={idx} className="material-icons" style={{ fontSize: '1.8em', verticalAlign: 'middle', color: 'inherit' }}>{iconMatch[1]}</span>;
+          // Validate icon name to prevent XSS
+          const iconName = iconMatch[1];
+          if (!/^[a-z_0-9]+$/.test(iconName)) {
+            return part; // Return original if invalid
+          }
+          return <span key={idx} className="material-icons" style={{ fontSize: '1.8em', verticalAlign: 'middle', color: 'inherit' }}>{iconName}</span>;
         }
         return part;
       });
     }
     if (Array.isArray(children)) {
-      return children.map((child) => typeof child === 'string' ? processIcons(child) : child);
+      return children.map((child, index) => typeof child === 'string' ? processIcons(child) : child);
     }
     return children;
   }, []);
@@ -1089,8 +1104,11 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
+    // Only scroll when messages actually change in length, not content
+    if (messages.length > 0) {
+      scrollToBottom();
+    }
+  }, [messages.length, scrollToBottom]);
 
   // Load tier from usage tracker on mount
   useEffect(() => {
@@ -1225,14 +1243,27 @@ const App = () => {
       return;
     }
 
+    // Additional file size check
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      setUploadError('File size must be less than 10MB.');
+      setUploadFeedback(null);
+      return;
+    }
+
     setIsProcessingUpload(true);
     setUploadError(null);
     setUploadFeedback(`Processing "${file.name}"...`);
 
     try {
       const text = await extractTextFromFile(file);
-      if (!text) {
+      if (!text || text.trim().length === 0) {
         throw new Error('No readable text found in the document.');
+      }
+      
+      // Validate extracted text length
+      if (text.length > 500000) { // 500KB text limit
+        throw new Error('Document text is too large. Please use a smaller document.');
       }
 
       console.log('[DocumentUpload] Extracted text length:', text.length);
@@ -1297,7 +1328,19 @@ const App = () => {
       }, 5000); // 5 seconds
     } catch (error) {
       console.error('[DocumentUpload] Failed to process document:', error);
-      setUploadError(error instanceof Error ? error.message : 'Failed to process the document.');
+      
+      let errorMessage = 'Failed to process the document.';
+      if (error instanceof Error) {
+        if (error.message.includes('network') || error.message.includes('fetch')) {
+          errorMessage = 'Network error while processing document. Please check your connection.';
+        } else if (error.message.includes('size') || error.message.includes('large')) {
+          errorMessage = 'Document is too large to process.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      setUploadError(errorMessage);
       setUploadFeedback(null);
 
       // Keep error notification visible for longer
@@ -1439,6 +1482,10 @@ const App = () => {
       const audioBlob = await response.blob();
       console.log('[Audio] Received blob:', audioBlob.size, 'bytes, type:', audioBlob.type);
       
+      if (audioBlob.size === 0) {
+        throw new Error('Received empty audio response');
+      }
+      
       const audioUrl = URL.createObjectURL(audioBlob);
       console.log('[Audio] URL created:', audioUrl);
       
@@ -1493,6 +1540,10 @@ const App = () => {
       setSpeakingIndex(null);
       isSpeakingRef.current = false;
       
+      // Show user-friendly error message
+      const errorMessage = error instanceof Error ? error.message : 'Unknown TTS error';
+      console.warn('[TTS] User notification:', errorMessage);
+      
       // Restart recognition on error
       if (voiceModeEnabledRef.current && recognitionRef.current && !isListening) {
         setTimeout(() => {
@@ -1505,8 +1556,7 @@ const App = () => {
         }, 300);
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentAudio, speakingIndex, voiceGender, voiceModeEnabled, isListening]);
+  }, [currentAudio, speakingIndex, voiceGender, voiceModeEnabled, isListening, secureInput]);
 
   const handleCopy = async (text: string, index: number) => {
     try {
@@ -1516,22 +1566,51 @@ const App = () => {
         setCopiedIndex(null);
       }, 2000); // Show "Copied!" for 2 seconds
     } catch (err) {
-      // console.error('Failed to copy text:', err);
+      console.warn('Failed to copy text:', err);
+      // Fallback: try to select text for manual copy
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        setCopiedIndex(index);
+        setTimeout(() => setCopiedIndex(null), 2000);
+      } catch (fallbackErr) {
+        console.error('Copy fallback also failed:', fallbackErr);
+      }
     }
   };
 
   // Download image handler to avoid navigation
   const handleDownloadImage = async (imageUrl: string, prompt: string) => {
     try {
+      // Validate URL before processing
+      if (!imageUrl || typeof imageUrl !== 'string') {
+        throw new Error('Invalid image URL');
+      }
+      
       // Fetch the image as a blob to avoid CORS issues
       const response = await fetch(imageUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status}`);
+      }
+      
       const blob = await response.blob();
+      if (blob.size === 0) {
+        throw new Error('Received empty image file');
+      }
+      
       const url = window.URL.createObjectURL(blob);
+      
+      // Sanitize filename
+      const sanitizedPrompt = prompt.replace(/[^a-zA-Z0-9\s-]/g, '').slice(0, 30);
       
       // Create temporary link and trigger download
       const link = document.createElement('a');
       link.href = url;
-      link.download = `gogga-${prompt.slice(0, 30)}-${Date.now()}.png`;
+      link.download = `gogga-${sanitizedPrompt}-${Date.now()}.png`;
       document.body.appendChild(link);
       link.click();
       
@@ -1540,8 +1619,17 @@ const App = () => {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Download failed:', error);
-      // Fallback: open in new tab
-      window.open(imageUrl, '_blank');
+      const errorMessage = error instanceof Error ? error.message : 'Download failed';
+      console.warn('User notification:', errorMessage);
+      
+      // Fallback: open in new tab with validation
+      try {
+        if (imageUrl && typeof imageUrl === 'string') {
+          window.open(imageUrl, '_blank', 'noopener,noreferrer');
+        }
+      } catch (fallbackError) {
+        console.error('Fallback download also failed:', fallbackError);
+      }
     }
   };
 
@@ -1566,6 +1654,13 @@ const App = () => {
   useEffect(() => {
     contextStore.init().catch(console.error);
     inputRef.current?.focus();
+    
+    // Cleanup function
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
   }, []);
 
   // Re-focus after messages are sent (after loading completes)
@@ -1660,7 +1755,7 @@ const App = () => {
       
       // Update the input field with the transcript
       if (fullTranscript) {
-        setInput(fullTranscript);
+        secureInput.validateAndSet(fullTranscript);
         hasVoiceTranscriptionRef.current = true; // Mark that we have voice transcription
         
         // Auto-detect language and switch recognition if needed
@@ -1844,7 +1939,7 @@ const App = () => {
     setCurrentConversationId(null);
     setConversationDocuments([]);
     setPendingAttachmentIds([]);
-    setInput('');
+    secureInput.reset();
     setShowChatHistory(false);
     setDocumentTargetConversationId(null);
     // console.log('Started new chat');
@@ -1957,7 +2052,7 @@ const App = () => {
     // Remove the current assistant response and regenerate
     const messagesUpToRetry = messages.slice(0, messageIndex);
     setMessages(messagesUpToRetry);
-    setInput('');
+    secureInput.reset();
     setIsLoading(true);
     
     // Regenerate the response by calling handleSubmit logic directly
@@ -2086,7 +2181,9 @@ LEGAL VERIFIED ANCHORS: S v Makwanyane [1995] 3 SA 391 (CC), Harksen v Lane [199
 
         const goggaPrompt = GOGGA_BASE_PROMPT;
 
-        const systemPromptContent = useStrategicMode ? strategicPrompt : goggaPrompt;        const systemMessage = {
+        const systemPromptContent = useStrategicMode ? strategicPrompt : goggaPrompt;
+        
+        const systemMessage = {
           role: 'system' as const,
           content: systemPromptContent
         };
@@ -2474,7 +2571,7 @@ Provide the improved final answer addressing any issues identified.`;
         
         // Quick search strategy selection
         const serpApiKey = import.meta.env.VITE_SERPAPI_KEY;
-        const isComplex = input.trim().split(' ').length > 15;
+        const isComplex = secureInput.value.trim().split(' ').length > 15;
         let searchResult;
         
         setStreamingResults(true);
@@ -2483,13 +2580,13 @@ Provide the improved final answer addressing any issues identified.`;
         if (serpApiKey && isComplex) {
           // Use SerpAPI for complex queries
           const { serpApiSearch } = await import('./utils/smartSearch');
-          searchResult = await serpApiSearch(input.trim(), (progress: string) => {
+          searchResult = await serpApiSearch(secureInput.value.trim(), (progress: string) => {
             setSearchProgress(progress);
           });
         } else {
           // Use hybrid search for standard queries
           setSearchProgress('GOGGA is gathering information...');
-          searchResult = await hybridSearch(input.trim(), {
+          searchResult = await hybridSearch(secureInput.value.trim(), {
             useGoogle: true,
             useFreeAPIs: true,
             fetchContent: false,
@@ -2980,6 +3077,9 @@ CONTEXT AWARENESS:
   };
 
   const documentsById = useMemo(() => {
+    if (conversationDocuments.length === 0) {
+      return {};
+    }
     const lookup: Record<string, StoredDocument | undefined> = {};
     conversationDocuments.forEach((doc) => {
       lookup[doc.id] = doc;
@@ -2988,15 +3088,21 @@ CONTEXT AWARENESS:
   }, [conversationDocuments]);
 
   const documentModalConversations = useMemo(() => {
+    // Only compute when document manager is actually shown
+    if (!showDocumentManager) {
+      return [];
+    }
     const stored = conversationManagerRef.current.getAllConversations();
     return stored.map((conv) => ({
       ...conv,
       documents: conv.id === currentConversationId ? conversationDocuments : (conv.documents ?? []),
     }));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversationDocuments, currentConversationId, documentLibraryVersion]);
+  }, [conversationDocuments, currentConversationId, documentLibraryVersion, showDocumentManager]);
 
   const filteredDocumentConversations = useMemo(() => {
+    if (documentModalConversations.length === 0) {
+      return [];
+    }
     const query = documentSearch.trim().toLowerCase();
     if (!query) {
       return documentModalConversations;
@@ -3195,7 +3301,16 @@ CONTEXT AWARENESS:
                   </p>
                 </div>
                 <pre className="text-vcb-black text-sm font-mono whitespace-pre-wrap break-words leading-relaxed">
-                  {previewDocument?.text || 'No content available'}
+                  {previewDocument?.text ? previewDocument.text.replace(/[<>&"']/g, (char) => {
+                    const entities: Record<string, string> = {
+                      '<': '&lt;',
+                      '>': '&gt;',
+                      '&': '&amp;',
+                      '"': '&quot;',
+                      "'": '&#39;'
+                    };
+                    return entities[char] || char;
+                  }) : 'No content available'}
                 </pre>
               </div>
             </div>
@@ -3932,8 +4047,8 @@ CONTEXT AWARENESS:
 
       {/* Input Container - high contrast per §5.1, Mobile Optimized */}
       <div
-        className="relative border-t border-vcb-light-grey bg-white px-3 pt-0 pb-0 md:px-5 md:pt-0.5 md:pb-0 overflow-visible transform translate-y-2 md:translate-y-3"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        className="relative border-t border-vcb-light-grey bg-white px-3 pt-0 pb-16 md:px-5 md:pt-0.5 md:pb-16 overflow-visible transform translate-y-2 md:translate-y-3"
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 4rem)' }}
       >
         <div className="relative max-w-5xl mx-auto">
           <img
@@ -4126,7 +4241,7 @@ CONTEXT AWARENESS:
               </button>
               <button
                 type="submit"
-                disabled={isLoading || !input.trim()}
+                disabled={isLoading || !secureInput.value.trim()}
                 className="h-8 bg-vcb-black hover:bg-vcb-dark-grey disabled:bg-vcb-light-grey disabled:cursor-not-allowed text-vcb-white font-medium transition-colors duration-200 flex items-center justify-center border border-vcb-mid-grey rounded-md"
               >
                 {isLoading ? (
@@ -4231,7 +4346,7 @@ CONTEXT AWARENESS:
               </button>
               <button
                 type="submit"
-                disabled={isLoading || !input.trim()}
+                disabled={isLoading || !secureInput.value.trim()}
                 className="bg-vcb-black hover:bg-vcb-dark-grey disabled:bg-vcb-light-grey disabled:cursor-not-allowed text-vcb-white px-7 h-12 text-sm font-medium uppercase tracking-wider transition-colors duration-200 flex items-center space-x-3 border border-vcb-mid-grey"
               >
                 {isLoading ? (
@@ -4258,8 +4373,8 @@ CONTEXT AWARENESS:
                 )}
               </button>
             </div>
-            </form>
-          </div>
+          </form>
+        </div>
 
         {/* Interactive Voice Mode Toast Notification */}
         {showToast && (
@@ -4288,24 +4403,25 @@ CONTEXT AWARENESS:
         )}
       </div>
       
-      {/* Footer - Fixed at bottom of screen */}
-      <footer className="fixed bottom-0 left-0 right-0 bg-vcb-black border-t border-vcb-mid-grey px-4 py-2 z-30">
-        <div className="max-w-7xl mx-auto flex items-center justify-between text-vcb-white">
-          <div className="flex items-center space-x-4 text-xs">
-            <span>© 2025 VCB-AI (Pty) Ltd</span>
-            <span>•</span>
-            <span>GOGGA Beta</span>
+        {/* Footer - Fixed at bottom of screen */}
+        <footer className="fixed bottom-0 left-0 right-0 bg-vcb-black border-t border-vcb-mid-grey px-4 py-2 z-30">
+          <div className="max-w-7xl mx-auto flex items-center justify-between text-vcb-white">
+            <div className="flex items-center space-x-4 text-xs">
+              <span>© 2025 VCB-AI (Pty) Ltd</span>
+              <span>•</span>
+              <span>GOGGA Beta</span>
+            </div>
+            <div className="flex items-center space-x-4 text-xs">
+              <a href="https://vcb-ai.online" target="_blank" rel="noopener noreferrer" className="hover:text-vcb-accent transition-colors">
+                vcb-ai.online
+              </a>
+              <span>•</span>
+              <span>Pretoria, SA</span>
+            </div>
           </div>
-          <div className="flex items-center space-x-4 text-xs">
-            <a href="https://vcb-ai.online" target="_blank" rel="noopener noreferrer" className="hover:text-vcb-accent transition-colors">
-              vcb-ai.online
-            </a>
-            <span>•</span>
-            <span>Pretoria, SA</span>
-          </div>
-        </div>
-      </footer>
+        </footer>
     </div>
+    </ErrorBoundary>
   );
 };
 
