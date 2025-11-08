@@ -896,7 +896,7 @@ const App = () => {
   const [localPlaces, setLocalPlaces] = useState<any[]>([]);
   const [mapImage, setMapImage] = useState<string | undefined>();
   const [userLocation, setUserLocation] = useState<{lat: number, lon: number, city?: string, street?: string, isManual?: boolean} | null>(null);
-  const [showLocationPrompt, setShowLocationPrompt] = useState(false);
+  const [showLocationPrompt, setShowLocationPrompt] = useState(false);`n  const [locationPromptExpanded, setLocationPromptExpanded] = useState(false);
   const [showManualLocation, setShowManualLocation] = useState(false);
   const [manualLocationInput, setManualLocationInput] = useState('');
   const [weatherData, setWeatherData] = useState<WeatherForecast | null>(null);
@@ -4846,3 +4846,4 @@ WEATHER USAGE INSTRUCTIONS:
 };
 
 export default App;
+
