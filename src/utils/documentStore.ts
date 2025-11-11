@@ -1,3 +1,5 @@
+// Add ONNX.js dependency to package.json
+// This will be handled by the build system
 import type { StoredDocument } from '../types/documents';
 
 const DOCUMENT_STORAGE_KEY = 'vcb-uploaded-documents';

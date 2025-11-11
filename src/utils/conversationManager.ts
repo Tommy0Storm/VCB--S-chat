@@ -10,7 +10,7 @@ export interface Message {
   type?: 'text' | 'image';
   imageUrl?: string;
   imagePrompt?: string;
-  model?: 'llama' | 'qwen' | 'cepo'; // Track which model generated the response
+  model?: 'llama' | 'qwen' | 'cepo' | 'qwen-instruct' | 'qwen-thinking'; // Track which model generated the response
   isVoiceTranscription?: boolean; // Track if sent via voice transcription
   language?: string; // Human-readable SA language name (e.g., "Zulu")
   languageCode?: string; // SA language code (af, zu, xh, etc.)

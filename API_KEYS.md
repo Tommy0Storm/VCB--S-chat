@@ -27,7 +27,7 @@ This document lists all API keys required for GOGGA to function properly.
 ### 3. **VITE_SERPAPI_KEY** (Required for search)
 - **Purpose**: Web search, local places, Google Maps integration
 - **Get it from**: https://serpapi.com/
-- **Free tier**: 100 searches/month
+- **Free tier**: 200 searches/month
 - **Usage**: 
   - Find coffee shops, restaurants, businesses
   - Display local places with ratings and reviews
@@ -38,9 +38,10 @@ This document lists all API keys required for GOGGA to function properly.
   VITE_SERPAPI_KEY=your_serpapi_key_here
   ```
 
-### 4. **VITE_WEATHER_API_KEY** (Required for weather)
+### 4. **WeatherAPI Key** (Already Configured)
 - **Purpose**: 3-day weather forecast, air quality, sports, astronomy
-- **Get it from**: https://www.weatherapi.com/
+- **Key**: `301ee26e8eaf4253964134839250811`
+- **Status**: ✅ Already hardcoded in `src/utils/weatherApi.ts`
 - **Free tier**: Yes (1M calls/month)
 - **Usage**:
   - Display 3-day forecast widget
@@ -49,9 +50,20 @@ This document lists all API keys required for GOGGA to function properly.
   - Air quality index (AQI)
   - Sports schedules
   - Astronomy data (sunrise, sunset, moon phases)
+- **No action needed**: This key is already configured for all users
+
+### 5. **VITE_NEWSAPI_KEY** (New - For news headlines)
+- **Purpose**: Fetch top headlines and search news articles from over 150,000 sources
+- **Get it from**: https://newsapi.org/
+- **Free tier**: 500 requests/day
+- **Usage**: 
+  - Display local news headlines next to chat interface
+  - Search for articles by keyword/topic
+  - Provide contextually relevant news to AI responses
+  - Filter by country (default: South Africa) and category
 - **Add to `.env`**: 
   ```
-  VITE_WEATHER_API_KEY=your_weather_key_here
+  VITE_NEWSAPI_KEY=your_newsapi_key_here
   ```
 
 ## Setup Instructions
@@ -66,7 +78,7 @@ This document lists all API keys required for GOGGA to function properly.
    VITE_CEREBRAS_API_KEY=sk-xxxxxxxxxxxxx
    VITE_DEEPINFRA_API_KEY=xxxxxxxxxxxxx
    VITE_SERPAPI_KEY=xxxxxxxxxxxxx
-   VITE_WEATHER_API_KEY=xxxxxxxxxxxxx
+   VITE_NEWSAPI_KEY=your_newsapi_key_here
    ```
 
 3. **Restart the dev server**:
@@ -82,7 +94,10 @@ This document lists all API keys required for GOGGA to function properly.
 ### Important (Features disabled without these):
 - ⚠️ **VITE_SERPAPI_KEY** - Search and local places
 - ⚠️ **VITE_DEEPINFRA_API_KEY** - Image generation
-- ⚠️ **VITE_WEATHER_API_KEY** - Weather widget and context
+- ⚠️ **VITE_NEWSAPI_KEY** - News headlines and search
+
+### Optional (Already configured):
+- ✅ **WeatherAPI** - Weather widget and context
 
 ## Free Tier Limits
 
@@ -92,6 +107,7 @@ This document lists all API keys required for GOGGA to function properly.
 | DeepInfra | Limited credits | $0.0003/image |
 | SerpAPI | 100 searches/month | $50/month (5,000 searches) |
 | WeatherAPI | 1M calls/month | Free forever |
+| NewsAPI | 500 requests/day | $10/month (10,000 requests) |
 
 ## Security Notes
 
@@ -113,28 +129,30 @@ This document lists all API keys required for GOGGA to function properly.
 - Implement caching to reduce API calls
 
 ### Weather not showing
-- Verify `VITE_WEATHER_API_KEY` is set in `.env`
+- Weather should work automatically (key is hardcoded)
 - Check browser console for errors
 - Verify location is set (needed for weather)
-- Restart dev server after adding key
+
+### News headlines not showing
+- Check that VITE_NEWSAPI_KEY is set in .env
+- Verify network connection
+- Check browser console for NewsAPI errors
 
 ## Production Deployment
 
 For production (Vercel, Netlify, etc.), add environment variables in your hosting platform:
-
-**GitHub Pages**: See [DEPLOYMENT.md](./DEPLOYMENT.md)
 
 **Vercel**:
 ```bash
 vercel env add VITE_CEREBRAS_API_KEY
 vercel env add VITE_DEEPINFRA_API_KEY
 vercel env add VITE_SERPAPI_KEY
-vercel env add VITE_WEATHER_API_KEY
+vercel env add VITE_NEWSAPI_KEY
 ```
 
 **Netlify**:
 - Go to Site Settings → Environment Variables
-- Add all 4 keys manually
+- Add each key manually
 
 ## Support
 
@@ -143,5 +161,6 @@ For API key issues:
 - **DeepInfra**: https://deepinfra.com/docs
 - **SerpAPI**: https://serpapi.com/docs
 - **WeatherAPI**: https://www.weatherapi.com/docs/
+- **NewsAPI**: https://newsapi.org/docs
 
 For GOGGA issues: info@vcb-ai.online

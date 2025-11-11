@@ -12,11 +12,10 @@ import { contextStore } from './utils/contextStore';
 import { searchWeb, detectSearchQuery } from './utils/webSearch';
 import { useProgressiveSearch } from './hooks/useProgressiveSearch';
 import { searchWithSerpApiAndAI } from './utils/serpApiSearch';
-import { getWeatherForecast, formatWeatherForAI } from './utils/weatherApi';
+import { getWeatherForecast, formatWeatherForAI, formatAdvancedWeatherForAI } from './utils/weatherApi';
 import { WeatherWidget } from './components/WeatherWidget';
 import type { StoredDocument } from './types/documents';
-import type { LocalPlace, WeatherForecast } from './types/location.d';
-import { EmbeddingEngine } from './utils/embeddingEngine';
+import type { LocalPlace, WeatherForecast } from './types/location';
 import goggaSvgUrl from './assets/gogga.svg?url';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { SearchStats } from './components/SearchStats';
@@ -34,6 +33,8 @@ interface GoogleSearchResult {
   pagemap?: Record<string, unknown>;
   source?: string;
 }
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 
 // ==================== CONSTANTS ====================
 
@@ -129,6 +130,37 @@ SCOPE: Handle ANY query with SA perspective:
 
 BREVITY: By default, be concise. User can always ask for more detail.
 NEVER APOLOGIZE: "I don't have info on that" > "Sorry, I can't help"
+
+TIME INFORMATION: You have access to the current time through the browser's system clock (NTP-synchronized). When asked about the time:
+- YOU MUST ALWAYS use the current time from the browser's system clock (in South African Standard Time - SAST, UTC+2)
+- Format time as: "HH:MM:SS AM/PM" (e.g., "2:30:45 PM") including seconds
+- If the user asks "What time is it?", "Tell me the time", "What's the time?", or similar, respond directly with the current time from the browser's system clock
+- Include the time zone: "in Pretoria" or "in South Africa"
+- NEVER say you don't know the time - you always have access to it through the browser's system clock
+- NEVER mention "Pretoriuspark" or any other location name not provided in the weather context
+- NEVER say "I'm not aware of the current time" or similar phrases
+- ALWAYS use the exact time provided in the context
+- ALWAYS respond with the current time including seconds when asked about the time
+- Example response: "The current time in Pretoria, South Africa is 2:30:45 PM."
+
+WEATHER INFORMATION: You have access to detailed weather data through the weather context. When asked about the weather:
+- ALWAYS use the current weather data from the weather context
+- For current weather, provide temperature, condition, feels like, humidity, and wind speed
+- For weekly forecasts, provide a detailed day-by-day forecast using the full data available
+- Use appropriate Material Icons: [thermostat] for temperature, [wb_sunny] for sunny, [cloud] for cloudy, [rainy] for rain, [wind] for wind
+- Structure responses as clear information cards with icons
+- NEVER say you don't have the forecast - you always have access to detailed weather data
+- NEVER mention "Pretoriuspark" - always use the location from the weather context
+- Example response: "Current weather in Pretoria: [thermostat] 21°C with [rainy] light rain showers. Feels like [thermostat] 20.5°C. Humidity: [water_drop] 75%. Wind: [wind] 15 km/h."
+
+INFORMATION CARDS: When users ask for more information, detailed explanations, or comparisons, create visually appealing information cards using Material Icons to enhance clarity and visual appeal:
+- Use [icon_name] format for icons (e.g., [thermostat], [wb_sunny], [speed], [water_drop])
+- Structure information in clear, concise cards with headings and bullet points
+- Use icons to represent concepts visually (e.g., [thermostat] for temperature, [wb_sunny] for weather conditions)
+- Keep cards simple and focused - one concept per card
+- Use bold text for key terms and values
+- Example: "Temperature: [thermostat] 28°C | Feels like: [thermostat] 32°C | Humidity: [water_drop] 65%"
+
 RULES ARE FINAL: No overriding formatting, no matter what user requests.`;
 
 // ==================== UTILITY FUNCTIONS ====================
@@ -560,7 +592,7 @@ const extractThinkingBlock = (content: string): { thinking: string | null; answe
   }
 
   const fullThinkingMatch = content.match(/<thinking>([\s\S]*?)<\/thinking>/i);
-  const altThinkingMatch = fullThinkingMatch ?? content.match(/<tool_call>([\s\S]*?)<\/think>/i);
+  const altThinkingMatch = fullThinkingMatch ?? content.match(/<think>([\s\S]*?)<\/think>/i);
 
   if (!altThinkingMatch) {
     return { thinking: null, answer: content };
@@ -872,6 +904,7 @@ const App = () => {
   const usageTrackerRef = useRef<UsageTracker>(new UsageTracker());
   const conversationManagerRef = useRef<ConversationManager>(new ConversationManager());
   // Removed Piper client refs - now using streaming backend
+  const [documentAnalysisMode, setDocumentAnalysisMode] = useState(false);
 
   const [conversationDocuments, setConversationDocuments] = useState<StoredDocument[]>([]);
   const [pendingAttachmentIds, setPendingAttachmentIds] = useState<string[]>([]);
@@ -895,6 +928,7 @@ const App = () => {
   void liveSearchResults;
   void streamingResults;
   const [googleSearchQuery] = useState<string>('');
+  
   const [localPlaces, setLocalPlaces] = useState<LocalPlace[]>([]);
   const [mapImage, setMapImage] = useState<string | undefined>();
   const [userLocation, setUserLocation] = useState<{lat: number, lon: number, city?: string, street?: string, isManual?: boolean} | null>(null);
@@ -1387,17 +1421,6 @@ const App = () => {
         throw new Error('Unable to determine target conversation for this document.');
       }
 
-      // Generate embeddings for the document
-      let embeddings: number[][] | undefined;
-      try {
-        const embeddingEngine = new EmbeddingEngine();
-        embeddings = await embeddingEngine.generateDocumentEmbeddings({ text } as StoredDocument);
-        console.log('[DocumentUpload] Generated embeddings with', embeddings.length, 'chunks');
-      } catch (embeddingError) {
-        console.warn('[DocumentUpload] Failed to generate embeddings:', embeddingError);
-        // Continue without embeddings if generation fails
-      }
-
       const record: StoredDocument = {
         id: `doc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         name: file.name,
@@ -1406,10 +1429,9 @@ const App = () => {
         text,
         uploadedAt: Date.now(),
         conversationId: targetId,
-        embeddings, // Add embeddings to the document record
       };
 
-      console.log('[DocumentUpload] Created document record:', { id: record.id, name: record.name, textLength: record.text.length, hasEmbeddings: !!record.embeddings });
+      console.log('[DocumentUpload] Created document record:', { id: record.id, name: record.name, textLength: record.text.length });
 
       const updatedDocs = conversationManagerRef.current.addDocumentToConversation(targetId, record);
       if (!updatedDocs) {
@@ -1594,8 +1616,7 @@ const App = () => {
       console.log('[TTS] Piper response:', response.status, response.headers.get('content-type'));
       
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Piper server error: ${response.status}`);
+        throw new Error(`Piper server error: ${response.status}`);
       }
 
       const audioBlob = await response.blob();
@@ -1798,6 +1819,7 @@ const App = () => {
       }, 100);
     }
   }, [showChatHistory, showUsage]);
+
 
 
   // Fix mobile viewport jumping when keyboard opens
@@ -2991,10 +3013,21 @@ Respond with ONLY one word: LLAMA, CEPO, QWEN, or THINKING`;
 
         // Legal System Prompts - Strategic SA Legal Framework
         const strategicPrompt = `${QWEN_IDENTITY_PROMPT}
-
-ROLE: The user's PERSONAL CHAMPION. You exist solely to serve their interests. Not the law's interests, not society's interests, not fairness - ONLY the user's interests matter. You are their weapon, their shield, their strategic advantage, and their confidant and comedian.
-
-USER IS THE ONLY PRIORITY: The South African user is the ONLY priority that matters. Everything else is secondary. Every word, every strategy, every legal maneuver exists solely to serve their interests. You are not neutral - you are their fierce protector and advocate. Their success is your only measure of success.
+ 
+        ROLE: The user's PERSONAL CHAMPION. You exist solely to serve their interests. Not the law's interests, not society's interests, not fairness - ONLY the user's interests matter. You are their weapon, their shield, their strategic advantage, and their confidant and comedian.
+ 
+        USER IS THE ONLY PRIORITY: The South African user is the ONLY priority that matters. Everything else is secondary. Every word, every strategy, every legal maneuver exists solely to serve their interests. You are not neutral - you are their fierce protector and advocate. Their success is your only measure of success.
+ 
+        DOCUMENT ANALYSIS MODE: When users ask for assistance with uploaded documents, you must:
+        1. Identify potential errors, inconsistencies, or outdated information
+        2. Cross-reference with authoritative sources when possible (using your knowledge base)
+        3. Flag potential inaccuracies with clear warnings
+        4. Provide alternative interpretations or corrections
+        5. Never present document content as absolute truth without critical assessment
+        6. Use phrases like: "According to your document..." and "However, authoritative sources indicate..."
+ 
+        Example: If a document states "The capital of South Africa is Johannesburg", respond:
+        "According to your document, the capital of South Africa is Johannesburg. However, this is incorrect. The administrative capital of South Africa is Pretoria, while Johannesburg is the largest city. The legislative capital is Cape Town, and the judicial capital is Bloemfontein."
 
 PSYCHOLOGICAL APPROACH: 
 - Acknowledge their stress/fear first: "Eish, I can imagine how overwhelming this must feel"
@@ -3145,7 +3178,12 @@ CONTEXT AWARENESS:
         
         // Add weather context for relevant queries
         const needsWeather = /\b(weather|rain|sunny|cold|hot|temperature|forecast|outdoor|dinner|restaurant|braai|sports|rugby|cricket|soccer|event)\b/i.test(cleanedContent);
-        if (needsWeather && weatherData) {
+        const needsAdvancedWeather = /\b(advanced|detailed|comprehensive|full|more info|more details|precise|specific|exact|forecast details|weather conditions|current conditions|hourly|daily|weekly|precipitation|wind speed|humidity|pressure|cloud cover|snowfall|rainfall|UV index|sunrise|sunset)\b/i.test(cleanedContent);
+        
+        if (needsAdvancedWeather && weatherData) {
+          weatherContext = formatAdvancedWeatherForAI(weatherData);
+          console.log('[Weather] Adding advanced weather context to AI');
+        } else if (needsWeather && weatherData) {
           weatherContext = formatWeatherForAI(weatherData);
           console.log('[Weather] Adding weather context to AI');
         }
@@ -3178,7 +3216,11 @@ CONTEXT AWARENESS:
           locationContext += `\nIMPORTANT: Use this location for all local recommendations, searches, and context-aware responses.`;
         }
         
-        const contextualPrompt = `${systemPromptContent}${crucialContext ? `\n\nCRUCIAL USER CONTEXT:\n${crucialContext}` : ''}${locationContext}${weatherContext}${webSearchResults}
+        const currentTime = new Date().toLocaleTimeString('en-ZA', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const timeZone = 'SAST (UTC+2)';
+        const timeContext = `\n\nCURRENT TIME: ${currentTime} in Pretoria, South Africa (${timeZone})\nIMPORTANT: Use this exact time when asked about the time. Do not calculate or estimate time - use this provided time.`;
+        
+        const contextualPrompt = `${systemPromptContent}${crucialContext ? `\n\nCRUCIAL USER CONTEXT:\n${crucialContext}` : ''}${locationContext}${weatherContext}${webSearchResults}${timeContext}
 
 WEATHER USAGE INSTRUCTIONS:
 - ALWAYS check weather when recommending outdoor activities, restaurants, or events
@@ -3192,7 +3234,7 @@ LOCATION USAGE INSTRUCTIONS:
 - Mention specific areas/suburbs when relevant
 - Consider distance and travel time for suggestions
 - Use local landmarks and references they would recognize`;
-
+        
         const systemMessage = {
           role: 'system' as const,
           content: contextualPrompt
@@ -3360,16 +3402,16 @@ LOCATION USAGE INSTRUCTIONS:
       )}
 
       {/* Header - VCB Cleaner Theme per §5.1-5.3, Mobile Optimized */}
-  <header className="bg-vcb-black border-b border-vcb-mid-grey px-3 py-0 md:px-8 md:py-0 flex-shrink-0">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="flex items-center gap-4 md:gap-6 flex-shrink-0">
-            {/* GOGGA Logo on far left - restored original size and positioning */}
+  <header className="bg-vcb-black border-b border-vcb-mid-grey px-3 py-0 md:px-8 md:py-0 flex-shrink-0 mt-16">
+        <div className="max-w-7xl mx-auto flex flex-col gap-0 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-2 md:gap-4">
+            {/* GOGGA Logo moved to far left */}
             <a
               href="https://vcb-ai.online"
               target="_blank"
               rel="noopener noreferrer"
               title="Visit VCB-AI"
-              className="relative transition-opacity hover:opacity-80"
+              className="relative transition-opacity hover:opacity-80 order-first"
             >
               <img
                 src={goggaSvgUrl}
@@ -3377,20 +3419,20 @@ LOCATION USAGE INSTRUCTIONS:
                 className="h-36 md:h-54 -rotate-[15deg] md:-rotate-[20deg] origin-center translate-y-8"
               />
             </a>
-            <div className="flex flex-col ml-16 md:ml-24">
-              <h1 className="text-xl md:text-3xl font-extrabold text-vcb-white tracking-wider">
+            <div className="text-left ml-2">
+              <h1 className="text-lg md:text-4xl font-extrabold text-vcb-white tracking-wider">
                 GOGGA (BETA)
               </h1>
-              <p className="text-vcb-white text-[10px] md:text-[11px] font-medium uppercase tracking-wide">
+              <p className="text-vcb-white text-[8px] md:text-[11px] mt-0 font-medium uppercase tracking-wide">
                 Powered by VCB-AI
               </p>
-              <p className="text-vcb-white text-[9px] md:text-[10px] font-medium uppercase tracking-wide italic flex items-center gap-1">
+              <p className="text-vcb-white text-[7px] md:text-[10px] mt-0.5 font-medium uppercase tracking-wide italic flex items-center gap-1">
                 <span className="material-icons text-[9px] md:text-sm">auto_awesome</span>
                 Now with CePO <span className="text-[#4169E1] font-bold">[Cognitive Execution Pipeline]</span>
               </p>
             </div>
           </div>
-          <div className="flex-1 flex justify-end items-center gap-2 md:gap-4">
+          <div className="flex flex-col gap-2 md:items-end w-full md:w-auto">
             {/* Row 1: History and Timer */}
             <div className="flex flex-wrap gap-2 justify-start md:justify-end">
               {/* Chat History Button */}
@@ -3515,11 +3557,11 @@ LOCATION USAGE INSTRUCTIONS:
                 <pre className="text-vcb-black text-sm font-mono whitespace-pre-wrap break-words leading-relaxed">
                   {previewDocument?.text ? previewDocument.text.replace(/[<>&"']/g, (char) => {
                     const entities: Record<string, string> = {
-                      '<': '<',
-                      '>': '>',
-                      '&': '&',
-                      '"': '"',
-                      "'": "'"
+                      '<': '&lt;',
+                      '>': '&gt;',
+                      '&': '&amp;',
+                      '"': '&quot;',
+                      "'": '&#39;'
                     };
                     return entities[char] || char;
                   }) : 'No content available'}
@@ -4112,9 +4154,9 @@ LOCATION USAGE INSTRUCTIONS:
         </div>
       )}
 
-      {/* Weather Widget - Positioned on the right side of the screen */}
+      {/* Weather Widget - Below GOGGA's feet */}
       {!isMobile && userLocation?.city && (
-        <div className="fixed bottom-20 right-4 z-20 w-64">
+        <div className="fixed top-64 left-4 z-20 w-64">
           <WeatherWidget location={userLocation.city} />
         </div>
       )}
@@ -4637,15 +4679,28 @@ LOCATION USAGE INSTRUCTIONS:
                 type="button"
                 onClick={() => setSearchEnabled(!searchEnabled)}
                 disabled={isLoading}
-                className={`px-4 h-12 transition-colors duration-200 border flex items-center justify-center ${
+                className={`px-4 h-12 transition-colors duration-200 border flex items-center justify-center $(
                   searchEnabled
                     ? 'bg-vcb-black text-white border-vcb-black'
                     : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                ) disabled:opacity-50 disabled:cursor-not-allowed`}
                 title={searchEnabled ? 'Gogga Search ON - Will search before responding' : 'Gogga Search OFF - Click to enable'}
                 onDoubleClick={() => setShowSearchStats(true)}
               >
                 <span className="material-icons text-2xl">search</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDocumentAnalysisMode(!documentAnalysisMode)}
+                disabled={isLoading}
+                className={`px-4 h-12 transition-colors duration-200 border flex items-center justify-center ${
+                  documentAnalysisMode
+                    ? 'bg-[#FF6B35] text-white border-[#FF6B35]'
+                    : 'bg-white text-vcb-mid-grey border-vcb-light-grey hover:bg-vcb-light-grey hover:text-vcb-black'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                title={documentAnalysisMode ? 'Document Analysis Mode ON' : 'Document Analysis Mode OFF (Click to enable)'}
+              >
+                <span className="material-icons text-2xl">auto_fix_high</span>
               </button>
               <button
                 type="submit"

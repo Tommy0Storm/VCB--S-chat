@@ -6,4 +6,5 @@ export interface StoredDocument {
   text: string;
   uploadedAt: number;
   conversationId?: string;
+  embeddings?: number[][];
 }

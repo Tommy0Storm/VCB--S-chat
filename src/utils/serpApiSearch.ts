@@ -1,4 +1,4 @@
-interface SerpApiResult {
+export interface SerpApiResult {
   title: string;
   link: string;
   snippet: string;
@@ -151,22 +151,22 @@ export const searchWithSerpApi = async (query: string, options: {
     const localMap = data.local_map;
 
     return {
-      results: organicResults.map((item: any, index: number) => ({
+      results: organicResults.map((item: { title: string; link: string; snippet?: string; body?: string; description?: string; position?: number; source?: string; date?: string; thumbnail?: string }, index: number) => ({
         title: item.title,
         link: item.link,
-        snippet: item.snippet || item.body || item.description,
+        snippet: (item.snippet || item.body || item.description || '').trim(),
         position: item.position || index + 1,
-        source: item.source || item.displayed_link || item.cite?.domain,
-        date: item.date,
-        thumbnail: item.thumbnail
+        source: item.source || (item as { displayed_link?: string; cite?: { domain?: string } }).displayed_link || (item as { cite?: { domain?: string } }).cite?.domain || '',
+        date: item.date || '',
+        thumbnail: item.thumbnail || ''
       })),
       localPlaces: localPlaces.length > 0 ? localPlaces : undefined,
       mapImage: localMap?.image,
       mapCoordinates: localMap?.gps_coordinates,
-      relatedQueries: relatedSearches.map((r: any) => r.query || r),
-      peopleAlsoAsk: (data.people_also_ask || []).map((p: any) => ({
+      relatedQueries: relatedSearches.map((r: { query: string }) => r.query || ''),
+      peopleAlsoAsk: (data.people_also_ask || []).map((p: { question: string; snippet?: string; answer?: string }) => ({
         question: p.question,
-        answer: p.snippet || p.answer
+        answer: (p.snippet || p.answer || '').trim()
       })),
       knowledgeGraph: data.knowledge_graph ? {
         title: data.knowledge_graph.title,
@@ -269,7 +269,7 @@ export const searchWithSerpApiAndAI = async (
         peopleAlsoAsk: [],
         knowledgeGraph: undefined
       };
-      usedEngine = `Multi-Engine (${Object.keys(multiResults.engineStats).join(', ')})` as any;
+      usedEngine = useEngine;
     } else {
       throw new Error('No results from multi-engine search');
     }
