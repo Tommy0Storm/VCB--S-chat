@@ -22,6 +22,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { SearchStats } from './components/SearchStats';
 import { sanitizeMarkdown, validateSearchQuery, sanitizeUserInput, validateFileUpload } from './utils/security';
 import { useSecureInput } from './hooks/useSecureInput';
+import { modelRouter, type ModelType } from './utils/modelRouter';
 
 // Google Search Result Interface
 interface GoogleSearchResult {
